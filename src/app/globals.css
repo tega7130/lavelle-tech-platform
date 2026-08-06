@@ -1,0 +1,261 @@
+@import "tailwindcss";
+
+/*
+ * Lavelle design tokens — ported 1:1 from the design handoff's styles.css
+ * and README. Values are final per the handoff; do not eyedrop/approximate.
+ *
+ * Plain (non-inline) @theme: this is required, not just default, for the
+ * color tokens. `inline` mode bakes the resolved value directly into each
+ * utility's compiled CSS instead of emitting `var(--color-x)` — fine for
+ * the font tokens below (which just alias next/font's own runtime
+ * variable), but it would silently break dark-mode overriding here, since
+ * [data-theme="dark"] redefining --color-bg would have nothing left to
+ * cascade into.
+ */
+@theme {
+  --color-bg: #ffffff;
+  --color-surface: #f6f7f9;
+  --color-text: #131a2e;
+  --color-accent: #1668e3;
+  --color-accent-2: #ffc629;
+  --color-divider: #e4e7ec;
+
+  --color-neutral-100: #f8f9fb;
+  --color-neutral-200: #eef0f4;
+  --color-neutral-300: #e0e4ea;
+  --color-neutral-400: #c3c9d4;
+  --color-neutral-500: #98a1b2;
+  --color-neutral-600: #6d7789;
+  --color-neutral-700: #4c5566;
+  --color-neutral-800: #333b49;
+  --color-neutral-900: #1b2130;
+
+  --color-accent-100: #eff5ff;
+  --color-accent-200: #d9e7fd;
+  --color-accent-300: #b3ccfb;
+  --color-accent-400: #6f9ff4;
+  --color-accent-500: #1668e3;
+  --color-accent-600: #1256bd;
+  --color-accent-700: #0f4596;
+  --color-accent-800: #0c356f;
+  --color-accent-900: #08234a;
+
+  --color-accent-2-100: #fffaeb;
+  --color-accent-2-200: #fff2c9;
+  --color-accent-2-300: #ffe490;
+  --color-accent-2-400: #ffd45c;
+  --color-accent-2-500: #ffc629;
+  --color-accent-2-600: #d9a418;
+  --color-accent-2-700: #a97e12;
+  --color-accent-2-800: #7a5a0d;
+  --color-accent-2-900: #4d3908;
+
+  /* semantic status */
+  --color-success-bg: #e7f6ed;
+  --color-success-text: #15803d;
+  --color-success-border: #bfe3cd;
+  --color-warning-bg: #fff7e6;
+  --color-warning-text: #a16207;
+  --color-warning-heading: #7a4d06;
+  --color-warning-body: #8a6013;
+  --color-warning-border: #f0d9a8;
+  --color-danger-bg: #fdecec;
+  --color-danger-bg-2: #fef3f2;
+  --color-danger-text: #b42318;
+  --color-danger-heading: #912019;
+  --color-danger-border: #f3c4bf;
+
+  /* Radii — override Tailwind's defaults with the handoff's exact scale */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+
+  /* Shadows — override Tailwind's defaults with the handoff's exact scale */
+  --shadow-sm: 0 0 0 1px var(--color-divider);
+  --shadow-md: 0 0 0 1px var(--color-divider), 0 4px 14px rgba(19, 26, 46, 0.06);
+  --shadow-lg: 0 0 0 1px var(--color-neutral-300), 0 16px 40px rgba(19, 26, 46, 0.12);
+}
+
+/* Fonts alias next/font's runtime variable — `inline` avoids a useless
+   extra indirection layer around an already-dynamic CSS variable. */
+@theme inline {
+  --font-heading: var(--font-poppins), system-ui, sans-serif;
+  --font-body: var(--font-poppins), system-ui, sans-serif;
+}
+
+/*
+ * Lavelle's own dense, irregular spacing scale (not a linear multiplier,
+ * so it can't live under Tailwind's --spacing-* namespace without
+ * clobbering the numeric utility scale). Reference via arbitrary values,
+ * e.g. p-[var(--space-4)] or gap-[var(--space-3)].
+ */
+:root {
+  --space-1: 3px;
+  --space-2: 6px;
+  --space-3: 10px;
+  --space-4: 14px;
+  --space-5: 17px;
+  --space-6: 20px;
+  --space-7: 24px;
+  --space-8: 28px;
+}
+
+/* Dark theme — same token names, toggled via [data-theme="dark"] on <html>. */
+[data-theme="dark"] {
+  --color-bg: #0e1526;
+  --color-surface: #16203a;
+  --color-text: #e8ecf5;
+  --color-accent: #4d8ff0;
+  --color-accent-2: #ffc629;
+  --color-divider: #263248;
+
+  --color-neutral-100: #1a2438;
+  --color-neutral-200: #212c44;
+  --color-neutral-300: #2c3853;
+  --color-neutral-400: #4a5670;
+  --color-neutral-500: #8792a8;
+  --color-neutral-600: #9aa5ba;
+  --color-neutral-700: #b8c2d4;
+  --color-neutral-800: #d3dae8;
+  --color-neutral-900: #e8ecf5;
+
+  --color-accent-100: #14243f;
+  --color-accent-200: #1b3560;
+  --color-accent-300: #2b4d80;
+  --color-accent-400: #3f6fbb;
+  --color-accent-500: #4d8ff0;
+  --color-accent-600: #6ea6f5;
+  --color-accent-700: #9cc3f9;
+  --color-accent-800: #c6dcfc;
+  --color-accent-900: #e6f0fe;
+
+  --color-accent-2-100: #2a2208;
+  --color-accent-2-200: #3d3210;
+  --color-accent-2-300: #5a4a17;
+  --color-accent-2-400: #a8871f;
+  --color-accent-2-500: #ffc629;
+  --color-accent-2-600: #ffd45c;
+  --color-accent-2-700: #ffe490;
+  --color-accent-2-800: #fff2c9;
+  --color-accent-2-900: #fffaeb;
+
+  --shadow-sm: 0 0 0 1px #263248;
+  --shadow-md: 0 0 0 1px #263248, 0 4px 14px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 0 0 1px #33415c, 0 16px 40px rgba(0, 0, 0, 0.55);
+}
+
+/*
+ * Everything below lives in @layer base so that Tailwind utility classes
+ * (which compile into @layer utilities) can always override it — e.g. a
+ * nav <a href> styled with `text-text` must win over the base `a { color }`
+ * rule below. Unlayered rules beat layered ones regardless of source order
+ * or specificity, so leaving these unlayered silently broke every colored
+ * link/button built from an <a>.
+ */
+@layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  body {
+    margin: 0;
+    background: var(--color-bg);
+    color: var(--color-text);
+    font-family: var(--font-body);
+    font-size: 15px;
+    line-height: 1.55;
+    font-weight: 400;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: var(--font-heading);
+    font-weight: 700;
+    line-height: 1.18;
+    letter-spacing: -0.015em;
+    margin: 0 0 var(--space-2);
+  }
+  h1 {
+    font-size: 34px;
+  }
+  h2 {
+    font-size: 26px;
+  }
+  h3 {
+    font-size: 20px;
+  }
+  h4 {
+    font-size: 17px;
+  }
+  h5 {
+    font-size: 15px;
+  }
+  h6 {
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  p {
+    margin: 0 0 var(--space-3);
+  }
+  a {
+    color: var(--color-accent);
+    text-underline-offset: 3px;
+  }
+  a:hover {
+    color: var(--color-accent-700);
+  }
+  img {
+    display: block;
+    max-width: 100%;
+  }
+  figure {
+    margin: 0;
+  }
+  figcaption {
+    font-size: 11px;
+    margin-top: var(--space-1);
+    color: var(--color-neutral-600);
+  }
+  .text-muted {
+    color: var(--color-neutral-600);
+  }
+  :focus {
+    outline: none;
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
+  ::selection {
+    background: var(--color-accent-200);
+  }
+
+  /* dashed rule — the brand's signature divider, distinct from solid table/card edges */
+  .hr {
+    height: 0;
+    border: 0;
+    border-top: 1px dashed var(--color-neutral-300);
+    margin: var(--space-4) 0;
+  }
+
+  /* deep-blue institutional gradient used for hero/ID-card/brand panels */
+  .lv-gradient {
+    background: linear-gradient(158deg, #0c356f 0%, #08234a 48%, #061529 100%);
+  }
+
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-neutral-800);
+    border-radius: 8px;
+  }
+}

@@ -1,0 +1,597 @@
+// Lavelle — foundation domain model.
+// Vocabulary, entities and state machines are binding per the design
+// handoff README: candidate/programme/module/lecture/enrolment/cohort/
+// intake/credit/applicant/registrar/faculty. Never "student" or "course".
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Candidate ───────────────────────────────────────────────────────────
+
+enum ProfessionalStatus {
+  PRACTISING_LAWYER
+  IN_HOUSE_COUNSEL
+  LAW_GRADUATE
+  LAW_STUDENT
+  NON_LAWYER_REGULATED
+  OTHER
+}
+
+// registered (applicant) -> enrolled -> suspended -> reactivated (-> enrolled)
+enum CandidateAccountStatus {
+  APPLICANT
+  ENROLLED
+  SUSPENDED
+}
+
+model Candidate {
+  id String @id @default(cuid())
+
+  // Provisional number issued at registration (LVL-APP-2026-04412); the
+  // candidate number is issued only on first confirmed payment (LVL/2026/00291) —
+  // business rule 2.
+  provisionalApplicantNumber String  @unique
+  candidateNumber            String? @unique
+
+  firstName String
+  lastName  String
+  email     String @unique
+  phone     String
+  passwordHash String
+
+  professionalStatus ProfessionalStatus?
+  yearOfCall         Int?
+  scn                String?
+  experienceBand     String?
+  placeOfPractice    String?
+
+  accountStatus CandidateAccountStatus @default(APPLICANT)
+  // Suspension / reactivation — README shell rules: suspended shows an
+  // amber banner with reason+date; reactivation shows a dismissible green
+  // confirmation and extends in-window deadlines. Both transitions post a
+  // registrar-authored notification and write to the audit log (rule 10).
+  suspendedReason           String?
+  suspendedAt               DateTime?
+  reactivatedAt             DateTime?
+  reactivationAcknowledgedAt DateTime?
+
+  termsAcceptedAt DateTime?
+  marketingOptIn  Boolean  @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  enrolments         Enrolment[]
+  payments           Payment[]
+  certificates       Certificate[]
+  examinationSittings ExaminationSitting[]
+  contactRequests    ContactRequest[]
+  adminNotes         AdminNote[]
+
+  @@index([accountStatus])
+}
+
+// ─── Staff, roles & permissions ─────────────────────────────────────────
+
+enum StaffRole {
+  SUPER_ADMIN
+  OPERATIONS_ADMIN
+  FINANCE_ADMIN
+  ACADEMIC_ADMIN
+  FACULTY
+  SUPPORT_AGENT
+}
+
+enum StaffStatus {
+  ACTIVE
+  INACTIVE
+}
+
+// The 17-permission catalogue, six categories, per the README table.
+enum Permission {
+  VIEW_CANDIDATES
+  EDIT_CANDIDATES
+  VIEW_CONTACT_REQUESTS
+  RESOLVE_CONTACT_REQUESTS
+  ADD_ADMIN_NOTES
+  VIEW_PAYMENTS
+  MANAGE_PAYMENTS
+  VIEW_GRADES
+  GRADE_ASSESSMENTS
+  MANAGE_PROGRAMMES
+  MANAGE_INTAKES
+  ISSUE_CERTIFICATES
+  REVOKE_CERTIFICATES
+  VIEW_AUDIT_LOG
+  EXPORT_DATA
+  MANAGE_STAFF
+  SUPER_ADMIN
+}
+
+model Staff {
+  id String @id @default(cuid())
+
+  name     String
+  email    String @unique // the login
+  phone    String?
+  jobTitle String?
+  department String?
+
+  lineManagerId String?
+  lineManager   Staff?  @relation("StaffReports", fields: [lineManagerId], references: [id])
+  reports       Staff[] @relation("StaffReports")
+
+  role   StaffRole
+  status StaffStatus @default(ACTIVE)
+
+  passwordHash String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  permissionGrants PermissionGrant[]
+
+  auditLogEntries       AuditLogEntry[]
+  resolvedContactRequests ContactRequest[] @relation("ContactRequestResolvedBy")
+  adminNotesAuthored     AdminNote[]
+  revokedCertificates    Certificate[]    @relation("CertificateRevokedBy")
+
+  @@index([role])
+  @@index([status])
+}
+
+// Explicit per-staff permission set. Seeded from the role's preset on
+// creation or when a preset is (re-)applied; individual toggles update
+// rows here directly and save immediately (README: "toggling saves
+// immediately and writes to the audit log"). super_admin's SUPER_ADMIN
+// grant bypasses every other check — see src/lib/permissions.ts.
+model PermissionGrant {
+  id         String     @id @default(cuid())
+  staffId    String
+  staff      Staff      @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  permission Permission
+  granted    Boolean    @default(true)
+  updatedAt  DateTime   @updatedAt
+
+  @@unique([staffId, permission])
+}
+
+// ─── Programme, module, lecture ─────────────────────────────────────────
+
+enum ProgrammeTier {
+  FOUNDATION
+  SPECIALIST
+  ADVANCED_PRACTITIONER
+}
+
+// Website listing state machine: draft -> live (published) -> draft.
+// Only live programmes appear in the public catalogue.
+enum ProgrammeStatus {
+  DRAFT
+  LIVE
+}
+
+model Programme {
+  id    String @id @default(cuid())
+  title String
+  code  String @unique // e.g. ELR-201
+
+  tier                 ProgrammeTier
+  category             String
+  lengthWeeks          Int
+  weeklyCommitmentHours Int
+  credits              Int
+  feeNaira             Decimal @db.Decimal(12, 2)
+  status               ProgrammeStatus @default(DRAFT)
+  description          String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  modules     Module[]
+  cohorts     Cohort[]
+  enrolments  Enrolment[]
+  payments    Payment[]
+  certificates Certificate[]
+  examination Examination?
+
+  @@index([status])
+  @@index([tier])
+}
+
+enum ModuleStatus {
+  DRAFT
+  PUBLISHED
+}
+
+model Module {
+  id          String @id @default(cuid())
+  programmeId String
+  programme   Programme @relation(fields: [programmeId], references: [id], onDelete: Cascade)
+
+  weekNumber Int
+  title      String
+  status     ModuleStatus @default(DRAFT)
+  // Business rule 6: publishing is blocked while a module has fewer
+  // approved objective questions than this draw count.
+  questionDrawCount Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  lectures  Lecture[]
+  questions Question[]
+
+  @@unique([programmeId, weekNumber])
+}
+
+enum LectureMedia {
+  SLIDES
+  VIDEO
+}
+
+// Business rule 15: narration is configurable per lecture — per-slide with
+// auto-advance, or one track for the whole lecture. Duration is derived
+// from the uploaded audio at ingest time, not entered by hand.
+enum NarrationMode {
+  PER_SLIDE
+  SINGLE_TRACK
+}
+
+model Lecture {
+  id       String @id @default(cuid())
+  moduleId String
+  module   Module @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+
+  title    String
+  media    LectureMedia
+  mediaUrl String?
+
+  narrationMode         NarrationMode @default(PER_SLIDE)
+  narrationAutoAdvance  Boolean       @default(true)
+  narrationDurationSecs Int?
+
+  hasScenario         Boolean @default(false)
+  hasDraftingExercise Boolean @default(false)
+  hasQuiz             Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ─── Intake, cohort, enrolment ──────────────────────────────────────────
+
+enum IntakeType {
+  JANUARY
+  APRIL
+  SEPTEMBER
+}
+
+model Intake {
+  id        String     @id @default(cuid())
+  label     String // e.g. "September 2026"
+  type      IntakeType
+  startDate DateTime
+
+  createdAt DateTime @default(now())
+
+  cohorts             Cohort[]
+  examinationSittings ExaminationSitting[]
+
+  @@unique([type, startDate])
+}
+
+model Cohort {
+  id          String @id @default(cuid())
+  programmeId String
+  programme   Programme @relation(fields: [programmeId], references: [id], onDelete: Cascade)
+  intakeId    String
+  intake      Intake @relation(fields: [intakeId], references: [id], onDelete: Cascade)
+  label       String
+
+  createdAt DateTime @default(now())
+
+  enrolments Enrolment[]
+
+  @@unique([programmeId, intakeId, label])
+}
+
+enum EnrolmentStatus {
+  ACTIVE
+  COMPLETED
+  PENDING_PAYMENT
+  REFUNDED
+}
+
+model Enrolment {
+  id          String @id @default(cuid())
+  candidateId String
+  candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  programmeId String
+  programme   Programme @relation(fields: [programmeId], references: [id])
+  cohortId    String?
+  cohort      Cohort?   @relation(fields: [cohortId], references: [id])
+
+  // Business rule 2: cohort/intake assignment, and this record's existence
+  // at all, follow confirmed payment — not acceptance.
+  status      EnrolmentStatus @default(PENDING_PAYMENT)
+  enrolledAt  DateTime?
+  completedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([candidateId])
+  @@index([programmeId])
+}
+
+// ─── Payments ────────────────────────────────────────────────────────────
+
+enum PaymentPurpose {
+  PROGRAMME
+  EXAMINATION
+}
+
+enum PaymentStatus {
+  SUCCESS
+  PENDING
+  FAILED
+  REFUNDED
+}
+
+model Payment {
+  id          String @id @default(cuid())
+  candidateId String
+  candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  purpose               PaymentPurpose
+  programmeId            String?
+  programme              Programme?          @relation(fields: [programmeId], references: [id])
+  examinationSittingId   String?
+  examinationSitting     ExaminationSitting? @relation(fields: [examinationSittingId], references: [id])
+
+  amountNaira Decimal @db.Decimal(12, 2)
+  provider    String
+  reference   String  @unique
+  status      PaymentStatus @default(PENDING)
+
+  initiatedAt DateTime  @default(now())
+  confirmedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([candidateId])
+  @@index([status])
+}
+
+// ─── Assessment: question bank & examination ────────────────────────────
+
+enum QuestionType {
+  MCQ
+  THEORY
+}
+
+enum QuestionDifficulty {
+  STANDARD
+  TESTING
+  ADVANCED
+}
+
+// Business rule 8/9: retiring withdraws a question from future draws but
+// preserves the record and can be restored; editing applies to future
+// sittings only.
+enum QuestionStatus {
+  DRAFT
+  IN_REVIEW
+  APPROVED
+  RETIRED
+}
+
+model Question {
+  id       String @id @default(cuid())
+  moduleId String
+  module   Module @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+
+  type       QuestionType
+  text       String
+  marks      Int
+  difficulty QuestionDifficulty?
+  minWords   Int? // theory only
+  guidance   String? // theory only — marking guidance, not shown to candidates
+
+  status    QuestionStatus @default(DRAFT)
+  retiredAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([moduleId, status])
+}
+
+model Examination {
+  id          String    @id @default(cuid())
+  programmeId String    @unique
+  programme   Programme @relation(fields: [programmeId], references: [id], onDelete: Cascade)
+
+  feeNaira        Decimal @db.Decimal(12, 2)
+  durationMinutes Int
+  passMarkPct     Int     @default(60)
+  attemptsPolicy  String  @default("One resit on referral")
+
+  proctored Boolean @default(true)
+  remote    Boolean @default(true)
+
+  fullscreenRequired Boolean @default(true)
+  tabSwitchWarning   Boolean @default(true)
+  shuffleQuestions   Boolean @default(true)
+  shuffleOptions     Boolean @default(false)
+  reviewAllowed      Boolean @default(true)
+
+  // Business rule 6: publishing is blocked while any module is short on
+  // approved objective questions for its draw count.
+  published Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  sittings ExaminationSitting[]
+}
+
+// registered -> sat -> passed | referred
+//            -> forfeited (on quit)
+enum SittingStatus {
+  REGISTERED
+  SAT
+  PASSED
+  REFERRED
+  FORFEITED
+}
+
+model ExaminationSitting {
+  id            String      @id @default(cuid())
+  examinationId String
+  examination   Examination @relation(fields: [examinationId], references: [id])
+  candidateId   String
+  candidate     Candidate   @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  intakeId      String
+  intake        Intake      @relation(fields: [intakeId], references: [id])
+
+  status SittingStatus @default(REGISTERED)
+
+  registeredAt DateTime  @default(now())
+  satAt        DateTime?
+  // Weighted composite per business rule 7: quizzes 20%, drafting 40%,
+  // examination 40%. Grade bands: Distinction / Merit / Pass / Refer.
+  finalScorePct Decimal? @db.Decimal(5, 2)
+  grade         Grade?
+
+  payments Payment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([candidateId])
+  @@index([status])
+}
+
+enum Grade {
+  DISTINCTION
+  MERIT
+  PASS
+  REFER
+}
+
+// ─── Certificates ────────────────────────────────────────────────────────
+
+// active -> revoked (mandatory reason, audit-logged)
+// active -> reissued (creates a NEW identifier; the previous one is retired)
+enum CertificateStatus {
+  ACTIVE
+  REVOKED
+}
+
+model Certificate {
+  id         String @id @default(cuid())
+  identifier String @unique // e.g. LVL-CERT-2026-01188
+
+  candidateId String
+  candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  programmeId String
+  programme   Programme @relation(fields: [programmeId], references: [id])
+
+  tier  ProgrammeTier
+  grade Grade
+
+  issuedAt DateTime @default(now())
+  status   CertificateStatus @default(ACTIVE)
+
+  revokedReason   String?
+  revokedAt       DateTime?
+  revokedByStaffId String?
+  revokedBy       Staff? @relation("CertificateRevokedBy", fields: [revokedByStaffId], references: [id])
+
+  // Reissue chain — course access is unaffected by revocation (README);
+  // only the credential document itself is retired/replaced.
+  replacesCertificateId String?      @unique
+  replaces               Certificate? @relation("CertificateReissue", fields: [replacesCertificateId], references: [id])
+  supersededBy            Certificate? @relation("CertificateReissue")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([candidateId])
+  @@index([status])
+}
+
+// ─── Support ─────────────────────────────────────────────────────────────
+
+enum ContactRequestStatus {
+  OPEN
+  RESOLVED
+}
+
+model ContactRequest {
+  id          String @id @default(cuid())
+  candidateId String
+  candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  category String
+  subject  String
+  message  String
+
+  status         ContactRequestStatus @default(OPEN)
+  resolvedByStaffId String?
+  resolvedBy      Staff?  @relation("ContactRequestResolvedBy", fields: [resolvedByStaffId], references: [id])
+  resolvedAt      DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+}
+
+// Internal notes on a candidate profile — distinct from contact-request
+// resolution; gated by its own permission (add_admin_notes).
+model AdminNote {
+  id          String @id @default(cuid())
+  candidateId String
+  candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  staffId     String
+  staff       Staff     @relation(fields: [staffId], references: [id])
+
+  note String
+
+  createdAt DateTime @default(now())
+
+  @@index([candidateId])
+}
+
+// ─── Audit log ───────────────────────────────────────────────────────────
+
+// Immutable by contract (business rule 11) — the app layer must never
+// issue an UPDATE or DELETE against this table. actorStaffId is nullable
+// to allow system-originated entries (e.g. an automated payment webhook).
+model AuditLogEntry {
+  id String @id @default(cuid())
+
+  actorStaffId String?
+  actor        Staff?  @relation(fields: [actorStaffId], references: [id])
+
+  action     String // e.g. "certificate.revoke", "staff.permission.grant"
+  targetType String // e.g. "Certificate", "Staff", "Candidate"
+  targetId   String
+  reason     String?
+  metadata   Json?
+
+  createdAt DateTime @default(now())
+
+  @@index([targetType, targetId])
+  @@index([actorStaffId])
+}
