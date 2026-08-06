@@ -75,15 +75,4 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       },
     }),
   ],
-  callbacks: {
-    ...authConfig.callbacks,
-    jwt({ token, user }) {
-      if (user) token.user = user as SessionUser;
-      return token;
-    },
-    session({ session, token }) {
-      if (token.user) session.user = token.user as unknown as typeof session.user;
-      return session;
-    },
-  },
 });

@@ -13,11 +13,14 @@ This repository currently contains **only the foundation**: design tokens, the s
 
 ## Getting started
 
+Point `DATABASE_URL` in `.env` at any local Postgres — either a native install (Postgres.app, Homebrew) or the bundled `docker-compose.yml`:
+
 ```bash
 npm install
-cp .env.example .env        # already populated for local Docker Postgres
-npm run db:up                # docker compose up -d — starts Postgres
-npm run db:migrate           # applies the schema and seeds demo data
+cp .env.example .env         # pick the DATABASE_URL line for your setup, or edit it directly
+npm run db:up                # only if using docker-compose — docker compose up -d
+npm run db:migrate           # applies the schema
+npm run db:seed              # loads demo data
 npm run dev
 ```
 
@@ -39,7 +42,7 @@ Demo accounts (seeded by `prisma/seed.ts`, password `Lavelle2026!` for all):
 | `t.nwachukwu@lavelle.ng` | Staff — Faculty |
 | `h.suleiman@lavelle.ng` | Staff — Support Agent |
 
-**Docker is required for local Postgres and isn't available in every environment this was built in** — if `npm run db:up` fails, install Docker Desktop (or point `DATABASE_URL` in `.env` at any Postgres instance) before running `db:migrate`.
+Verified end-to-end against a local Postgres: migration applies cleanly, seed data loads, and both credential providers sign in and correctly gate `/portal/*` vs `/admin/*` (including applicant nav-gating for the unpaid demo candidate). Docker isn't required — `npm run db:up` is only relevant if you're using `docker-compose.yml` instead of a native Postgres install.
 
 ## What's here
 
