@@ -42,3 +42,7 @@ yarn-error.log*
 next-env.d.ts
 
 /src/generated/prisma
+
+# local dev storage shim (src/lib/storage.ts) — a real deployment points
+# the same presign/sign contract at real object storage instead
+/.local-storage/

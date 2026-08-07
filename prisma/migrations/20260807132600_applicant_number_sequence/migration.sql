@@ -22,7 +22,7 @@ DECLARE
   n bigint;
 BEGIN
   EXECUTE format('CREATE SEQUENCE IF NOT EXISTS %I START 1', seq_name);
-  EXECUTE format('SELECT nextval(%I)', seq_name) INTO n;
+  EXECUTE format('SELECT nextval(%L)', seq_name) INTO n;
   RETURN 'LVL-APP-' || yr || '-' || lpad(n::text, 5, '0');
 END;
 $$;

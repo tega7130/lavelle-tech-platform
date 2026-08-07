@@ -29,16 +29,16 @@ CREATE TYPE "Permission" AS ENUM ('VIEW_CANDIDATES', 'EDIT_CANDIDATES', 'VIEW_CO
 CREATE TYPE "ProgrammeTier" AS ENUM ('FOUNDATION', 'SPECIALIST', 'ADVANCED_PRACTITIONER');
 
 -- CreateEnum
-CREATE TYPE "ProgrammeStatus" AS ENUM ('DRAFT', 'LIVE');
+CREATE TYPE "ProgrammeStatus" AS ENUM ('DRAFT', 'ACTIVE', 'ARCHIVED');
 
 -- CreateEnum
-CREATE TYPE "ModuleStatus" AS ENUM ('DRAFT', 'PUBLISHED');
+CREATE TYPE "LectureMediaKind" AS ENUM ('SLIDES', 'VIDEO');
 
 -- CreateEnum
-CREATE TYPE "LectureMedia" AS ENUM ('SLIDES', 'VIDEO');
+CREATE TYPE "NarrationMode" AS ENUM ('NONE', 'PER_SLIDE', 'FULL_LECTURE');
 
 -- CreateEnum
-CREATE TYPE "NarrationMode" AS ENUM ('PER_SLIDE', 'SINGLE_TRACK');
+CREATE TYPE "AssessmentKind" AS ENUM ('QUIZ', 'DRAFTING', 'EXAMINATION');
 
 -- CreateEnum
 CREATE TYPE "IntakeType" AS ENUM ('JANUARY', 'APRIL', 'SEPTEMBER');
@@ -186,18 +186,34 @@ CREATE TABLE "PermissionGrant" (
 );
 
 -- CreateTable
+CREATE TABLE "ProgrammeCategory" (
+    "id" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "slug" TEXT NOT NULL,
+    "description" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "ProgrammeCategory_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "Programme" (
     "id" TEXT NOT NULL,
-    "title" TEXT NOT NULL,
     "code" TEXT NOT NULL,
+    "title" TEXT NOT NULL,
+    "categoryId" TEXT NOT NULL,
     "tier" "ProgrammeTier" NOT NULL,
-    "category" TEXT NOT NULL,
-    "lengthWeeks" INTEGER NOT NULL,
-    "weeklyCommitmentHours" INTEGER NOT NULL,
-    "credits" INTEGER NOT NULL,
-    "feeNaira" DECIMAL(12,2) NOT NULL,
     "status" "ProgrammeStatus" NOT NULL DEFAULT 'DRAFT',
-    "description" TEXT,
+    "summary" TEXT NOT NULL,
+    "weeks" INTEGER NOT NULL,
+    "weeklyHoursLabel" TEXT NOT NULL,
+    "credits" INTEGER NOT NULL,
+    "feeMinor" INTEGER NOT NULL,
+    "currency" TEXT NOT NULL DEFAULT 'NGN',
+    "deliveryLabel" TEXT NOT NULL DEFAULT 'Online + proctored exam',
+    "prerequisiteTier" "ProgrammeTier",
+    "createdByStaffId" TEXT NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -210,8 +226,9 @@ CREATE TABLE "Module" (
     "programmeId" TEXT NOT NULL,
     "weekNumber" INTEGER NOT NULL,
     "title" TEXT NOT NULL,
-    "status" "ModuleStatus" NOT NULL DEFAULT 'DRAFT',
-    "questionDrawCount" INTEGER NOT NULL DEFAULT 0,
+    "summary" TEXT,
+    "examQuestionDraw" INTEGER NOT NULL DEFAULT 2,
+    "orderIndex" INTEGER NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -222,19 +239,96 @@ CREATE TABLE "Module" (
 CREATE TABLE "Lecture" (
     "id" TEXT NOT NULL,
     "moduleId" TEXT NOT NULL,
+    "orderIndex" INTEGER NOT NULL,
     "title" TEXT NOT NULL,
-    "media" "LectureMedia" NOT NULL,
-    "mediaUrl" TEXT,
-    "narrationMode" "NarrationMode" NOT NULL DEFAULT 'PER_SLIDE',
-    "narrationAutoAdvance" BOOLEAN NOT NULL DEFAULT true,
-    "narrationDurationSecs" INTEGER,
-    "hasScenario" BOOLEAN NOT NULL DEFAULT false,
-    "hasDraftingExercise" BOOLEAN NOT NULL DEFAULT false,
-    "hasQuiz" BOOLEAN NOT NULL DEFAULT false,
+    "mediaKind" "LectureMediaKind" NOT NULL,
+    "videoUrl" TEXT,
+    "videoAssetId" TEXT,
+    "narrationMode" "NarrationMode" NOT NULL DEFAULT 'NONE',
+    "narrationAutoAdvance" BOOLEAN NOT NULL DEFAULT false,
+    "narrationRequireFull" BOOLEAN NOT NULL DEFAULT false,
+    "fullNarrationAssetId" TEXT,
+    "scenarioPrompt" TEXT,
+    "scenarioGuidance" TEXT,
+    "draftingPrompt" TEXT,
+    "draftingWordLimit" INTEGER,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "Lecture_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "Slide" (
+    "id" TEXT NOT NULL,
+    "lectureId" TEXT NOT NULL,
+    "orderIndex" INTEGER NOT NULL,
+    "title" TEXT,
+    "body" TEXT,
+    "imageAssetId" TEXT,
+    "narrationAssetId" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "Slide_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "MediaAsset" (
+    "id" TEXT NOT NULL,
+    "kind" TEXT NOT NULL,
+    "storageKey" TEXT NOT NULL,
+    "mimeType" TEXT NOT NULL,
+    "bytes" INTEGER NOT NULL,
+    "durationSeconds" INTEGER,
+    "originalFilename" TEXT NOT NULL,
+    "uploadedByStaffId" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "MediaAsset_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "Quiz" (
+    "id" TEXT NOT NULL,
+    "moduleId" TEXT NOT NULL,
+    "passMarkPercent" INTEGER NOT NULL DEFAULT 60,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "Quiz_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "QuizQuestion" (
+    "id" TEXT NOT NULL,
+    "quizId" TEXT NOT NULL,
+    "orderIndex" INTEGER NOT NULL,
+    "prompt" TEXT NOT NULL,
+    "marks" INTEGER NOT NULL DEFAULT 1,
+    "explanation" TEXT,
+
+    CONSTRAINT "QuizQuestion_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "QuizOption" (
+    "id" TEXT NOT NULL,
+    "questionId" TEXT NOT NULL,
+    "orderIndex" INTEGER NOT NULL,
+    "text" TEXT NOT NULL,
+    "isCorrect" BOOLEAN NOT NULL DEFAULT false,
+
+    CONSTRAINT "QuizOption_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "AssessmentWeighting" (
+    "programmeId" TEXT NOT NULL,
+    "kind" "AssessmentKind" NOT NULL,
+    "weightPercent" INTEGER NOT NULL,
+
+    CONSTRAINT "AssessmentWeighting_pkey" PRIMARY KEY ("programmeId","kind")
 );
 
 -- CreateTable
@@ -459,16 +553,43 @@ CREATE INDEX "Staff_status_idx" ON "Staff"("status");
 CREATE UNIQUE INDEX "PermissionGrant_staffId_permission_key" ON "PermissionGrant"("staffId", "permission");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "ProgrammeCategory_name_key" ON "ProgrammeCategory"("name");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "ProgrammeCategory_slug_key" ON "ProgrammeCategory"("slug");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "Programme_code_key" ON "Programme"("code");
 
 -- CreateIndex
-CREATE INDEX "Programme_status_idx" ON "Programme"("status");
+CREATE INDEX "Programme_status_tier_idx" ON "Programme"("status", "tier");
 
 -- CreateIndex
-CREATE INDEX "Programme_tier_idx" ON "Programme"("tier");
+CREATE INDEX "Programme_categoryId_idx" ON "Programme"("categoryId");
+
+-- CreateIndex
+CREATE INDEX "Module_programmeId_orderIndex_idx" ON "Module"("programmeId", "orderIndex");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "Module_programmeId_weekNumber_key" ON "Module"("programmeId", "weekNumber");
+
+-- CreateIndex
+CREATE INDEX "Lecture_moduleId_orderIndex_idx" ON "Lecture"("moduleId", "orderIndex");
+
+-- CreateIndex
+CREATE INDEX "Slide_lectureId_orderIndex_idx" ON "Slide"("lectureId", "orderIndex");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "MediaAsset_storageKey_key" ON "MediaAsset"("storageKey");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Quiz_moduleId_key" ON "Quiz"("moduleId");
+
+-- CreateIndex
+CREATE INDEX "QuizQuestion_quizId_orderIndex_idx" ON "QuizQuestion"("quizId", "orderIndex");
+
+-- CreateIndex
+CREATE INDEX "QuizOption_questionId_orderIndex_idx" ON "QuizOption"("questionId", "orderIndex");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "Intake_type_startDate_key" ON "Intake"("type", "startDate");
@@ -549,10 +670,46 @@ ALTER TABLE "Staff" ADD CONSTRAINT "Staff_lineManagerId_fkey" FOREIGN KEY ("line
 ALTER TABLE "PermissionGrant" ADD CONSTRAINT "PermissionGrant_staffId_fkey" FOREIGN KEY ("staffId") REFERENCES "Staff"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "Programme" ADD CONSTRAINT "Programme_categoryId_fkey" FOREIGN KEY ("categoryId") REFERENCES "ProgrammeCategory"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Programme" ADD CONSTRAINT "Programme_createdByStaffId_fkey" FOREIGN KEY ("createdByStaffId") REFERENCES "Staff"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "Module" ADD CONSTRAINT "Module_programmeId_fkey" FOREIGN KEY ("programmeId") REFERENCES "Programme"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Lecture" ADD CONSTRAINT "Lecture_moduleId_fkey" FOREIGN KEY ("moduleId") REFERENCES "Module"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Lecture" ADD CONSTRAINT "Lecture_videoAssetId_fkey" FOREIGN KEY ("videoAssetId") REFERENCES "MediaAsset"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Lecture" ADD CONSTRAINT "Lecture_fullNarrationAssetId_fkey" FOREIGN KEY ("fullNarrationAssetId") REFERENCES "MediaAsset"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Slide" ADD CONSTRAINT "Slide_lectureId_fkey" FOREIGN KEY ("lectureId") REFERENCES "Lecture"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Slide" ADD CONSTRAINT "Slide_imageAssetId_fkey" FOREIGN KEY ("imageAssetId") REFERENCES "MediaAsset"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Slide" ADD CONSTRAINT "Slide_narrationAssetId_fkey" FOREIGN KEY ("narrationAssetId") REFERENCES "MediaAsset"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "MediaAsset" ADD CONSTRAINT "MediaAsset_uploadedByStaffId_fkey" FOREIGN KEY ("uploadedByStaffId") REFERENCES "Staff"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Quiz" ADD CONSTRAINT "Quiz_moduleId_fkey" FOREIGN KEY ("moduleId") REFERENCES "Module"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "QuizQuestion" ADD CONSTRAINT "QuizQuestion_quizId_fkey" FOREIGN KEY ("quizId") REFERENCES "Quiz"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "QuizOption" ADD CONSTRAINT "QuizOption_questionId_fkey" FOREIGN KEY ("questionId") REFERENCES "QuizQuestion"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "AssessmentWeighting" ADD CONSTRAINT "AssessmentWeighting_programmeId_fkey" FOREIGN KEY ("programmeId") REFERENCES "Programme"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Cohort" ADD CONSTRAINT "Cohort_programmeId_fkey" FOREIGN KEY ("programmeId") REFERENCES "Programme"("id") ON DELETE CASCADE ON UPDATE CASCADE;

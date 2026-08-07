@@ -241,6 +241,8 @@ model Staff {
   resolvedContactRequests ContactRequest[] @relation("ContactRequestResolvedBy")
   adminNotesAuthored      AdminNote[]
   revokedCertificates     Certificate[]    @relation("CertificateRevokedBy")
+  createdProgrammes       Programme[]      @relation("ProgrammeCreatedBy")
+  uploadedMediaAssets     MediaAsset[]
 
   @@index([role])
   @@index([status])
@@ -263,6 +265,11 @@ model PermissionGrant {
 }
 
 // ─── Programme, module, lecture ─────────────────────────────────────────
+//
+// The deepest schema in the system (Handoff Slice 02) — column names and
+// types kept verbatim from that README because the catalogue, course
+// player, quizzes, exam question bank and certificates all read this.
+// Nothing here is candidate-facing.
 
 enum ProgrammeTier {
   FOUNDATION
@@ -270,99 +277,277 @@ enum ProgrammeTier {
   ADVANCED_PRACTITIONER
 }
 
-// Website listing state machine: draft -> live (published) -> draft.
-// Only live programmes appear in the public catalogue.
+// DRAFT is the authoring state. ACTIVE means open for enrolment — it is
+// NOT website publication (a separate flag Slice 09 adds); a programme
+// can be ACTIVE and unpublished on the marketing site at the same time.
+// Conflating the two would make unpublishing silently close enrolment.
 enum ProgrammeStatus {
   DRAFT
-  LIVE
+  ACTIVE
+  ARCHIVED
 }
 
-model Programme {
-  id    String @id @default(cuid())
-  title String
-  code  String @unique // e.g. ELR-201
-
-  tier                  ProgrammeTier
-  category              String
-  lengthWeeks           Int
-  weeklyCommitmentHours Int
-  credits               Int
-  feeNaira              Decimal         @db.Decimal(12, 2)
-  status                ProgrammeStatus @default(DRAFT)
-  description           String?
+// Administrators pick an existing category or create one inline while
+// authoring. Case-insensitive dedupe on `name` happens in the service
+// (createCategory), not here — Postgres citext would also work but the
+// spec gives a plain unique String, so the dedupe check stays app-side.
+model ProgrammeCategory {
+  id          String  @id @default(uuid())
+  name        String  @unique
+  slug        String  @unique
+  description String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  modules      Module[]
-  cohorts      Cohort[]
-  enrolments   Enrolment[]
-  payments     Payment[]
-  certificates Certificate[]
-  examination  Examination?
-
-  @@index([status])
-  @@index([tier])
+  programmes Programme[]
 }
 
-enum ModuleStatus {
-  DRAFT
-  PUBLISHED
+model Programme {
+  id    String @id @default(uuid())
+  code  String @unique // e.g. ELR-201 — immutable once any enrolment exists (rule 3)
+  title String
+
+  categoryId String
+  category   ProgrammeCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  tier   ProgrammeTier
+  status ProgrammeStatus @default(DRAFT)
+
+  summary String // the paragraph shown in the catalogue and public listing
+
+  weeks            Int // 8 Foundation · 12 Specialist · 16 Advanced — stored, never derived from tier
+  weeklyHoursLabel String // free text range, e.g. "6–8 hrs / week" — a label, not a number
+  credits          Int // Lavelle credits — never "CPD points"
+
+  feeMinor Int // naira KOBO, integer minor units — ₦450,000 is 45000000. Never a float.
+  currency String @default("NGN")
+
+  deliveryLabel     String         @default("Online + proctored exam")
+  prerequisiteTier  ProgrammeTier? // non-null only for ADVANCED_PRACTITIONER; Slice 06 enforces it
+
+  createdByStaffId String
+  createdBy        Staff  @relation("ProgrammeCreatedBy", fields: [createdByStaffId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  modules             Module[]
+  assessmentWeightings AssessmentWeighting[]
+  cohorts             Cohort[]
+  enrolments          Enrolment[]
+  payments            Payment[]
+  certificates        Certificate[]
+  examination         Examination?
+
+  @@index([status, tier])
+  @@index([categoryId])
 }
 
 model Module {
-  id          String    @id @default(cuid())
+  id          String    @id @default(uuid())
   programmeId String
   programme   Programme @relation(fields: [programmeId], references: [id], onDelete: Cascade)
 
-  weekNumber Int
+  weekNumber Int // 1-based
   title      String
-  status     ModuleStatus @default(DRAFT)
-  // Business rule 6: publishing is blocked while a module has fewer
-  // approved objective questions than this draw count.
-  questionDrawCount Int @default(0)
+  summary    String?
+
+  // How many approved objective questions this module contributes to the
+  // certifying examination. Slice 06 reads it and blocks publishing an
+  // examination while a module has fewer approved questions than this —
+  // this slice only stores the number, it does not enforce that check.
+  examQuestionDraw Int @default(2)
+
+  // Explicit ordering, independent of weekNumber — reordering must not
+  // renumber weeks (rule 9).
+  orderIndex Int
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   lectures  Lecture[]
-  questions Question[]
+  questions Question[] // the Slice 00 exam question bank — a different table from Quiz below, see that model's comment
+  quiz      Quiz?
 
   @@unique([programmeId, weekNumber])
+  @@index([programmeId, orderIndex])
 }
 
-enum LectureMedia {
+enum LectureMediaKind {
   SLIDES
   VIDEO
 }
 
-// Business rule 15: narration is configurable per lecture — per-slide with
-// auto-advance, or one track for the whole lecture. Duration is derived
-// from the uploaded audio at ingest time, not entered by hand.
+// NONE — no audio.
+// PER_SLIDE — each slide carries its own narrationAssetId; narrationAutoAdvance
+//   decides whether finishing it advances the slide.
+// FULL_LECTURE — one fullNarrationAssetId for the whole lecture;
+//   narrationAutoAdvance is meaningless there and must be stored false.
 enum NarrationMode {
+  NONE
   PER_SLIDE
-  SINGLE_TRACK
+  FULL_LECTURE
 }
 
 model Lecture {
-  id       String @id @default(cuid())
+  id       String @id @default(uuid())
   moduleId String
   module   Module @relation(fields: [moduleId], references: [id], onDelete: Cascade)
 
-  title    String
-  media    LectureMedia
-  mediaUrl String?
+  orderIndex Int
+  title      String
 
-  narrationMode         NarrationMode @default(PER_SLIDE)
-  narrationAutoAdvance  Boolean       @default(true)
-  narrationDurationSecs Int?
+  mediaKind LectureMediaKind
+  videoUrl  String? // video only — a pasted hosted URL; nothing to probe, duration shows "pending"
 
-  hasScenario         Boolean @default(false)
-  hasDraftingExercise Boolean @default(false)
-  hasQuiz             Boolean @default(false)
+  // Not in the README's literal table — added because the duration rule
+  // ("...or the video's duration") is only achievable for a video that
+  // was actually uploaded (and so has bytes to probe), as distinct from
+  // videoUrl above (a pasted URL, where there is genuinely nothing to
+  // probe and "Duration pending" is correct, not a gap).
+  // Not @unique — a MediaAsset can be referenced by more than one lecture
+  // (duplicateProgramme shares uploaded bytes by reference rather than
+  // copying them; nothing in the README requires strict 1:1 either).
+  videoAssetId String?
+  videoAsset   MediaAsset? @relation("LectureVideo", fields: [videoAssetId], references: [id])
+
+  narrationMode         NarrationMode @default(NONE)
+  narrationAutoAdvance  Boolean       @default(false) // only meaningful when PER_SLIDE
+  narrationRequireFull  Boolean       @default(false) // must the candidate hear a slide out before advancing
+
+  fullNarrationAssetId String?     // only when FULL_LECTURE
+  fullNarrationAsset   MediaAsset? @relation("LectureFullNarration", fields: [fullNarrationAssetId], references: [id])
+
+  scenarioPrompt   String? // the applied-scenario step
+  scenarioGuidance String?
+
+  draftingPrompt    String? // the faculty-marked drafting exercise
+  draftingWordLimit Int?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  slides Slide[]
+
+  @@index([moduleId, orderIndex])
+}
+
+model Slide {
+  id        String  @id @default(uuid())
+  lectureId String
+  lecture   Lecture @relation(fields: [lectureId], references: [id], onDelete: Cascade)
+
+  orderIndex Int
+  title      String?
+  body       String? // markdown
+
+  imageAssetId String?
+  imageAsset   MediaAsset? @relation("SlideImage", fields: [imageAssetId], references: [id])
+
+  narrationAssetId String? // the per-slide audio
+  narrationAsset   MediaAsset? @relation("SlideNarration", fields: [narrationAssetId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([lectureId, orderIndex])
+}
+
+// One table for every upload — narration audio, slide images, lecture
+// video, certificate artwork. storageKey is an object-storage key, never
+// a public URL — content is only ever reachable through a signed,
+// expiring URL (rule 10). durationSeconds is required for audio/video and
+// is probed server-side on upload (src/lib/uploads.ts); a lecture's
+// estimated duration is always derived by summing these, never entered.
+model MediaAsset {
+  id String @id @default(uuid())
+
+  kind       String // "audio" | "image" | "video" | "document"
+  storageKey String @unique
+  mimeType   String
+  bytes      Int
+
+  durationSeconds Int? // required for audio/video, probed not trusted from the client
+
+  originalFilename String
+
+  uploadedByStaffId String
+  uploadedBy         Staff  @relation(fields: [uploadedByStaffId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  // Arrays, not single relations — not @unique on the FK side above, so a
+  // MediaAsset can be shared by more than one lecture/slide.
+  lectureFullNarrations Lecture[] @relation("LectureFullNarration")
+  lectureVideos         Lecture[] @relation("LectureVideo")
+  slideImages           Slide[]   @relation("SlideImage")
+  slideNarrations       Slide[]   @relation("SlideNarration")
+}
+
+// Module-close quizzes — auto-marked and formative. NOT the examination
+// question bank (a different table Slice 06 owns): a quiz question is
+// drawn from nowhere and always shown; an examination question is drawn,
+// shuffled, and summative. Do not conflate them.
+model Quiz {
+  id       String @id @default(uuid())
+  moduleId String @unique
+  module   Module @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+
+  passMarkPercent Int @default(60)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  questions QuizQuestion[]
+}
+
+model QuizQuestion {
+  id     String @id @default(uuid())
+  quizId String
+  quiz   Quiz   @relation(fields: [quizId], references: [id], onDelete: Cascade)
+
+  orderIndex  Int
+  prompt      String
+  marks       Int     @default(1)
+  explanation String? // shown after marking
+
+  options QuizOption[]
+
+  @@index([quizId, orderIndex])
+}
+
+model QuizOption {
+  id         String       @id @default(uuid())
+  questionId String
+  question   QuizQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  orderIndex Int
+  text       String
+  // Exactly one true per question — enforced in the service (upsertQuiz), not by a DB constraint.
+  isCorrect  Boolean @default(false)
+
+  @@index([questionId, orderIndex])
+}
+
+enum AssessmentKind {
+  QUIZ
+  DRAFTING
+  EXAMINATION
+}
+
+// The 20/40/40 split is a property of the programme, not a constant in
+// code. The three weights must total exactly 100 — validated on write
+// (upsertAssessmentWeighting), because Slice 05 computes a final mark
+// from whatever is stored here regardless.
+model AssessmentWeighting {
+  programmeId String
+  programme   Programme @relation(fields: [programmeId], references: [id], onDelete: Cascade)
+
+  kind          AssessmentKind
+  weightPercent Int
+
+  @@id([programmeId, kind])
 }
 
 // ─── Intake, cohort, enrolment ──────────────────────────────────────────
