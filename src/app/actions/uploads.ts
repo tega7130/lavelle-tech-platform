@@ -13,7 +13,15 @@ const finaliseUploadSchema = z.object({
   kind: z.enum(["audio", "image", "video", "document"]),
   mimeType: z.string().min(1),
   originalFilename: z.string().min(1),
+  // Mirrors /api/uploads/sign's purpose — programme media (default) or a
+  // finance receipt, each gated by a different permission.
+  purpose: z.enum(["programme", "finance"]).default("programme"),
 });
+
+const PERMISSION_BY_PURPOSE = {
+  programme: Permission.MANAGE_PROGRAMMES,
+  finance: Permission.MANAGE_PAYMENTS,
+} as const;
 
 /**
  * Probes duration server-side and creates the MediaAsset — never trusts
@@ -21,8 +29,8 @@ const finaliseUploadSchema = z.object({
  * in this app's UI ever asks the admin to type one).
  */
 export async function finaliseUpload(input: unknown) {
-  const staff = await requireStaffPermission(Permission.MANAGE_PROGRAMMES);
   const data = finaliseUploadSchema.parse(input);
+  const staff = await requireStaffPermission(PERMISSION_BY_PURPOSE[data.purpose]);
 
   if (!(await blobExists(data.storageKey))) {
     throw new Error("Upload not found — the presigned URL may have expired before the file finished uploading.");

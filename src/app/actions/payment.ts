@@ -1,0 +1,207 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { prisma } from "@/lib/prisma";
+import { Prisma, Permission, PaymentPurpose, PaymentStatus, EnrolmentStatus } from "@/generated/prisma/client";
+import { requireStaffPermission } from "@/lib/staff-auth";
+import { getCurrentCandidate } from "@/lib/candidate-session";
+import { getClientIp } from "@/lib/request-info";
+import { recordAuditEvent } from "@/lib/audit";
+import { createProviderCheckout, generateInternalReference } from "@/lib/payment-provider";
+import { LiveEnrolmentExistsError, PaymentNotPendingError } from "@/lib/payment-errors";
+import { applyOfflineRecording } from "@/lib/offline-recording";
+import { offlinePaymentInputSchema, recordOfflinePaymentSchema, fieldErrors } from "@/lib/validation/payment";
+import { getPaymentStatus } from "@/lib/catalogue-reads";
+import type { FormActionState } from "@/lib/action-state";
+
+/** Thin Server Action wrapper so the checkout return page's client-side poll can call the server function (rule 6 — this, not the redirect URL, is the authority). */
+export async function pollPaymentStatus(internalReference: string) {
+  return getPaymentStatus(internalReference);
+}
+
+// Keeps empty strings (unlike programme.ts's formToObject, which filters
+// them for optional-field semantics) — every field on this form is
+// required, and zod's own min(1, "message") needs an actual "" to report
+// that friendly message; a missing key instead fails on the base type
+// check first ("expected string, received undefined") and never reaches it.
+function formToObject(formData: FormData): Record<string, string> {
+  const obj: Record<string, string> = {};
+  for (const [k, v] of formData.entries()) if (typeof v === "string") obj[k] = v;
+  return obj;
+}
+
+async function pickOpenIntake() {
+  const intake = await prisma.intake.findFirst({ where: { status: "OPEN" }, orderBy: { startsAt: "asc" } });
+  if (!intake) throw new Error("No open intake is currently accepting enrolments.");
+  return intake;
+}
+
+async function createPendingPaymentAndEnrolment(candidateId: string, programmeId: string, feeMinor: number) {
+  const intake = await pickOpenIntake();
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const internalReference = generateInternalReference();
+    try {
+      return await prisma.$transaction(async (tx) => {
+        const enrolment = await tx.enrolment.create({
+          data: { candidateId, programmeId, intakeId: intake.id, status: EnrolmentStatus.PENDING_PAYMENT },
+        });
+        const payment = await tx.payment.create({
+          data: {
+            candidateId,
+            purpose: PaymentPurpose.PROGRAMME_FEE,
+            enrolmentId: enrolment.id,
+            amountMinor: feeMinor,
+            provider: "paystack",
+            internalReference,
+            status: PaymentStatus.PENDING,
+          },
+        });
+        return { enrolment, payment };
+      });
+    } catch (e) {
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
+        const target = JSON.stringify(e.meta?.target ?? "");
+        if (target.includes("internalReference") && attempt < 2) continue; // reference collision — regenerate and retry
+        throw new LiveEnrolmentExistsError(); // the partial unique index caught an existing live enrolment
+      }
+      throw e;
+    }
+  }
+  throw new Error("Could not generate a unique payment reference. Try again.");
+}
+
+/** Creates the PENDING payment and PENDING_PAYMENT enrolment together; rejects if a live enrolment already exists. */
+export async function initiatePayment(programmeId: string) {
+  const candidate = await getCurrentCandidate();
+  if (!candidate) throw new Error("Sign in required.");
+
+  const programme = await prisma.programme.findUniqueOrThrow({ where: { id: programmeId } });
+  if (programme.status !== "ACTIVE") throw new Error("This programme is not open for enrolment.");
+
+  const existing = await prisma.enrolment.findFirst({
+    where: { candidateId: candidate.id, programmeId, status: { notIn: [EnrolmentStatus.WITHDRAWN, EnrolmentStatus.REFUNDED] } },
+  });
+  if (existing) throw new LiveEnrolmentExistsError();
+
+  const { payment } = await createPendingPaymentAndEnrolment(candidate.id, programmeId, programme.feeMinor);
+  const checkout = createProviderCheckout({
+    provider: payment.provider,
+    internalReference: payment.internalReference,
+    amountMinor: payment.amountMinor,
+    candidateEmail: candidate.email,
+  });
+
+  revalidatePath("/portal/catalogue");
+  return { internalReference: payment.internalReference, checkoutUrl: checkout.checkoutUrl };
+}
+
+/** Finance ledger / candidate record entry point — a pending payment already exists. Irreversible; requires confirm-payments (mapped to MANAGE_PAYMENTS). */
+export async function confirmPaymentManually(paymentId: string, _prev: FormActionState, formData: FormData): Promise<FormActionState> {
+  const staff = await requireStaffPermission(Permission.MANAGE_PAYMENTS);
+  const raw = formToObject(formData);
+  const parsed = offlinePaymentInputSchema.safeParse(raw);
+  if (!parsed.success) return { errors: fieldErrors(parsed.error), values: raw };
+
+  const ip = await getClientIp();
+  try {
+    const result = await applyOfflineRecording(paymentId, parsed.data, staff.id, ip);
+    revalidatePath("/admin/finance");
+    return { ok: true, data: result };
+  } catch (e) {
+    if (e instanceof PaymentNotPendingError) return { message: e.message };
+    throw e;
+  }
+}
+
+/** Candidate record entry point for someone who transferred before ever starting checkout — no pending payment row exists yet. */
+export async function recordOfflinePayment(_prev: FormActionState, formData: FormData): Promise<FormActionState> {
+  const staff = await requireStaffPermission(Permission.MANAGE_PAYMENTS);
+  const raw = formToObject(formData);
+  const parsed = recordOfflinePaymentSchema.safeParse(raw);
+  if (!parsed.success) return { errors: fieldErrors(parsed.error), values: raw };
+  const data = parsed.data;
+
+  const programme = await prisma.programme.findUniqueOrThrow({ where: { id: data.programmeId } });
+  const existing = await prisma.enrolment.findFirst({
+    where: {
+      candidateId: data.candidateId,
+      programmeId: data.programmeId,
+      status: { notIn: [EnrolmentStatus.WITHDRAWN, EnrolmentStatus.REFUNDED] },
+    },
+  });
+  if (existing) return { message: new LiveEnrolmentExistsError().message };
+
+  const { payment } = await createPendingPaymentAndEnrolment(data.candidateId, data.programmeId, programme.feeMinor);
+
+  const ip = await getClientIp();
+  const result = await applyOfflineRecording(payment.id, data, staff.id, ip);
+  revalidatePath("/admin/finance");
+  revalidatePath(`/admin/candidates/${data.candidateId}`);
+  return { ok: true, data: result };
+}
+
+/** Status and audit-log update only — Lavelle holds no candidate balances; the refund itself is settled outside the platform (rule 10). */
+export async function markEnrolmentRefunded(enrolmentId: string, reason: string) {
+  const staff = await requireStaffPermission(Permission.MANAGE_PAYMENTS);
+  const trimmedReason = reason.trim();
+  if (!trimmedReason) throw new Error("A reason is required.");
+
+  const ip = await getClientIp();
+  const updated = await prisma.$transaction(async (tx) => {
+    const enrolment = await tx.enrolment.update({
+      where: { id: enrolmentId },
+      data: { status: EnrolmentStatus.REFUNDED, refundedAt: new Date(), statusReason: trimmedReason },
+    });
+    await recordAuditEvent(tx, {
+      actorStaffId: staff.id,
+      subjectType: "enrolment",
+      subjectId: enrolmentId,
+      action: "enrolment.refunded",
+      description: "Enrolment marked refunded",
+      reason: trimmedReason,
+      ipAddress: ip,
+    });
+    return enrolment;
+  });
+
+  revalidatePath("/admin/finance");
+  return updated;
+}
+
+/** Retires the current card and creates a successor with reissuedFromId, so the history stays legible. */
+export async function reissueIdCard(candidateId: string, reason: string) {
+  const staff = await requireStaffPermission(Permission.MANAGE_PAYMENTS);
+  const trimmedReason = reason.trim();
+  if (!trimmedReason) throw new Error("A reason is required.");
+
+  const current = await prisma.idCard.findFirst({ where: { candidateId, retiredAt: null } });
+  if (!current) throw new Error("This candidate has no active ID card to reissue.");
+
+  const ip = await getClientIp();
+  const successor = await prisma.$transaction(async (tx) => {
+    await tx.idCard.update({ where: { id: current.id }, data: { retiredAt: new Date() } });
+    const created = await tx.idCard.create({
+      data: {
+        candidateId,
+        cardNumber: current.cardNumber,
+        tier: current.tier,
+        issuedAt: new Date(),
+        validUntil: current.validUntil,
+        reissuedFromId: current.id,
+      },
+    });
+    await recordAuditEvent(tx, {
+      actorStaffId: staff.id,
+      subjectType: "id_card",
+      subjectId: created.id,
+      action: "id_card.reissued",
+      description: `Reissued ID card for candidate ${candidateId}`,
+      reason: trimmedReason,
+      ipAddress: ip,
+    });
+    return created;
+  });
+
+  revalidatePath(`/admin/candidates/${candidateId}`);
+  return successor;
+}

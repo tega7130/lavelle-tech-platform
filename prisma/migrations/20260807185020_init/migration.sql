@@ -41,16 +41,22 @@ CREATE TYPE "NarrationMode" AS ENUM ('NONE', 'PER_SLIDE', 'FULL_LECTURE');
 CREATE TYPE "AssessmentKind" AS ENUM ('QUIZ', 'DRAFTING', 'EXAMINATION');
 
 -- CreateEnum
-CREATE TYPE "IntakeType" AS ENUM ('JANUARY', 'APRIL', 'SEPTEMBER');
+CREATE TYPE "IntakeMonth" AS ENUM ('JANUARY', 'APRIL', 'SEPTEMBER');
 
 -- CreateEnum
-CREATE TYPE "EnrolmentStatus" AS ENUM ('ACTIVE', 'COMPLETED', 'PENDING_PAYMENT', 'REFUNDED');
+CREATE TYPE "IntakeStatus" AS ENUM ('OPEN', 'IN_PROGRESS', 'CLOSED');
 
 -- CreateEnum
-CREATE TYPE "PaymentPurpose" AS ENUM ('PROGRAMME', 'EXAMINATION');
+CREATE TYPE "EnrolmentStatus" AS ENUM ('PENDING_PAYMENT', 'ACTIVE', 'COMPLETED', 'WITHDRAWN', 'REFUNDED');
 
 -- CreateEnum
-CREATE TYPE "PaymentStatus" AS ENUM ('SUCCESS', 'PENDING', 'FAILED', 'REFUNDED');
+CREATE TYPE "PaymentPurpose" AS ENUM ('PROGRAMME_FEE', 'EXAMINATION_FEE');
+
+-- CreateEnum
+CREATE TYPE "PaymentStatus" AS ENUM ('PENDING', 'SUCCESS', 'FAILED', 'REFUNDED');
+
+-- CreateEnum
+CREATE TYPE "OfflinePaymentMode" AS ENUM ('BANK_TRANSFER', 'CASH_DEPOSIT', 'POS_TERMINAL', 'CHEQUE');
 
 -- CreateEnum
 CREATE TYPE "QuestionType" AS ENUM ('MCQ', 'THEORY');
@@ -334,10 +340,14 @@ CREATE TABLE "AssessmentWeighting" (
 -- CreateTable
 CREATE TABLE "Intake" (
     "id" TEXT NOT NULL,
-    "label" TEXT NOT NULL,
-    "type" "IntakeType" NOT NULL,
-    "startDate" TIMESTAMP(3) NOT NULL,
+    "month" "IntakeMonth" NOT NULL,
+    "year" INTEGER NOT NULL,
+    "status" "IntakeStatus" NOT NULL DEFAULT 'OPEN',
+    "enrolmentOpensAt" TIMESTAMP(3) NOT NULL,
+    "enrolmentClosesAt" TIMESTAMP(3) NOT NULL,
+    "startsAt" TIMESTAMP(3) NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "Intake_pkey" PRIMARY KEY ("id")
 );
@@ -345,10 +355,14 @@ CREATE TABLE "Intake" (
 -- CreateTable
 CREATE TABLE "Cohort" (
     "id" TEXT NOT NULL,
+    "code" TEXT NOT NULL,
     "programmeId" TEXT NOT NULL,
     "intakeId" TEXT NOT NULL,
-    "label" TEXT NOT NULL,
+    "capacity" INTEGER NOT NULL,
+    "facultyLeadStaffId" TEXT,
+    "status" TEXT NOT NULL DEFAULT 'OPEN',
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "Cohort_pkey" PRIMARY KEY ("id")
 );
@@ -359,9 +373,13 @@ CREATE TABLE "Enrolment" (
     "candidateId" UUID NOT NULL,
     "programmeId" TEXT NOT NULL,
     "cohortId" TEXT,
+    "intakeId" TEXT NOT NULL,
     "status" "EnrolmentStatus" NOT NULL DEFAULT 'PENDING_PAYMENT',
     "enrolledAt" TIMESTAMP(3),
     "completedAt" TIMESTAMP(3),
+    "withdrawnAt" TIMESTAMP(3),
+    "refundedAt" TIMESTAMP(3),
+    "statusReason" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -373,18 +391,58 @@ CREATE TABLE "Payment" (
     "id" TEXT NOT NULL,
     "candidateId" UUID NOT NULL,
     "purpose" "PaymentPurpose" NOT NULL,
-    "programmeId" TEXT,
+    "enrolmentId" TEXT,
     "examinationSittingId" TEXT,
-    "amountNaira" DECIMAL(12,2) NOT NULL,
-    "provider" TEXT NOT NULL,
-    "reference" TEXT NOT NULL,
+    "amountMinor" INTEGER NOT NULL,
+    "currency" TEXT NOT NULL DEFAULT 'NGN',
     "status" "PaymentStatus" NOT NULL DEFAULT 'PENDING',
+    "provider" TEXT NOT NULL,
+    "providerReference" TEXT,
+    "internalReference" TEXT NOT NULL,
     "initiatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "confirmedAt" TIMESTAMP(3),
+    "failedAt" TIMESTAMP(3),
+    "failureReason" TEXT,
+    "confirmedByStaffId" TEXT,
+    "manualConfirmationNote" TEXT,
+    "offlineMode" "OfflinePaymentMode",
+    "offlineReference" TEXT,
+    "offlineReceivedOn" TIMESTAMP(3),
+    "receiptAssetId" TEXT,
+    "statementVerifiedAt" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "Payment_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "WebhookEvent" (
+    "id" TEXT NOT NULL,
+    "provider" TEXT NOT NULL,
+    "providerEventId" TEXT NOT NULL,
+    "payload" JSONB NOT NULL,
+    "signatureValid" BOOLEAN NOT NULL,
+    "processedAt" TIMESTAMP(3),
+    "receivedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "WebhookEvent_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "IdCard" (
+    "id" TEXT NOT NULL,
+    "candidateId" UUID NOT NULL,
+    "cardNumber" TEXT NOT NULL,
+    "tier" "ProgrammeTier" NOT NULL,
+    "issuedAt" TIMESTAMP(3) NOT NULL,
+    "validUntil" TIMESTAMP(3) NOT NULL,
+    "retiredAt" TIMESTAMP(3),
+    "reissuedFromId" TEXT,
+    "photoAssetId" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "IdCard_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -592,25 +650,46 @@ CREATE INDEX "QuizQuestion_quizId_orderIndex_idx" ON "QuizQuestion"("quizId", "o
 CREATE INDEX "QuizOption_questionId_orderIndex_idx" ON "QuizOption"("questionId", "orderIndex");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Intake_type_startDate_key" ON "Intake"("type", "startDate");
+CREATE UNIQUE INDEX "Intake_month_year_key" ON "Intake"("month", "year");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Cohort_programmeId_intakeId_label_key" ON "Cohort"("programmeId", "intakeId", "label");
+CREATE UNIQUE INDEX "Cohort_code_key" ON "Cohort"("code");
 
 -- CreateIndex
-CREATE INDEX "Enrolment_candidateId_idx" ON "Enrolment"("candidateId");
+CREATE INDEX "Cohort_programmeId_intakeId_idx" ON "Cohort"("programmeId", "intakeId");
+
+-- CreateIndex
+CREATE INDEX "Enrolment_candidateId_status_idx" ON "Enrolment"("candidateId", "status");
+
+-- CreateIndex
+CREATE INDEX "Enrolment_cohortId_status_idx" ON "Enrolment"("cohortId", "status");
 
 -- CreateIndex
 CREATE INDEX "Enrolment_programmeId_idx" ON "Enrolment"("programmeId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Payment_reference_key" ON "Payment"("reference");
+CREATE UNIQUE INDEX "Payment_providerReference_key" ON "Payment"("providerReference");
 
 -- CreateIndex
-CREATE INDEX "Payment_candidateId_idx" ON "Payment"("candidateId");
+CREATE UNIQUE INDEX "Payment_internalReference_key" ON "Payment"("internalReference");
 
 -- CreateIndex
-CREATE INDEX "Payment_status_idx" ON "Payment"("status");
+CREATE INDEX "Payment_candidateId_createdAt_idx" ON "Payment"("candidateId", "createdAt" DESC);
+
+-- CreateIndex
+CREATE INDEX "Payment_status_initiatedAt_idx" ON "Payment"("status", "initiatedAt");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "WebhookEvent_provider_providerEventId_key" ON "WebhookEvent"("provider", "providerEventId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "IdCard_cardNumber_key" ON "IdCard"("cardNumber");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "IdCard_reissuedFromId_key" ON "IdCard"("reissuedFromId");
+
+-- CreateIndex
+CREATE INDEX "IdCard_candidateId_idx" ON "IdCard"("candidateId");
 
 -- CreateIndex
 CREATE INDEX "Question_moduleId_status_idx" ON "Question"("moduleId", "status");
@@ -718,6 +797,9 @@ ALTER TABLE "Cohort" ADD CONSTRAINT "Cohort_programmeId_fkey" FOREIGN KEY ("prog
 ALTER TABLE "Cohort" ADD CONSTRAINT "Cohort_intakeId_fkey" FOREIGN KEY ("intakeId") REFERENCES "Intake"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "Cohort" ADD CONSTRAINT "Cohort_facultyLeadStaffId_fkey" FOREIGN KEY ("facultyLeadStaffId") REFERENCES "Staff"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "Enrolment" ADD CONSTRAINT "Enrolment_candidateId_fkey" FOREIGN KEY ("candidateId") REFERENCES "Candidate"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -727,13 +809,31 @@ ALTER TABLE "Enrolment" ADD CONSTRAINT "Enrolment_programmeId_fkey" FOREIGN KEY 
 ALTER TABLE "Enrolment" ADD CONSTRAINT "Enrolment_cohortId_fkey" FOREIGN KEY ("cohortId") REFERENCES "Cohort"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "Enrolment" ADD CONSTRAINT "Enrolment_intakeId_fkey" FOREIGN KEY ("intakeId") REFERENCES "Intake"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "Payment" ADD CONSTRAINT "Payment_candidateId_fkey" FOREIGN KEY ("candidateId") REFERENCES "Candidate"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "Payment" ADD CONSTRAINT "Payment_programmeId_fkey" FOREIGN KEY ("programmeId") REFERENCES "Programme"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "Payment" ADD CONSTRAINT "Payment_enrolmentId_fkey" FOREIGN KEY ("enrolmentId") REFERENCES "Enrolment"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Payment" ADD CONSTRAINT "Payment_examinationSittingId_fkey" FOREIGN KEY ("examinationSittingId") REFERENCES "ExaminationSitting"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Payment" ADD CONSTRAINT "Payment_confirmedByStaffId_fkey" FOREIGN KEY ("confirmedByStaffId") REFERENCES "Staff"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Payment" ADD CONSTRAINT "Payment_receiptAssetId_fkey" FOREIGN KEY ("receiptAssetId") REFERENCES "MediaAsset"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "IdCard" ADD CONSTRAINT "IdCard_candidateId_fkey" FOREIGN KEY ("candidateId") REFERENCES "Candidate"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "IdCard" ADD CONSTRAINT "IdCard_reissuedFromId_fkey" FOREIGN KEY ("reissuedFromId") REFERENCES "IdCard"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "IdCard" ADD CONSTRAINT "IdCard_photoAssetId_fkey" FOREIGN KEY ("photoAssetId") REFERENCES "MediaAsset"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Question" ADD CONSTRAINT "Question_moduleId_fkey" FOREIGN KEY ("moduleId") REFERENCES "Module"("id") ON DELETE CASCADE ON UPDATE CASCADE;

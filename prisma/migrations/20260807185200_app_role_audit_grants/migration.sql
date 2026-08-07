@@ -16,9 +16,9 @@ $$;
 GRANT USAGE ON SCHEMA public TO lavelle_app;
 
 -- Full CRUD on every table except audit_event, plus USAGE on sequences
--- (bigserial ids, the applicant-number sequences created by
--- next_applicant_number(), which is SECURITY DEFINER and so does not
--- itself require sequence USAGE for the caller).
+-- (bigserial ids, the applicant/candidate-number sequences created by the
+-- SECURITY DEFINER number-generator functions, which do not themselves
+-- require sequence USAGE for the caller).
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO lavelle_app;
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO lavelle_app;
 GRANT EXECUTE ON FUNCTION next_applicant_number() TO lavelle_app;

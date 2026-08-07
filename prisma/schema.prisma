@@ -52,13 +52,13 @@ model Candidate {
   id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
 
   // Issued at registration, permanent, never reused (LVL-APP-2026-04412).
-  applicantNumber String @unique @db.VarChar(24)
+  applicantNumber String  @unique @db.VarChar(24)
   // Null until first confirmed payment (LVL/2026/00291) — a second,
   // separate identifier from applicantNumber, never derived from it.
   candidateNumber String? @unique @db.VarChar(24)
 
-  firstName String @db.VarChar(80)
-  lastName  String @db.VarChar(80)
+  firstName       String    @db.VarChar(80)
+  lastName        String    @db.VarChar(80)
   // citext — case-insensitive uniqueness/lookup is the point, not just storage.
   email           String    @unique @db.Citext
   emailVerifiedAt DateTime?
@@ -81,16 +81,17 @@ model Candidate {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  profile             CandidateProfile?
+  profile                 CandidateProfile?
   emailVerificationTokens EmailVerificationToken[]
-  notifications       Notification[]
-  sessions            Session[]
-  enrolments          Enrolment[]
-  payments            Payment[]
-  certificates        Certificate[]
-  examinationSittings ExaminationSitting[]
-  contactRequests     ContactRequest[]
-  adminNotes          AdminNote[]
+  notifications           Notification[]
+  sessions                Session[]
+  enrolments              Enrolment[]
+  payments                Payment[]
+  idCards                 IdCard[]
+  certificates            Certificate[]
+  examinationSittings     ExaminationSitting[]
+  contactRequests         ContactRequest[]
+  adminNotes              AdminNote[]
 
   @@index([accountStatus])
 }
@@ -243,6 +244,8 @@ model Staff {
   revokedCertificates     Certificate[]    @relation("CertificateRevokedBy")
   createdProgrammes       Programme[]      @relation("ProgrammeCreatedBy")
   uploadedMediaAssets     MediaAsset[]
+  confirmedPayments       Payment[]        @relation("PaymentConfirmedBy")
+  facultyLeadCohorts      Cohort[]         @relation("CohortFacultyLead")
 
   @@index([role])
   @@index([status])
@@ -323,8 +326,8 @@ model Programme {
   feeMinor Int // naira KOBO, integer minor units — ₦450,000 is 45000000. Never a float.
   currency String @default("NGN")
 
-  deliveryLabel     String         @default("Online + proctored exam")
-  prerequisiteTier  ProgrammeTier? // non-null only for ADVANCED_PRACTITIONER; Slice 06 enforces it
+  deliveryLabel    String         @default("Online + proctored exam")
+  prerequisiteTier ProgrammeTier? // non-null only for ADVANCED_PRACTITIONER; Slice 06 enforces it
 
   createdByStaffId String
   createdBy        Staff  @relation("ProgrammeCreatedBy", fields: [createdByStaffId], references: [id])
@@ -332,13 +335,15 @@ model Programme {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  modules             Module[]
+  modules              Module[]
   assessmentWeightings AssessmentWeighting[]
-  cohorts             Cohort[]
-  enrolments          Enrolment[]
-  payments            Payment[]
-  certificates        Certificate[]
-  examination         Examination?
+  cohorts              Cohort[]
+  enrolments           Enrolment[]
+  // No direct payments relation — Payment references Enrolment, not
+  // Programme, directly (see the README's Payment table); go through
+  // enrolment.programme to reach a payment's programme.
+  certificates         Certificate[]
+  examination          Examination?
 
   @@index([status, tier])
   @@index([categoryId])
@@ -412,11 +417,11 @@ model Lecture {
   videoAssetId String?
   videoAsset   MediaAsset? @relation("LectureVideo", fields: [videoAssetId], references: [id])
 
-  narrationMode         NarrationMode @default(NONE)
-  narrationAutoAdvance  Boolean       @default(false) // only meaningful when PER_SLIDE
-  narrationRequireFull  Boolean       @default(false) // must the candidate hear a slide out before advancing
+  narrationMode        NarrationMode @default(NONE)
+  narrationAutoAdvance Boolean       @default(false) // only meaningful when PER_SLIDE
+  narrationRequireFull Boolean       @default(false) // must the candidate hear a slide out before advancing
 
-  fullNarrationAssetId String?     // only when FULL_LECTURE
+  fullNarrationAssetId String? // only when FULL_LECTURE
   fullNarrationAsset   MediaAsset? @relation("LectureFullNarration", fields: [fullNarrationAssetId], references: [id])
 
   scenarioPrompt   String? // the applied-scenario step
@@ -473,7 +478,7 @@ model MediaAsset {
   originalFilename String
 
   uploadedByStaffId String
-  uploadedBy         Staff  @relation(fields: [uploadedByStaffId], references: [id])
+  uploadedBy        Staff  @relation(fields: [uploadedByStaffId], references: [id])
 
   createdAt DateTime @default(now())
 
@@ -483,6 +488,8 @@ model MediaAsset {
   lectureVideos         Lecture[] @relation("LectureVideo")
   slideImages           Slide[]   @relation("SlideImage")
   slideNarrations       Slide[]   @relation("SlideNarration")
+  receiptForPayments    Payment[] @relation("PaymentReceipt")
+  idCardPhotos          IdCard[]  @relation("IdCardPhoto")
 }
 
 // Module-close quizzes — auto-marked and formative. NOT the examination
@@ -552,108 +559,246 @@ model AssessmentWeighting {
 
 // ─── Intake, cohort, enrolment ──────────────────────────────────────────
 
-enum IntakeType {
+// ─── Slice 03: catalogue, payment & enrolment ───────────────────────────
+//
+// This is the slice where an applicant becomes a candidate. Column names,
+// types and indexes are kept verbatim from that README — the enrolment
+// transaction, the webhook handler and the offline-recording action all
+// depend on this exact shape. Deviations are called out inline.
+
+enum IntakeMonth {
   JANUARY
   APRIL
   SEPTEMBER
 }
 
+enum IntakeStatus {
+  OPEN
+  IN_PROGRESS
+  CLOSED
+}
+
 model Intake {
-  id        String     @id @default(cuid())
-  label     String // e.g. "September 2026"
-  type      IntakeType
-  startDate DateTime
+  id     String       @id @default(uuid())
+  month  IntakeMonth
+  year   Int
+  status IntakeStatus @default(OPEN)
 
-  createdAt DateTime @default(now())
-
-  cohorts             Cohort[]
-  examinationSittings ExaminationSitting[]
-
-  @@unique([type, startDate])
-}
-
-model Cohort {
-  id          String    @id @default(cuid())
-  programmeId String
-  programme   Programme @relation(fields: [programmeId], references: [id], onDelete: Cascade)
-  intakeId    String
-  intake      Intake    @relation(fields: [intakeId], references: [id], onDelete: Cascade)
-  label       String
-
-  createdAt DateTime @default(now())
-
-  enrolments Enrolment[]
-
-  @@unique([programmeId, intakeId, label])
-}
-
-enum EnrolmentStatus {
-  ACTIVE
-  COMPLETED
-  PENDING_PAYMENT
-  REFUNDED
-}
-
-model Enrolment {
-  id          String    @id @default(cuid())
-  candidateId String    @db.Uuid
-  candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
-  programmeId String
-  programme   Programme @relation(fields: [programmeId], references: [id])
-  cohortId    String?
-  cohort      Cohort?   @relation(fields: [cohortId], references: [id])
-
-  // Business rule 2: cohort/intake assignment, and this record's existence
-  // at all, follow confirmed payment — not acceptance.
-  status      EnrolmentStatus @default(PENDING_PAYMENT)
-  enrolledAt  DateTime?
-  completedAt DateTime?
+  enrolmentOpensAt  DateTime
+  enrolmentClosesAt DateTime
+  startsAt          DateTime
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([candidateId])
+  cohorts             Cohort[]
+  examinationSittings ExaminationSitting[]
+  enrolments          Enrolment[]
+
+  @@unique([month, year])
+}
+
+model Cohort {
+  id          String    @id @default(uuid())
+  code        String    @unique // e.g. "SPEC-ENR-03"
+  programmeId String
+  programme   Programme @relation(fields: [programmeId], references: [id], onDelete: Cascade)
+  intakeId    String
+  intake      Intake    @relation(fields: [intakeId], references: [id], onDelete: Cascade)
+
+  capacity Int
+
+  facultyLeadStaffId String?
+  facultyLead        Staff?  @relation("CohortFacultyLead", fields: [facultyLeadStaffId], references: [id])
+
+  // OPEN | FULL | IN_PROGRESS | COMPLETED — a plain string per the README
+  // (not an enum), so a new operational state doesn't need a migration.
+  status String @default("OPEN")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  enrolments Enrolment[]
+
+  @@index([programmeId, intakeId])
+}
+
+// PENDING_PAYMENT -> ACTIVE -> COMPLETED, or -> WITHDRAWN | REFUNDED.
+// WITHDRAWN/REFUNDED are the only statuses a candidate can hold two live
+// rows around for the same programme (see the partial unique index below)
+// — re-enrolment after leaving is allowed.
+enum EnrolmentStatus {
+  PENDING_PAYMENT
+  ACTIVE
+  COMPLETED
+  WITHDRAWN
+  REFUNDED
+}
+
+model Enrolment {
+  id          String    @id @default(uuid())
+  candidateId String    @db.Uuid
+  candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  programmeId String
+  programme   Programme @relation(fields: [programmeId], references: [id])
+  // Assigned on confirmation (enrolment transaction step 5) — null until then.
+  cohortId    String?
+  cohort      Cohort?   @relation(fields: [cohortId], references: [id])
+  intakeId    String
+  intake      Intake    @relation(fields: [intakeId], references: [id])
+
+  // Business rule 1: this record's existence at ACTIVE, and the cohort
+  // placement, follow confirmed payment — never acceptance, never an
+  // admin flag.
+  status EnrolmentStatus @default(PENDING_PAYMENT)
+
+  enrolledAt   DateTime? // set when status becomes ACTIVE — i.e. on payment confirmation
+  completedAt  DateTime? // a later slice sets this
+  withdrawnAt  DateTime?
+  refundedAt   DateTime?
+  // Required for WITHDRAWN and REFUNDED; written to the audit log.
+  statusReason String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  payments Payment[]
+
+  // Partial unique index — a candidate cannot hold two live enrolments in
+  // the same programme, but may re-enrol after withdrawing. Prisma cannot
+  // express a WHERE clause on a unique index, so this is written as raw
+  // SQL in the migration (enrolment_one_live_per_programme) and is not
+  // enforced by this @@index declaration alone.
+  @@index([candidateId, status])
+  @@index([cohortId, status])
   @@index([programmeId])
 }
 
 // ─── Payments ────────────────────────────────────────────────────────────
 
 enum PaymentPurpose {
-  PROGRAMME
-  EXAMINATION
+  PROGRAMME_FEE
+  EXAMINATION_FEE
 }
 
 enum PaymentStatus {
-  SUCCESS
   PENDING
+  SUCCESS
   FAILED
   REFUNDED
 }
 
+// Bank transfer, cash at a branch, a POS terminal, or a cheque — recorded
+// by a finance officer once cleared, never a candidate self-report.
+enum OfflinePaymentMode {
+  BANK_TRANSFER
+  CASH_DEPOSIT
+  POS_TERMINAL
+  CHEQUE
+}
+
 model Payment {
-  id          String    @id @default(cuid())
+  id          String    @id @default(uuid())
   candidateId String    @db.Uuid
   candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
 
   purpose              PaymentPurpose
-  programmeId          String?
-  programme            Programme?          @relation(fields: [programmeId], references: [id])
+  enrolmentId          String? // null for an examination fee
+  enrolment            Enrolment?          @relation(fields: [enrolmentId], references: [id])
+  // The README's table names this examRegistrationId for a not-yet-built
+  // Slice 06 model — this codebase already has ExaminationSitting serving
+  // exactly that role (an existing, tested FK), so it is reused here
+  // rather than inventing a second, still-hypothetical model.
   examinationSittingId String?
   examinationSitting   ExaminationSitting? @relation(fields: [examinationSittingId], references: [id])
 
-  amountNaira Decimal       @db.Decimal(12, 2)
-  provider    String
-  reference   String        @unique
+  // Kobo. A snapshot of the fee at the time of payment — never read the
+  // live programme fee when displaying a historic payment (rule 7).
+  amountMinor Int
+  currency    String        @default("NGN")
   status      PaymentStatus @default(PENDING)
 
-  initiatedAt DateTime  @default(now())
-  confirmedAt DateTime?
+  provider          String // "paystack" | "flutterwave" | "bank_transfer"
+  providerReference String? @unique // the provider's transaction reference
+  // Ours — shown to the candidate and quoted in support, e.g. LVL-PAY-2026-11842.
+  internalReference String  @unique
+
+  initiatedAt   DateTime  @default(now())
+  confirmedAt   DateTime?
+  failedAt      DateTime?
+  failureReason String? // provider message, sanitised for display
+
+  // Non-null only for a manual confirmation (webhook confirmations leave
+  // this null) — the audit trail for the highest-risk admin action.
+  confirmedByStaffId     String?
+  confirmedByStaff       Staff?  @relation("PaymentConfirmedBy", fields: [confirmedByStaffId], references: [id])
+  manualConfirmationNote String? // mandatory when confirmedByStaffId is set
+
+  // Non-null only for an offline recording.
+  offlineMode         OfflinePaymentMode?
+  offlineReference    String? // bank transaction reference, teller slip no., terminal reference, or cheque no.
+  // The date the money actually arrived — NOT confirmedAt. A transfer
+  // received on the 6th may be recorded on the 8th, and the ledger
+  // reconciles against this column, not confirmedAt.
+  offlineReceivedOn   DateTime?
+  // Mandatory for an offline recording — held on the record permanently.
+  receiptAssetId      String?
+  receiptAsset        MediaAsset?         @relation("PaymentReceipt", fields: [receiptAssetId], references: [id])
+  // Stamped when the finance officer ticks "I have verified this payment
+  // against the bank statement" — the moment they take responsibility.
+  statementVerifiedAt DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@index([candidateId, createdAt(sort: Desc)])
+  // Drives the "pending over 48 hours" alert.
+  @@index([status, initiatedAt])
+}
+
+// Idempotency for provider callbacks — without this table a retried
+// webhook enrols twice. Insert before processing; a duplicate insert
+// (the unique constraint below) means already handled: return 200 and do
+// nothing.
+model WebhookEvent {
+  id              String  @id @default(uuid())
+  provider        String
+  providerEventId String
+  payload         Json // the raw body, stored verbatim
+  signatureValid  Boolean
+
+  processedAt DateTime? // null means received but not yet applied
+  receivedAt  DateTime  @default(now())
+
+  @@unique([provider, providerEventId])
+}
+
+// Issued on payment confirmation, never on acceptance (rule 3). Only one
+// card per candidate has retiredAt IS NULL — reissue retires the current
+// one and creates a successor via reissuedFromId, so the history stays
+// legible.
+model IdCard {
+  id          String    @id @default(uuid())
+  candidateId String    @db.Uuid
+  candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  cardNumber String        @unique // matches the candidate number
+  tier       ProgrammeTier // the highest tier the candidate holds
+
+  issuedAt   DateTime
+  validUntil DateTime
+  retiredAt  DateTime?
+
+  reissuedFromId String? @unique
+  reissuedFrom   IdCard? @relation("IdCardReissue", fields: [reissuedFromId], references: [id])
+  reissuedTo     IdCard? @relation("IdCardReissue")
+
+  photoAssetId String?
+  photoAsset   MediaAsset? @relation("IdCardPhoto", fields: [photoAssetId], references: [id])
+
+  createdAt DateTime @default(now())
+
   @@index([candidateId])
-  @@index([status])
 }
 
 // ─── Assessment: question bank & examination ────────────────────────────
@@ -750,11 +895,11 @@ model ExaminationSitting {
 
   status SittingStatus @default(REGISTERED)
 
-  registeredAt DateTime  @default(now())
-  satAt        DateTime?
+  registeredAt  DateTime  @default(now())
+  satAt         DateTime?
   // Weighted composite per business rule 7: quizzes 20%, drafting 40%,
   // examination 40%. Grade bands: Distinction / Merit / Pass / Refer.
-  finalScorePct Decimal? @db.Decimal(5, 2)
+  finalScorePct Decimal?  @db.Decimal(5, 2)
   grade         Grade?
 
   payments Payment[]
@@ -797,16 +942,16 @@ model Certificate {
   issuedAt DateTime          @default(now())
   status   CertificateStatus @default(ACTIVE)
 
-  revokedReason     String?
-  revokedAt         DateTime?
-  revokedByStaffId  String?
-  revokedBy         Staff?     @relation("CertificateRevokedBy", fields: [revokedByStaffId], references: [id])
+  revokedReason    String?
+  revokedAt        DateTime?
+  revokedByStaffId String?
+  revokedBy        Staff?    @relation("CertificateRevokedBy", fields: [revokedByStaffId], references: [id])
 
   // Reissue chain — course access is unaffected by revocation (README);
   // only the credential document itself is retired/replaced.
   replacesCertificateId String?      @unique
-  replaces               Certificate? @relation("CertificateReissue", fields: [replacesCertificateId], references: [id])
-  supersededBy            Certificate? @relation("CertificateReissue")
+  replaces              Certificate? @relation("CertificateReissue", fields: [replacesCertificateId], references: [id])
+  supersededBy          Certificate? @relation("CertificateReissue")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -834,7 +979,7 @@ model ContactRequest {
   status            ContactRequestStatus @default(OPEN)
   resolvedByStaffId String?
   resolvedBy        Staff?               @relation("ContactRequestResolvedBy", fields: [resolvedByStaffId], references: [id])
-  resolvedAt         DateTime?
+  resolvedAt        DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

@@ -9,7 +9,10 @@ import {
   StaffRole,
   ProgrammeTier,
   ProgrammeStatus,
-  IntakeType,
+  IntakeMonth,
+  IntakeStatus,
+  PaymentPurpose,
+  PaymentStatus,
   Grade,
   CertificateStatus,
   ProfessionalStatus,
@@ -67,22 +70,44 @@ async function main() {
   }
   const academicAdmin = staff["k.balogun@lavelle.ng"]!;
 
-  // ── Intakes ──
-  const [, , sep26] = await Promise.all([
+  // ── Intakes — only January, April, September exist (README: other
+  // months are not selectable without registrar override) ──
+  const [jan26, apr26, sep26] = await Promise.all([
     prisma.intake.upsert({
-      where: { type_startDate: { type: IntakeType.JANUARY, startDate: new Date("2026-01-12") } },
+      where: { month_year: { month: IntakeMonth.JANUARY, year: 2026 } },
       update: {},
-      create: { label: "January 2026", type: IntakeType.JANUARY, startDate: new Date("2026-01-12") },
+      create: {
+        month: IntakeMonth.JANUARY,
+        year: 2026,
+        status: IntakeStatus.IN_PROGRESS,
+        enrolmentOpensAt: new Date("2025-11-01"),
+        enrolmentClosesAt: new Date("2026-01-09"),
+        startsAt: new Date("2026-01-12"),
+      },
     }),
     prisma.intake.upsert({
-      where: { type_startDate: { type: IntakeType.APRIL, startDate: new Date("2026-04-13") } },
+      where: { month_year: { month: IntakeMonth.APRIL, year: 2026 } },
       update: {},
-      create: { label: "April 2026", type: IntakeType.APRIL, startDate: new Date("2026-04-13") },
+      create: {
+        month: IntakeMonth.APRIL,
+        year: 2026,
+        status: IntakeStatus.OPEN,
+        enrolmentOpensAt: new Date("2026-02-01"),
+        enrolmentClosesAt: new Date("2026-04-10"),
+        startsAt: new Date("2026-04-13"),
+      },
     }),
     prisma.intake.upsert({
-      where: { type_startDate: { type: IntakeType.SEPTEMBER, startDate: new Date("2026-09-07") } },
+      where: { month_year: { month: IntakeMonth.SEPTEMBER, year: 2026 } },
       update: {},
-      create: { label: "September 2026", type: IntakeType.SEPTEMBER, startDate: new Date("2026-09-07") },
+      create: {
+        month: IntakeMonth.SEPTEMBER,
+        year: 2026,
+        status: IntakeStatus.OPEN,
+        enrolmentOpensAt: new Date("2026-06-01"),
+        enrolmentClosesAt: new Date("2026-09-04"),
+        startsAt: new Date("2026-09-07"),
+      },
     }),
   ]);
 
@@ -263,18 +288,47 @@ async function main() {
     },
   });
 
-  // A cohort for the flagship active programme, September 2026 intake.
-  const cohort = await prisma.cohort.upsert({
-    where: {
-      programmeId_intakeId_label: {
+  // Cohorts for the flagship active programme, across all three intakes —
+  // codes match the design reference (e.g. "SPEC-ENR-03").
+  const [, , cohortSep] = await Promise.all([
+    prisma.cohort.upsert({
+      where: { code: "SPEC-ENR-01" },
+      update: {},
+      create: {
+        code: "SPEC-ENR-01",
+        programmeId: elr.id,
+        intakeId: jan26.id,
+        capacity: 20,
+        facultyLeadStaffId: staff["t.nwachukwu@lavelle.ng"]!.id,
+        status: "IN_PROGRESS",
+      },
+    }),
+    prisma.cohort.upsert({
+      where: { code: "SPEC-ENR-02" },
+      update: {},
+      create: {
+        code: "SPEC-ENR-02",
+        programmeId: elr.id,
+        intakeId: apr26.id,
+        capacity: 20,
+        facultyLeadStaffId: staff["t.nwachukwu@lavelle.ng"]!.id,
+        status: "OPEN",
+      },
+    }),
+    prisma.cohort.upsert({
+      where: { code: "SPEC-ENR-03" },
+      update: {},
+      create: {
+        code: "SPEC-ENR-03",
         programmeId: elr.id,
         intakeId: sep26.id,
-        label: "ELR-201 · Sep 2026",
+        capacity: 30,
+        facultyLeadStaffId: staff["t.nwachukwu@lavelle.ng"]!.id,
+        status: "OPEN",
       },
-    },
-    update: {},
-    create: { programmeId: elr.id, intakeId: sep26.id, label: "ELR-201 · Sep 2026" },
-  });
+    }),
+  ]);
+  const cohort = cohortSep;
 
   // A handful of DRAFT programmes (no modules yet) so the list screen has
   // something to filter/search — status stays DRAFT because a programme
@@ -350,10 +404,45 @@ async function main() {
         create: {
           programmeId: elr.id,
           cohortId: cohort.id,
+          intakeId: sep26.id,
           status: "ACTIVE",
           enrolledAt: new Date("2026-07-02"),
         },
       },
+    },
+    include: { enrolments: true },
+  });
+  const chiamakaEnrolment = chiamaka.enrolments[0]!;
+
+  // Her confirmed payment and ID card — a candidateNumber implies both
+  // exist, so seed them for real rather than leaving the number dangling
+  // with nothing behind it (the finance ledger and candidate record read
+  // these directly).
+  await prisma.payment.upsert({
+    where: { internalReference: "LVL-PAY-2026-00291" },
+    update: {},
+    create: {
+      candidateId: chiamaka.id,
+      purpose: PaymentPurpose.PROGRAMME_FEE,
+      enrolmentId: chiamakaEnrolment.id,
+      amountMinor: 45_000_000,
+      provider: "paystack",
+      providerReference: "PSK-8842-KX19",
+      internalReference: "LVL-PAY-2026-00291",
+      status: PaymentStatus.SUCCESS,
+      initiatedAt: new Date("2026-07-02T09:10:00Z"),
+      confirmedAt: new Date("2026-07-02T09:11:00Z"),
+    },
+  });
+  await prisma.idCard.upsert({
+    where: { cardNumber: "LVL/2026/00291" },
+    update: {},
+    create: {
+      candidateId: chiamaka.id,
+      cardNumber: "LVL/2026/00291",
+      tier: ProgrammeTier.SPECIALIST,
+      issuedAt: new Date("2026-07-02T09:11:00Z"),
+      validUntil: new Date("2027-12-31"),
     },
   });
 
@@ -371,6 +460,36 @@ async function main() {
       passwordHash,
       acceptedTermsAt: new Date(),
       profile: { create: {} },
+    },
+  });
+
+  // A third candidate — profile complete, email verified, no payment or
+  // enrolment yet — ready to browse the catalogue and enrol for real
+  // (Slice 03's seed requirement). Named for the finance ledger design
+  // reference's own "payment still pending" candidate.
+  await prisma.candidate.upsert({
+    where: { email: "n.adeleke@example.com" },
+    update: {},
+    create: {
+      applicantNumber: "LVL-APP-2026-05884",
+      firstName: "Ngozi",
+      lastName: "Adeleke",
+      email: "n.adeleke@example.com",
+      phone: "805 221 7734",
+      passwordHash,
+      acceptedTermsAt: new Date(),
+      emailVerifiedAt: new Date(),
+      profile: {
+        create: {
+          professionalStatus: ProfessionalStatus.PRACTISING_LAWYER,
+          yearOfCall: 2019,
+          scnNumber: "SCN881204",
+          experienceBand: ExperienceBand.Y3_5,
+          placeOfPractice: "Abuja, Nigeria",
+          handbookAcknowledgedAt: new Date(),
+          completedAt: new Date(),
+        },
+      },
     },
   });
 
@@ -419,9 +538,12 @@ async function main() {
   });
 
   console.log(`Seeded. Demo password for every account: ${DEMO_PASSWORD}`);
-  console.log("Candidate login: c.okonji@chambers.ng (enrolled) · i.danjuma@example.com (applicant)");
-  console.log("Staff login: a.obi@lavelle.ng (Super Admin) · k.balogun@lavelle.ng (Academic Admin) · see prisma/seed.ts for the rest");
+  console.log(
+    "Candidate login: c.okonji@chambers.ng (enrolled, LVL/2026/00291) · i.danjuma@example.com (applicant, incomplete profile) · n.adeleke@example.com (applicant, profile complete, ready to enrol)"
+  );
+  console.log("Staff login: a.obi@lavelle.ng (Super Admin) · k.balogun@lavelle.ng (Academic Admin) · f.udo@lavelle.ng (Finance Officer) · see prisma/seed.ts for the rest");
   console.log("Programme: ELR-201 — 4 modules, 20 lectures, per-module quizzes, weights 20/40/40, ACTIVE");
+  console.log("Intakes: January 2026 (in progress) · April 2026 (open) · September 2026 (open) — cohorts SPEC-ENR-01/02/03 on ELR-201");
 }
 
 main()
