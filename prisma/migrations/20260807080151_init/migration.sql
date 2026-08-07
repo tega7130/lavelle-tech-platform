@@ -1,8 +1,20 @@
--- CreateEnum
-CREATE TYPE "ProfessionalStatus" AS ENUM ('PRACTISING_LAWYER', 'IN_HOUSE_COUNSEL', 'LAW_GRADUATE', 'LAW_STUDENT', 'NON_LAWYER_REGULATED', 'OTHER');
+-- CreateExtension
+CREATE EXTENSION IF NOT EXISTS "citext";
+
+-- CreateExtension
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 -- CreateEnum
-CREATE TYPE "CandidateAccountStatus" AS ENUM ('APPLICANT', 'ENROLLED', 'SUSPENDED');
+CREATE TYPE "ProfessionalStatus" AS ENUM ('PRACTISING_LAWYER', 'INHOUSE_COUNSEL', 'LAW_GRADUATE', 'LAW_STUDENT', 'REGULATED_NON_LAWYER', 'OTHER');
+
+-- CreateEnum
+CREATE TYPE "ExperienceBand" AS ENUM ('0_2', '3_5', '6_10', '10_plus');
+
+-- CreateEnum
+CREATE TYPE "CandidateAccountStatus" AS ENUM ('ACTIVE', 'SUSPENDED');
+
+-- CreateEnum
+CREATE TYPE "NotificationCategory" AS ENUM ('ACCOUNT', 'CREDENTIAL', 'PROGRAMME', 'ASSESSMENT', 'FINANCE');
 
 -- CreateEnum
 CREATE TYPE "StaffRole" AS ENUM ('SUPER_ADMIN', 'OPERATIONS_ADMIN', 'FINANCE_ADMIN', 'ACADEMIC_ADMIN', 'FACULTY', 'SUPPORT_AGENT');
@@ -63,30 +75,85 @@ CREATE TYPE "ContactRequestStatus" AS ENUM ('OPEN', 'RESOLVED');
 
 -- CreateTable
 CREATE TABLE "Candidate" (
-    "id" TEXT NOT NULL,
-    "provisionalApplicantNumber" TEXT NOT NULL,
-    "candidateNumber" TEXT,
-    "firstName" TEXT NOT NULL,
-    "lastName" TEXT NOT NULL,
-    "email" TEXT NOT NULL,
-    "phone" TEXT NOT NULL,
+    "id" UUID NOT NULL DEFAULT gen_random_uuid(),
+    "applicantNumber" VARCHAR(24) NOT NULL,
+    "candidateNumber" VARCHAR(24),
+    "firstName" VARCHAR(80) NOT NULL,
+    "lastName" VARCHAR(80) NOT NULL,
+    "email" CITEXT NOT NULL,
+    "emailVerifiedAt" TIMESTAMP(3),
+    "phoneCountryCode" VARCHAR(6) NOT NULL DEFAULT '+234',
+    "phone" VARCHAR(24),
     "passwordHash" TEXT NOT NULL,
-    "professionalStatus" "ProfessionalStatus",
-    "yearOfCall" INTEGER,
-    "scn" TEXT,
-    "experienceBand" TEXT,
-    "placeOfPractice" TEXT,
-    "accountStatus" "CandidateAccountStatus" NOT NULL DEFAULT 'APPLICANT',
-    "suspendedReason" TEXT,
+    "acceptedTermsAt" TIMESTAMP(3) NOT NULL,
+    "marketingOptIn" BOOLEAN NOT NULL DEFAULT false,
+    "accountStatus" "CandidateAccountStatus" NOT NULL DEFAULT 'ACTIVE',
     "suspendedAt" TIMESTAMP(3),
+    "suspendedReason" TEXT,
     "reactivatedAt" TIMESTAMP(3),
-    "reactivationAcknowledgedAt" TIMESTAMP(3),
-    "termsAcceptedAt" TIMESTAMP(3),
-    "marketingOptIn" BOOLEAN NOT NULL DEFAULT true,
+    "lastLoginAt" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "Candidate_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "CandidateProfile" (
+    "candidateId" UUID NOT NULL,
+    "professionalStatus" "ProfessionalStatus",
+    "yearOfCall" SMALLINT,
+    "scnNumber" VARCHAR(24),
+    "institution" VARCHAR(160),
+    "graduationYear" SMALLINT,
+    "organisation" VARCHAR(160),
+    "roleTitle" VARCHAR(120),
+    "experienceBand" "ExperienceBand",
+    "placeOfPractice" VARCHAR(160),
+    "photoUrl" TEXT,
+    "handbookAcknowledgedAt" TIMESTAMP(3),
+    "completedAt" TIMESTAMP(3),
+
+    CONSTRAINT "CandidateProfile_pkey" PRIMARY KEY ("candidateId")
+);
+
+-- CreateTable
+CREATE TABLE "EmailVerificationToken" (
+    "id" UUID NOT NULL DEFAULT gen_random_uuid(),
+    "candidateId" UUID NOT NULL,
+    "tokenHash" TEXT NOT NULL,
+    "expiresAt" TIMESTAMP(3) NOT NULL,
+    "consumedAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "EmailVerificationToken_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "Notification" (
+    "id" UUID NOT NULL DEFAULT gen_random_uuid(),
+    "candidateId" UUID NOT NULL,
+    "category" "NotificationCategory" NOT NULL,
+    "title" VARCHAR(160) NOT NULL,
+    "body" TEXT NOT NULL,
+    "readAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "Notification_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "Session" (
+    "id" UUID NOT NULL DEFAULT gen_random_uuid(),
+    "candidateId" UUID NOT NULL,
+    "tokenHash" TEXT NOT NULL,
+    "expiresAt" TIMESTAMP(3) NOT NULL,
+    "revokedAt" TIMESTAMP(3),
+    "userAgent" TEXT,
+    "ipAddress" INET,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "Session_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -195,7 +262,7 @@ CREATE TABLE "Cohort" (
 -- CreateTable
 CREATE TABLE "Enrolment" (
     "id" TEXT NOT NULL,
-    "candidateId" TEXT NOT NULL,
+    "candidateId" UUID NOT NULL,
     "programmeId" TEXT NOT NULL,
     "cohortId" TEXT,
     "status" "EnrolmentStatus" NOT NULL DEFAULT 'PENDING_PAYMENT',
@@ -210,7 +277,7 @@ CREATE TABLE "Enrolment" (
 -- CreateTable
 CREATE TABLE "Payment" (
     "id" TEXT NOT NULL,
-    "candidateId" TEXT NOT NULL,
+    "candidateId" UUID NOT NULL,
     "purpose" "PaymentPurpose" NOT NULL,
     "programmeId" TEXT,
     "examinationSittingId" TEXT,
@@ -270,7 +337,7 @@ CREATE TABLE "Examination" (
 CREATE TABLE "ExaminationSitting" (
     "id" TEXT NOT NULL,
     "examinationId" TEXT NOT NULL,
-    "candidateId" TEXT NOT NULL,
+    "candidateId" UUID NOT NULL,
     "intakeId" TEXT NOT NULL,
     "status" "SittingStatus" NOT NULL DEFAULT 'REGISTERED',
     "registeredAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -287,7 +354,7 @@ CREATE TABLE "ExaminationSitting" (
 CREATE TABLE "Certificate" (
     "id" TEXT NOT NULL,
     "identifier" TEXT NOT NULL,
-    "candidateId" TEXT NOT NULL,
+    "candidateId" UUID NOT NULL,
     "programmeId" TEXT NOT NULL,
     "tier" "ProgrammeTier" NOT NULL,
     "grade" "Grade" NOT NULL,
@@ -306,7 +373,7 @@ CREATE TABLE "Certificate" (
 -- CreateTable
 CREATE TABLE "ContactRequest" (
     "id" TEXT NOT NULL,
-    "candidateId" TEXT NOT NULL,
+    "candidateId" UUID NOT NULL,
     "category" TEXT NOT NULL,
     "subject" TEXT NOT NULL,
     "message" TEXT NOT NULL,
@@ -322,7 +389,7 @@ CREATE TABLE "ContactRequest" (
 -- CreateTable
 CREATE TABLE "AdminNote" (
     "id" TEXT NOT NULL,
-    "candidateId" TEXT NOT NULL,
+    "candidateId" UUID NOT NULL,
     "staffId" TEXT NOT NULL,
     "note" TEXT NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -331,21 +398,32 @@ CREATE TABLE "AdminNote" (
 );
 
 -- CreateTable
-CREATE TABLE "AuditLogEntry" (
-    "id" TEXT NOT NULL,
+CREATE TABLE "audit_event" (
+    "id" BIGSERIAL NOT NULL,
     "actorStaffId" TEXT,
-    "action" TEXT NOT NULL,
-    "targetType" TEXT NOT NULL,
-    "targetId" TEXT NOT NULL,
+    "subjectType" VARCHAR(40) NOT NULL,
+    "subjectId" TEXT NOT NULL,
+    "action" VARCHAR(80) NOT NULL,
+    "description" TEXT NOT NULL,
     "reason" TEXT,
-    "metadata" JSONB,
+    "ipAddress" INET,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
-    CONSTRAINT "AuditLogEntry_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "audit_event_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "RateLimitAttempt" (
+    "id" BIGSERIAL NOT NULL,
+    "bucketKey" TEXT NOT NULL,
+    "windowStart" TIMESTAMP(3) NOT NULL,
+    "count" INTEGER NOT NULL DEFAULT 1,
+
+    CONSTRAINT "RateLimitAttempt_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Candidate_provisionalApplicantNumber_key" ON "Candidate"("provisionalApplicantNumber");
+CREATE UNIQUE INDEX "Candidate_applicantNumber_key" ON "Candidate"("applicantNumber");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "Candidate_candidateNumber_key" ON "Candidate"("candidateNumber");
@@ -355,6 +433,18 @@ CREATE UNIQUE INDEX "Candidate_email_key" ON "Candidate"("email");
 
 -- CreateIndex
 CREATE INDEX "Candidate_accountStatus_idx" ON "Candidate"("accountStatus");
+
+-- CreateIndex
+CREATE INDEX "EmailVerificationToken_candidateId_consumedAt_idx" ON "EmailVerificationToken"("candidateId", "consumedAt");
+
+-- CreateIndex
+CREATE INDEX "Notification_candidateId_createdAt_idx" ON "Notification"("candidateId", "createdAt" DESC);
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Session_tokenHash_key" ON "Session"("tokenHash");
+
+-- CreateIndex
+CREATE INDEX "Session_candidateId_revokedAt_idx" ON "Session"("candidateId", "revokedAt");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "Staff_email_key" ON "Staff"("email");
@@ -432,10 +522,25 @@ CREATE INDEX "ContactRequest_status_idx" ON "ContactRequest"("status");
 CREATE INDEX "AdminNote_candidateId_idx" ON "AdminNote"("candidateId");
 
 -- CreateIndex
-CREATE INDEX "AuditLogEntry_targetType_targetId_idx" ON "AuditLogEntry"("targetType", "targetId");
+CREATE INDEX "audit_event_subjectType_subjectId_createdAt_idx" ON "audit_event"("subjectType", "subjectId", "createdAt" DESC);
 
 -- CreateIndex
-CREATE INDEX "AuditLogEntry_actorStaffId_idx" ON "AuditLogEntry"("actorStaffId");
+CREATE INDEX "audit_event_createdAt_idx" ON "audit_event"("createdAt" DESC);
+
+-- CreateIndex
+CREATE UNIQUE INDEX "RateLimitAttempt_bucketKey_windowStart_key" ON "RateLimitAttempt"("bucketKey", "windowStart");
+
+-- AddForeignKey
+ALTER TABLE "CandidateProfile" ADD CONSTRAINT "CandidateProfile_candidateId_fkey" FOREIGN KEY ("candidateId") REFERENCES "Candidate"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "EmailVerificationToken" ADD CONSTRAINT "EmailVerificationToken_candidateId_fkey" FOREIGN KEY ("candidateId") REFERENCES "Candidate"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Notification" ADD CONSTRAINT "Notification_candidateId_fkey" FOREIGN KEY ("candidateId") REFERENCES "Candidate"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Session" ADD CONSTRAINT "Session_candidateId_fkey" FOREIGN KEY ("candidateId") REFERENCES "Candidate"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Staff" ADD CONSTRAINT "Staff_lineManagerId_fkey" FOREIGN KEY ("lineManagerId") REFERENCES "Staff"("id") ON DELETE SET NULL ON UPDATE CASCADE;
@@ -513,4 +618,4 @@ ALTER TABLE "AdminNote" ADD CONSTRAINT "AdminNote_candidateId_fkey" FOREIGN KEY 
 ALTER TABLE "AdminNote" ADD CONSTRAINT "AdminNote_staffId_fkey" FOREIGN KEY ("staffId") REFERENCES "Staff"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "AuditLogEntry" ADD CONSTRAINT "AuditLogEntry_actorStaffId_fkey" FOREIGN KEY ("actorStaffId") REFERENCES "Staff"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "audit_event" ADD CONSTRAINT "audit_event_actorStaffId_fkey" FOREIGN KEY ("actorStaffId") REFERENCES "Staff"("id") ON DELETE SET NULL ON UPDATE CASCADE;

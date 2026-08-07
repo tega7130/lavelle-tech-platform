@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/cn";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { CANDIDATE_NAV_ITEMS } from "@/lib/candidate-nav";
 import {
   DashboardIcon,
   ProgrammeIcon,
@@ -30,18 +31,23 @@ export interface CandidateShellNavItem {
   gated?: boolean;
 }
 
-export const CANDIDATE_NAV: CandidateShellNavItem[] = [
-  { key: "dashboard", label: "Dashboard", href: "/portal/dashboard", icon: DashboardIcon },
-  { key: "programme", label: "Programme", href: "/portal/programme", icon: ProgrammeIcon, gated: true },
-  { key: "catalogue", label: "Catalogue", href: "/portal/catalogue", icon: CatalogueIcon },
-  { key: "deadlines", label: "Deadlines", href: "/portal/deadlines", icon: DeadlinesIcon, gated: true },
-  { key: "assessment", label: "Assessment", href: "/portal/assessment", icon: AssessmentIcon, gated: true },
-  { key: "exams", label: "Exams", href: "/portal/exams", icon: ExamsIcon, gated: true },
-  { key: "credentials", label: "Credentials", href: "/portal/credentials", icon: CredentialsIcon, gated: true },
-  { key: "ai", label: "Lavelle AI", href: "/portal/ai", icon: AiIcon, gated: true },
-  { key: "profile", label: "Profile & ID", href: "/portal/profile", icon: ProfileIcon },
-  { key: "support", label: "Contact us", href: "/portal/support", icon: SupportIcon },
-];
+const NAV_ICONS: Record<string, React.ComponentType<React.SVGAttributes<SVGSVGElement>>> = {
+  dashboard: DashboardIcon,
+  programme: ProgrammeIcon,
+  catalogue: CatalogueIcon,
+  deadlines: DeadlinesIcon,
+  assessment: AssessmentIcon,
+  exams: ExamsIcon,
+  credentials: CredentialsIcon,
+  ai: AiIcon,
+  profile: ProfileIcon,
+  support: SupportIcon,
+};
+
+export const CANDIDATE_NAV: CandidateShellNavItem[] = CANDIDATE_NAV_ITEMS.map((item) => ({
+  ...item,
+  icon: NAV_ICONS[item.key]!,
+}));
 
 export interface CandidateShellProps {
   candidate: {

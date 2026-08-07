@@ -77,13 +77,13 @@ export async function applyRolePreset(params: {
     await tx.permissionGrant.createMany({
       data: preset.map((permission) => ({ staffId, permission, granted: true })),
     });
-    await tx.auditLogEntry.create({
+    await tx.auditEvent.create({
       data: {
         actorStaffId: actingStaffId,
         action: "staff.role.apply_preset",
-        targetType: "Staff",
-        targetId: staffId,
-        metadata: { role },
+        subjectType: "staff",
+        subjectId: staffId,
+        description: `Applied the ${role} permission preset`,
       },
     });
   });
@@ -115,13 +115,13 @@ export async function setPermission(params: {
       create: { staffId, permission, granted },
       update: { granted },
     });
-    await tx.auditLogEntry.create({
+    await tx.auditEvent.create({
       data: {
         actorStaffId: actingStaffId,
         action: granted ? "staff.permission.grant" : "staff.permission.revoke",
-        targetType: "Staff",
-        targetId: staffId,
-        metadata: { permission },
+        subjectType: "staff",
+        subjectId: staffId,
+        description: `${granted ? "Granted" : "Revoked"} the ${permission} permission`,
       },
     });
   });
@@ -134,12 +134,13 @@ export async function deactivateStaff(params: { staffId: string; reason: string;
 
   await prisma.$transaction(async (tx) => {
     await tx.staff.update({ where: { id: staffId }, data: { status: StaffStatus.INACTIVE } });
-    await tx.auditLogEntry.create({
+    await tx.auditEvent.create({
       data: {
         actorStaffId: actingStaffId,
         action: "staff.deactivate",
-        targetType: "Staff",
-        targetId: staffId,
+        subjectType: "staff",
+        subjectId: staffId,
+        description: "Deactivated the staff account",
         reason,
       },
     });

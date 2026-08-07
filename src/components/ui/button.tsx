@@ -17,6 +17,11 @@ const variants: Record<ButtonVariant, string> = {
   danger: "bg-[#b42318] border-[#b42318] text-white hover:bg-[#912019] hover:border-[#912019]",
 };
 
+/** For non-<button> elements styled as a button (e.g. a Next.js <Link> CTA). */
+export function buttonClassName(variant: ButtonVariant = "primary", className?: string) {
+  return cn(base, variants[variant], className);
+}
+
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;
   icon?: boolean;

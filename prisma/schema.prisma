@@ -1,80 +1,180 @@
-// Lavelle — foundation domain model.
+// Lavelle — domain model.
 // Vocabulary, entities and state machines are binding per the design
-// handoff README: candidate/programme/module/lecture/enrolment/cohort/
+// handoff READMEs: candidate/programme/module/lecture/enrolment/cohort/
 // intake/credit/applicant/registrar/faculty. Never "student" or "course".
+//
+// The candidate/session/audit tables below are a literal contract from
+// Handoff 01's README — column names, types, nullability and indexes are
+// kept verbatim because later slices reference them by name. See that
+// README for the authoritative spec; deviations are called out inline.
 
 generator client {
-  provider = "prisma-client"
-  output   = "../src/generated/prisma"
+  provider        = "prisma-client"
+  output          = "../src/generated/prisma"
+  previewFeatures = ["postgresqlExtensions"]
 }
 
 datasource db {
-  provider = "postgresql"
+  provider   = "postgresql"
+  extensions = [pgcrypto, citext]
 }
 
 // ─── Candidate ───────────────────────────────────────────────────────────
 
+// practising_lawyer | inhouse_counsel | law_graduate | law_student | regulated_non_lawyer | other
 enum ProfessionalStatus {
   PRACTISING_LAWYER
-  IN_HOUSE_COUNSEL
+  INHOUSE_COUNSEL
   LAW_GRADUATE
   LAW_STUDENT
-  NON_LAWYER_REGULATED
+  REGULATED_NON_LAWYER
   OTHER
 }
 
-// registered (applicant) -> enrolled -> suspended -> reactivated (-> enrolled)
+// 0_2 | 3_5 | 6_10 | 10_plus — Prisma enum identifiers can't start with a
+// digit, so the DB-level label is pinned with @map and the Prisma-side name
+// is just a valid spelling of it.
+enum ExperienceBand {
+  Y0_2     @map("0_2")
+  Y3_5     @map("3_5")
+  Y6_10    @map("6_10")
+  Y10_PLUS @map("10_plus")
+}
+
+// active | suspended. Deliberately NOT applicant/enrolled — is_enrolled is
+// derived from candidate_number IS NOT NULL, never stored (Handoff 01 rule 1).
 enum CandidateAccountStatus {
-  APPLICANT
-  ENROLLED
+  ACTIVE
   SUSPENDED
 }
 
 model Candidate {
-  id String @id @default(cuid())
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
 
-  // Provisional number issued at registration (LVL-APP-2026-04412); the
-  // candidate number is issued only on first confirmed payment (LVL/2026/00291) —
-  // business rule 2.
-  provisionalApplicantNumber String  @unique
-  candidateNumber            String? @unique
+  // Issued at registration, permanent, never reused (LVL-APP-2026-04412).
+  applicantNumber String @unique @db.VarChar(24)
+  // Null until first confirmed payment (LVL/2026/00291) — a second,
+  // separate identifier from applicantNumber, never derived from it.
+  candidateNumber String? @unique @db.VarChar(24)
 
-  firstName String
-  lastName  String
-  email     String @unique
-  phone     String
+  firstName String @db.VarChar(80)
+  lastName  String @db.VarChar(80)
+  // citext — case-insensitive uniqueness/lookup is the point, not just storage.
+  email           String    @unique @db.Citext
+  emailVerifiedAt DateTime?
+
+  phoneCountryCode String  @default("+234") @db.VarChar(6)
+  phone            String? @db.VarChar(24)
+
   passwordHash String
 
-  professionalStatus ProfessionalStatus?
-  yearOfCall         Int?
-  scn                String?
-  experienceBand     String?
-  placeOfPractice    String?
+  acceptedTermsAt DateTime
+  marketingOptIn  Boolean  @default(false)
 
-  accountStatus CandidateAccountStatus @default(APPLICANT)
-  // Suspension / reactivation — README shell rules: suspended shows an
-  // amber banner with reason+date; reactivation shows a dismissible green
-  // confirmation and extends in-window deadlines. Both transitions post a
-  // registrar-authored notification and write to the audit log (rule 10).
-  suspendedReason           String?
-  suspendedAt               DateTime?
-  reactivatedAt             DateTime?
-  reactivationAcknowledgedAt DateTime?
+  accountStatus   CandidateAccountStatus @default(ACTIVE)
+  suspendedAt     DateTime?
+  suspendedReason String?
+  reactivatedAt   DateTime?
 
-  termsAcceptedAt DateTime?
-  marketingOptIn  Boolean  @default(true)
+  lastLoginAt DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  enrolments         Enrolment[]
-  payments           Payment[]
-  certificates       Certificate[]
+  profile             CandidateProfile?
+  emailVerificationTokens EmailVerificationToken[]
+  notifications       Notification[]
+  sessions            Session[]
+  enrolments          Enrolment[]
+  payments            Payment[]
+  certificates        Certificate[]
   examinationSittings ExaminationSitting[]
-  contactRequests    ContactRequest[]
-  adminNotes         AdminNote[]
+  contactRequests     ContactRequest[]
+  adminNotes          AdminNote[]
 
   @@index([accountStatus])
+}
+
+// One-to-one, all nullable — the profile-completion modal's output. Which
+// conditional fields apply is decided by professionalStatus (see
+// src/lib/onboarding.ts); enforced in the Zod schema, not only the UI.
+model CandidateProfile {
+  candidateId String    @id @db.Uuid
+  candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  professionalStatus ProfessionalStatus?
+  yearOfCall         Int?                @db.SmallInt // lawyers only, 1960 <= n <= current year
+  scnNumber          String?             @db.VarChar(24) // lawyers only
+  institution        String?             @db.VarChar(160) // graduates/students
+  graduationYear     Int?                @db.SmallInt // graduates/students
+  organisation       String?             @db.VarChar(160) // regulated/other
+  roleTitle          String?             @db.VarChar(120) // regulated/other
+  experienceBand     ExperienceBand?
+  placeOfPractice    String?             @db.VarChar(160)
+  photoUrl           String?
+
+  handbookAcknowledgedAt DateTime? // checklist step 5
+  completedAt            DateTime? // set when the 3-step modal finishes
+}
+
+model EmailVerificationToken {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  candidateId String    @db.Uuid
+  candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  // Store the hash, send the plaintext — never store a usable token.
+  tokenHash  String
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([candidateId, consumedAt])
+}
+
+enum NotificationCategory {
+  ACCOUNT
+  CREDENTIAL
+  PROGRAMME
+  ASSESSMENT
+  FINANCE
+}
+
+model Notification {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  candidateId String    @db.Uuid
+  candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  category NotificationCategory
+  title    String               @db.VarChar(160)
+  body     String
+  readAt   DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([candidateId, createdAt(sort: Desc)])
+}
+
+// Database-backed candidate sessions — deliberately NOT a stateless JWT.
+// Suspending an account revokes every live session immediately, which a
+// self-contained token can't do. Read via a cached getCurrentCandidate()
+// (src/lib/candidate-session.ts): revokedAt IS NOT NULL or
+// accountStatus = SUSPENDED both mean signed out. Cookie carries the
+// opaque plaintext token; only its hash is ever persisted.
+model Session {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  candidateId String    @db.Uuid
+  candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  tokenHash String   @unique
+  expiresAt DateTime
+
+  revokedAt DateTime? // set on logout, on suspension, on password change
+  userAgent String?
+  ipAddress String?   @db.Inet
+
+  createdAt DateTime @default(now())
+
+  @@index([candidateId, revokedAt])
 }
 
 // ─── Staff, roles & permissions ─────────────────────────────────────────
@@ -117,10 +217,10 @@ enum Permission {
 model Staff {
   id String @id @default(cuid())
 
-  name     String
-  email    String @unique // the login
-  phone    String?
-  jobTitle String?
+  name       String
+  email      String  @unique // the login
+  phone      String?
+  jobTitle   String?
   department String?
 
   lineManagerId String?
@@ -137,10 +237,10 @@ model Staff {
 
   permissionGrants PermissionGrant[]
 
-  auditLogEntries       AuditLogEntry[]
+  auditEvents             AuditEvent[]
   resolvedContactRequests ContactRequest[] @relation("ContactRequestResolvedBy")
-  adminNotesAuthored     AdminNote[]
-  revokedCertificates    Certificate[]    @relation("CertificateRevokedBy")
+  adminNotesAuthored      AdminNote[]
+  revokedCertificates     Certificate[]    @relation("CertificateRevokedBy")
 
   @@index([role])
   @@index([status])
@@ -182,24 +282,24 @@ model Programme {
   title String
   code  String @unique // e.g. ELR-201
 
-  tier                 ProgrammeTier
-  category             String
-  lengthWeeks          Int
+  tier                  ProgrammeTier
+  category              String
+  lengthWeeks           Int
   weeklyCommitmentHours Int
-  credits              Int
-  feeNaira             Decimal @db.Decimal(12, 2)
-  status               ProgrammeStatus @default(DRAFT)
-  description          String?
+  credits               Int
+  feeNaira              Decimal         @db.Decimal(12, 2)
+  status                ProgrammeStatus @default(DRAFT)
+  description           String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  modules     Module[]
-  cohorts     Cohort[]
-  enrolments  Enrolment[]
-  payments    Payment[]
+  modules      Module[]
+  cohorts      Cohort[]
+  enrolments   Enrolment[]
+  payments     Payment[]
   certificates Certificate[]
-  examination Examination?
+  examination  Examination?
 
   @@index([status])
   @@index([tier])
@@ -211,7 +311,7 @@ enum ModuleStatus {
 }
 
 model Module {
-  id          String @id @default(cuid())
+  id          String    @id @default(cuid())
   programmeId String
   programme   Programme @relation(fields: [programmeId], references: [id], onDelete: Cascade)
 
@@ -288,11 +388,11 @@ model Intake {
 }
 
 model Cohort {
-  id          String @id @default(cuid())
+  id          String    @id @default(cuid())
   programmeId String
   programme   Programme @relation(fields: [programmeId], references: [id], onDelete: Cascade)
   intakeId    String
-  intake      Intake @relation(fields: [intakeId], references: [id], onDelete: Cascade)
+  intake      Intake    @relation(fields: [intakeId], references: [id], onDelete: Cascade)
   label       String
 
   createdAt DateTime @default(now())
@@ -310,8 +410,8 @@ enum EnrolmentStatus {
 }
 
 model Enrolment {
-  id          String @id @default(cuid())
-  candidateId String
+  id          String    @id @default(cuid())
+  candidateId String    @db.Uuid
   candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
   programmeId String
   programme   Programme @relation(fields: [programmeId], references: [id])
@@ -346,19 +446,19 @@ enum PaymentStatus {
 }
 
 model Payment {
-  id          String @id @default(cuid())
-  candidateId String
+  id          String    @id @default(cuid())
+  candidateId String    @db.Uuid
   candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
 
-  purpose               PaymentPurpose
-  programmeId            String?
-  programme              Programme?          @relation(fields: [programmeId], references: [id])
-  examinationSittingId   String?
-  examinationSitting     ExaminationSitting? @relation(fields: [examinationSittingId], references: [id])
+  purpose              PaymentPurpose
+  programmeId          String?
+  programme            Programme?          @relation(fields: [programmeId], references: [id])
+  examinationSittingId String?
+  examinationSitting   ExaminationSitting? @relation(fields: [examinationSittingId], references: [id])
 
-  amountNaira Decimal @db.Decimal(12, 2)
+  amountNaira Decimal       @db.Decimal(12, 2)
   provider    String
-  reference   String  @unique
+  reference   String        @unique
   status      PaymentStatus @default(PENDING)
 
   initiatedAt DateTime  @default(now())
@@ -458,7 +558,7 @@ model ExaminationSitting {
   id            String      @id @default(cuid())
   examinationId String
   examination   Examination @relation(fields: [examinationId], references: [id])
-  candidateId   String
+  candidateId   String      @db.Uuid
   candidate     Candidate   @relation(fields: [candidateId], references: [id], onDelete: Cascade)
   intakeId      String
   intake        Intake      @relation(fields: [intakeId], references: [id])
@@ -501,7 +601,7 @@ model Certificate {
   id         String @id @default(cuid())
   identifier String @unique // e.g. LVL-CERT-2026-01188
 
-  candidateId String
+  candidateId String    @db.Uuid
   candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
   programmeId String
   programme   Programme @relation(fields: [programmeId], references: [id])
@@ -509,13 +609,13 @@ model Certificate {
   tier  ProgrammeTier
   grade Grade
 
-  issuedAt DateTime @default(now())
+  issuedAt DateTime          @default(now())
   status   CertificateStatus @default(ACTIVE)
 
-  revokedReason   String?
-  revokedAt       DateTime?
-  revokedByStaffId String?
-  revokedBy       Staff? @relation("CertificateRevokedBy", fields: [revokedByStaffId], references: [id])
+  revokedReason     String?
+  revokedAt         DateTime?
+  revokedByStaffId  String?
+  revokedBy         Staff?     @relation("CertificateRevokedBy", fields: [revokedByStaffId], references: [id])
 
   // Reissue chain — course access is unaffected by revocation (README);
   // only the credential document itself is retired/replaced.
@@ -538,18 +638,18 @@ enum ContactRequestStatus {
 }
 
 model ContactRequest {
-  id          String @id @default(cuid())
-  candidateId String
+  id          String    @id @default(cuid())
+  candidateId String    @db.Uuid
   candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
 
   category String
   subject  String
   message  String
 
-  status         ContactRequestStatus @default(OPEN)
+  status            ContactRequestStatus @default(OPEN)
   resolvedByStaffId String?
-  resolvedBy      Staff?  @relation("ContactRequestResolvedBy", fields: [resolvedByStaffId], references: [id])
-  resolvedAt      DateTime?
+  resolvedBy        Staff?               @relation("ContactRequestResolvedBy", fields: [resolvedByStaffId], references: [id])
+  resolvedAt         DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -560,8 +660,8 @@ model ContactRequest {
 // Internal notes on a candidate profile — distinct from contact-request
 // resolution; gated by its own permission (add_admin_notes).
 model AdminNote {
-  id          String @id @default(cuid())
-  candidateId String
+  id          String    @id @default(cuid())
+  candidateId String    @db.Uuid
   candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
   staffId     String
   staff       Staff     @relation(fields: [staffId], references: [id])
@@ -573,25 +673,46 @@ model AdminNote {
   @@index([candidateId])
 }
 
-// ─── Audit log ───────────────────────────────────────────────────────────
+// ─── Audit ───────────────────────────────────────────────────────────────
 
-// Immutable by contract (business rule 11) — the app layer must never
-// issue an UPDATE or DELETE against this table. actorStaffId is nullable
-// to allow system-originated entries (e.g. an automated payment webhook).
-model AuditLogEntry {
-  id String @id @default(cuid())
+// Append-only by contract (Handoff 01): the application DB role holds only
+// INSERT and SELECT on this table — see prisma/migrations/*_audit_grants
+// for the REVOKE. subjectId/actorStaffId stay plain String (not @db.Uuid):
+// this table is polymorphic across subjects that are genuinely uuid
+// (Candidate) and subjects that are still cuid-keyed from the foundation
+// schema (Staff, Certificate, Payment, Question, ...) — a strict uuid
+// column would reject the latter. Documented as a spec deviation.
+model AuditEvent {
+  id BigInt @id @default(autoincrement())
 
   actorStaffId String?
   actor        Staff?  @relation(fields: [actorStaffId], references: [id])
 
-  action     String // e.g. "certificate.revoke", "staff.permission.grant"
-  targetType String // e.g. "Certificate", "Staff", "Candidate"
-  targetId   String
-  reason     String?
-  metadata   Json?
+  subjectType String  @db.VarChar(40) // "candidate", "certificate", "payment", "staff", "question", …
+  subjectId   String
+  action      String  @db.VarChar(80) // "candidate.suspended", "candidate.reactivated", …
+  description String // the human-readable label the audit log renders
+  reason      String? // mandatory for destructive actions — enforced per action, not by column
+  ipAddress   String? @db.Inet
 
   createdAt DateTime @default(now())
 
-  @@index([targetType, targetId])
-  @@index([actorStaffId])
+  @@index([subjectType, subjectId, createdAt(sort: Desc)])
+  @@index([createdAt(sort: Desc)])
+  @@map("audit_event")
+}
+
+// ─── Rate limiting ───────────────────────────────────────────────────────
+
+// Fixed-window counter, Postgres-backed so it survives serverless (an
+// in-memory limiter does not). Keyed by an arbitrary bucket string, e.g.
+// "register:ip:203.0.113.4" or "signIn:email:c.okonji@chambers.ng" — see
+// src/lib/rate-limit.ts.
+model RateLimitAttempt {
+  id          BigInt   @id @default(autoincrement())
+  bucketKey   String
+  windowStart DateTime
+  count       Int      @default(1)
+
+  @@unique([bucketKey, windowStart])
 }

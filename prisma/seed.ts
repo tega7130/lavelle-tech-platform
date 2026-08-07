@@ -4,7 +4,7 @@
 // (auto-seeds) or `npx prisma db seed`.
 import bcrypt from "bcryptjs";
 import { PrismaPg } from "@prisma/adapter-pg";
-import { PrismaClient, StaffRole, ProgrammeTier, ProgrammeStatus, IntakeType, CandidateAccountStatus, Grade, CertificateStatus } from "../src/generated/prisma/client";
+import { PrismaClient, StaffRole, ProgrammeTier, ProgrammeStatus, IntakeType, Grade, CertificateStatus, ProfessionalStatus, ExperienceBand } from "../src/generated/prisma/client";
 import { ROLE_PRESETS } from "../src/lib/permissions";
 
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
@@ -96,19 +96,34 @@ async function main() {
   });
 
   // ── Candidates ──
+  // is_enrolled is derived from candidateNumber !== null — never a stored
+  // flag (Handoff 01 rule 1). Chiamaka has one, so she renders the
+  // enrolled shell; Ibrahim doesn't, so he renders the applicant shell.
   const chiamaka = await prisma.candidate.upsert({
     where: { email: "c.okonji@chambers.ng" },
     update: {},
     create: {
-      provisionalApplicantNumber: "LVL-APP-2026-04412",
+      applicantNumber: "LVL-APP-2026-04412",
       candidateNumber: "LVL/2026/00291",
       firstName: "Chiamaka",
       lastName: "Okonji",
       email: "c.okonji@chambers.ng",
-      phone: "+234 803 552 8841",
+      phone: "803 552 8841",
       passwordHash,
-      accountStatus: CandidateAccountStatus.ENROLLED,
-      termsAcceptedAt: new Date(),
+      acceptedTermsAt: new Date(),
+      emailVerifiedAt: new Date(),
+      lastLoginAt: new Date(),
+      profile: {
+        create: {
+          professionalStatus: ProfessionalStatus.PRACTISING_LAWYER,
+          yearOfCall: 2016,
+          scnNumber: "SCN123456",
+          experienceBand: ExperienceBand.Y6_10,
+          placeOfPractice: "Lagos State, Nigeria",
+          handbookAcknowledgedAt: new Date(),
+          completedAt: new Date(),
+        },
+      },
       enrolments: {
         create: {
           programmeId: programmes["ELR-201"].id,
@@ -120,19 +135,20 @@ async function main() {
     },
   });
 
-  // A second candidate who has registered but not paid, to demonstrate applicant nav gating.
+  // A second candidate who has registered but not paid, to demonstrate
+  // applicant nav gating and an incomplete profile checklist.
   await prisma.candidate.upsert({
     where: { email: "i.danjuma@example.com" },
     update: {},
     create: {
-      provisionalApplicantNumber: "LVL-APP-2026-05107",
+      applicantNumber: "LVL-APP-2026-05107",
       firstName: "Ibrahim",
       lastName: "Danjuma",
       email: "i.danjuma@example.com",
-      phone: "+234 802 118 4420",
+      phone: "802 118 4420",
       passwordHash,
-      accountStatus: CandidateAccountStatus.APPLICANT,
-      termsAcceptedAt: new Date(),
+      acceptedTermsAt: new Date(),
+      profile: { create: {} },
     },
   });
 
