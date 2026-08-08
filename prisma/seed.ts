@@ -19,8 +19,15 @@ import {
   ExperienceBand,
   LectureMediaKind,
   AssessmentKind,
+  LectureState,
+  SubmissionState,
+  MarkState,
+  MarkableKind,
 } from "../src/generated/prisma/client";
 import { ROLE_PRESETS } from "../src/lib/permissions";
+import { generateDeadlinesForEnrolment } from "../src/lib/deadline-generation";
+import { recomputeProgrammeResult } from "../src/lib/programme-result";
+import { resolveGradeBand } from "../src/lib/grading";
 
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
 const prisma = new PrismaClient({ adapter });
@@ -69,6 +76,24 @@ async function main() {
     });
   }
   const academicAdmin = staff["k.balogun@lavelle.ng"]!;
+  const faculty = staff["t.nwachukwu@lavelle.ng"]!;
+
+  // ── Grade bands (Slice 05) — DATA, not constants (rule 2), so an
+  // institution can change its scale without a migration. effectiveFrom
+  // predates every seeded assessment so band resolution always finds a
+  // definition in force. Guarded on an existing-rows check so reseeding
+  // never duplicates the scale.
+  const existingGradeBands = await prisma.gradeBandDefinition.count();
+  if (existingGradeBands === 0) {
+    await prisma.gradeBandDefinition.createMany({
+      data: [
+        { band: "DISTINCTION", minPercent: 70, label: "Distinction", effectiveFrom: new Date("2025-01-01") },
+        { band: "MERIT", minPercent: 60, label: "Merit", effectiveFrom: new Date("2025-01-01") },
+        { band: "PASS", minPercent: 50, label: "Pass", effectiveFrom: new Date("2025-01-01") },
+        { band: "REFER", minPercent: 0, label: "Refer", effectiveFrom: new Date("2025-01-01") },
+      ],
+    });
+  }
 
   // ── Intakes — only January, April, September exist (README: other
   // months are not selectable without registrar override) ──
@@ -273,6 +298,74 @@ async function main() {
     }
   }
 
+  // ── Author Module 1's lecture content (Slice 04) ──
+  // Only Module 1 gets real scenario/drafting prompts and video URLs — the
+  // other three exist so the catalogue/overview shows a full four-module
+  // programme, but this slice's own scope is the player, not authoring
+  // twenty lectures of content. Deliberately varied step counts, since
+  // deriveLectureSteps() must never assume a fixed four: lecture 1 is a
+  // three-step lecture (content/scenario/drafting), lecture 3 is
+  // content-only, and lecture 5 (last in the module) is the full four
+  // steps including the module quiz. Guarded on scenarioPrompt IS NULL so
+  // a reseed never clobbers a live admin edit made through Slice 02's
+  // content builder.
+  const module1 = await prisma.module.findFirstOrThrow({ where: { programmeId: elr.id, weekNumber: 1 } });
+  const module1Lectures = await prisma.lecture.findMany({ where: { moduleId: module1.id }, orderBy: { orderIndex: "asc" } });
+  const LECTURE_CONTENT = [
+    {
+      videoUrl: "https://cdn.lavelle.ng/video/elr-201-w1-l1.mp4",
+      scenarioPrompt:
+        "Your client, an indigenous E&P company, has been offered a farm-in on a marginal field under a Production Sharing Contract. Identify the fiscal terms that most affect the deal's viability.",
+      scenarioGuidance: "Consider royalty rates, cost oil recovery limits, and profit oil split under the applicable PSC.",
+      draftingPrompt: "Draft a one-paragraph risk note to the client on the PSC's cost-recovery ceiling and its effect on their expected return.",
+      draftingWordLimit: 300,
+    },
+    {
+      videoUrl: "https://cdn.lavelle.ng/video/elr-201-w1-l2.mp4",
+      scenarioPrompt:
+        "NUPRC has announced a new licensing round. Your client wants to understand the pre-qualification criteria before committing resources to a bid.",
+      scenarioGuidance: "Focus on technical and financial capability thresholds and local content commitments.",
+      draftingPrompt: null,
+      draftingWordLimit: null,
+    },
+    {
+      videoUrl: "https://cdn.lavelle.ng/video/elr-201-w1-l3.mp4",
+      scenarioPrompt: null,
+      scenarioGuidance: null,
+      draftingPrompt: null,
+      draftingWordLimit: null,
+    },
+    {
+      videoUrl: "https://cdn.lavelle.ng/video/elr-201-w1-l4.mp4",
+      scenarioPrompt: null,
+      scenarioGuidance: null,
+      draftingPrompt: "Draft the royalty clause of a farm-out agreement, reflecting a sliding scale tied to production volume.",
+      draftingWordLimit: 250,
+    },
+    {
+      videoUrl: "https://cdn.lavelle.ng/video/elr-201-w1-l5.mp4",
+      scenarioPrompt:
+        "A marginal field operator is negotiating a farm-out with an indigenous company that lacks the operator's balance sheet strength. Advise on structuring the carry.",
+      scenarioGuidance: "Weigh a full carry against a capped/loan-back carry, and the security package that should accompany either.",
+      draftingPrompt: "Draft the carry and reimbursement clause for the farm-out agreement described in the scenario.",
+      draftingWordLimit: 350,
+    },
+  ];
+  for (const [i, lec] of module1Lectures.entries()) {
+    const content = LECTURE_CONTENT[i];
+    if (!content || lec.scenarioPrompt !== null || lec.draftingPrompt !== null) continue;
+    await prisma.lecture.update({
+      where: { id: lec.id },
+      data: {
+        videoUrl: content.videoUrl,
+        scenarioPrompt: content.scenarioPrompt,
+        scenarioGuidance: content.scenarioGuidance,
+        draftingPrompt: content.draftingPrompt,
+        draftingWordLimit: content.draftingWordLimit,
+      },
+    });
+  }
+
   // Examination — README "Reference data": ₦85,000 fee, 60% pass mark, 3 hours, proctored/remote.
   await prisma.examination.upsert({
     where: { programmeId: elr.id },
@@ -290,7 +383,7 @@ async function main() {
 
   // Cohorts for the flagship active programme, across all three intakes —
   // codes match the design reference (e.g. "SPEC-ENR-03").
-  const [, , cohortSep] = await Promise.all([
+  const [cohortJan] = await Promise.all([
     prisma.cohort.upsert({
       where: { code: "SPEC-ENR-01" },
       update: {},
@@ -328,7 +421,13 @@ async function main() {
       },
     }),
   ]);
-  const cohort = cohortSep;
+  // Chiamaka's cohort — moved to the January intake (Slice 04): the
+  // September cohort hasn't started (intake.startsAt is in the future),
+  // so a candidate on it can't legitimately have Module 1 progress yet —
+  // LECTURE_RELEASE deadlines are generated from the intake's start date
+  // and gate access in the player. January is IN_PROGRESS and already
+  // under way, which is what "part-way through the programme" requires.
+  const cohort = cohortJan;
 
   // A handful of DRAFT programmes (no modules yet) so the list screen has
   // something to filter/search — status stays DRAFT because a programme
@@ -404,7 +503,7 @@ async function main() {
         create: {
           programmeId: elr.id,
           cohortId: cohort.id,
-          intakeId: sep26.id,
+          intakeId: jan26.id,
           status: "ACTIVE",
           enrolledAt: new Date("2026-07-02"),
         },
@@ -445,6 +544,245 @@ async function main() {
       validUntil: new Date("2027-12-31"),
     },
   });
+
+  // ── Deadlines + part-way progress for Chiamaka (Slice 04) ──
+  // The Slice 03 enrolment transaction generates deadlines automatically,
+  // but Chiamaka's enrolment above was seeded directly (not through that
+  // transaction, which requires a real Payment to confirm) — generated
+  // here explicitly so her enrolment isn't the one candidate in the
+  // system with an active enrolment and no schedule. Guarded on an
+  // existing-deadlines check so reseeding never duplicates rows.
+  const existingDeadlines = await prisma.deadline.count({ where: { enrolmentId: chiamakaEnrolment.id } });
+  if (existingDeadlines === 0) {
+    await generateDeadlinesForEnrolment(chiamakaEnrolment.id, prisma);
+  }
+
+  // She's part-way through Module 1: lecture 1 finished (all three of its
+  // authored steps — content, scenario, drafting), lecture 2 started but
+  // not finished. Lectures 3-5 and every later module are left with no
+  // LectureProgress row at all — NOT_STARTED is the absence of a row, not
+  // a stored value (rule 2).
+  if (module1Lectures[0] && module1Lectures[1]) {
+    await prisma.lectureProgress.upsert({
+      where: { enrolmentId_lectureId: { enrolmentId: chiamakaEnrolment.id, lectureId: module1Lectures[0].id } },
+      update: {},
+      create: {
+        enrolmentId: chiamakaEnrolment.id,
+        lectureId: module1Lectures[0].id,
+        state: LectureState.COMPLETED,
+        stepsCompleted: ["content", "scenario", "drafting"],
+        startedAt: new Date("2026-07-03T08:00:00Z"),
+        completedAt: new Date("2026-07-03T08:52:00Z"),
+        lastSeenAt: new Date("2026-07-03T08:52:00Z"),
+      },
+    });
+    await prisma.draftingSubmission.upsert({
+      where: { enrolmentId_lectureId_attemptNumber: { enrolmentId: chiamakaEnrolment.id, lectureId: module1Lectures[0].id, attemptNumber: 1 } },
+      update: {},
+      create: {
+        enrolmentId: chiamakaEnrolment.id,
+        lectureId: module1Lectures[0].id,
+        state: SubmissionState.SUBMITTED,
+        body: "The cost-recovery ceiling under the PSC caps the contractor's annual recovery of cost oil at 80% of production, deferring the balance to later years. For a marginal field with a compressed payback horizon, this materially slows the client's return...",
+        wordCount: 287,
+        submittedAt: new Date("2026-07-03T08:50:00Z"),
+      },
+    });
+
+    await prisma.lectureProgress.upsert({
+      where: { enrolmentId_lectureId: { enrolmentId: chiamakaEnrolment.id, lectureId: module1Lectures[1].id } },
+      update: {},
+      create: {
+        enrolmentId: chiamakaEnrolment.id,
+        lectureId: module1Lectures[1].id,
+        state: LectureState.IN_PROGRESS,
+        stepsCompleted: ["content"],
+        slideIndex: 0,
+        mediaPositionSeconds: 240,
+        startedAt: new Date("2026-08-06T19:10:00Z"),
+        lastSeenAt: new Date("2026-08-06T19:24:00Z"),
+      },
+    });
+  }
+
+  // ── A further-along candidate with marked work and no examination
+  // (Slice 05) ──
+  // Amara Nwosu has finished Module 1 entirely — quiz submitted (system-
+  // graded) and all three of its drafting exercises marked and returned
+  // by faculty — and started Module 2. Slice 06 (the examination) doesn't
+  // exist yet, so examinationPercent is always null regardless of who's
+  // seeded; this candidate exists to exercise the PROVISIONAL weighted
+  // result specifically (rule 4): a strong quiz+drafting showing must
+  // never read as a failing mark just because the exam hasn't happened.
+  const amara = await prisma.candidate.upsert({
+    where: { email: "a.nwosu@chambers.ng" },
+    update: {},
+    create: {
+      applicantNumber: "LVL-APP-2026-04298",
+      candidateNumber: "LVL/2026/00305",
+      firstName: "Amara",
+      lastName: "Nwosu",
+      email: "a.nwosu@chambers.ng",
+      phone: "803 552 9910",
+      passwordHash,
+      emailVerifiedAt: new Date("2026-01-05"),
+      acceptedTermsAt: new Date("2026-01-05"),
+      profile: {
+        create: {
+          professionalStatus: ProfessionalStatus.PRACTISING_LAWYER,
+          yearOfCall: 2019,
+          scnNumber: "SCN-88214",
+          placeOfPractice: "Lagos",
+          handbookAcknowledgedAt: new Date(),
+          completedAt: new Date(),
+        },
+      },
+      enrolments: {
+        create: {
+          programmeId: elr.id,
+          cohortId: cohort.id,
+          intakeId: jan26.id,
+          status: "ACTIVE",
+          enrolledAt: new Date("2026-01-14"),
+        },
+      },
+    },
+    include: { enrolments: true },
+  });
+  const amaraEnrolment = amara.enrolments[0]!;
+
+  await prisma.payment.upsert({
+    where: { internalReference: "LVL-PAY-2026-00305" },
+    update: {},
+    create: {
+      candidateId: amara.id,
+      purpose: PaymentPurpose.PROGRAMME_FEE,
+      enrolmentId: amaraEnrolment.id,
+      amountMinor: 45_000_000,
+      provider: "paystack",
+      providerReference: "PSK-9931-QW44",
+      internalReference: "LVL-PAY-2026-00305",
+      status: PaymentStatus.SUCCESS,
+      initiatedAt: new Date("2026-01-14T10:00:00Z"),
+      confirmedAt: new Date("2026-01-14T10:01:00Z"),
+    },
+  });
+
+  const existingAmaraDeadlines = await prisma.deadline.count({ where: { enrolmentId: amaraEnrolment.id } });
+  if (existingAmaraDeadlines === 0) {
+    await generateDeadlinesForEnrolment(amaraEnrolment.id, prisma);
+  }
+
+  const module2 = await prisma.module.findFirstOrThrow({ where: { programmeId: elr.id, weekNumber: 2 } });
+  const module2Lectures = await prisma.lecture.findMany({ where: { moduleId: module2.id }, orderBy: { orderIndex: "asc" } });
+  const module1Quiz = await prisma.quiz.findUniqueOrThrow({ where: { moduleId: module1.id } });
+
+  if (module1Lectures.length === 5 && module2Lectures[0]) {
+    const [lec1, lec2, lec3, lec4, lec5] = module1Lectures;
+    const now = new Date("2026-02-10T12:00:00Z");
+
+    // Module 1 — every lecture COMPLETED.
+    const stepsByLecture: { lecture: (typeof module1Lectures)[number]; steps: string[] }[] = [
+      { lecture: lec1!, steps: ["content", "scenario", "drafting"] },
+      { lecture: lec2!, steps: ["content", "scenario"] },
+      { lecture: lec3!, steps: ["content"] },
+      { lecture: lec4!, steps: ["content", "drafting"] },
+      { lecture: lec5!, steps: ["content", "scenario", "drafting", "quiz"] },
+    ];
+    for (const { lecture, steps } of stepsByLecture) {
+      await prisma.lectureProgress.upsert({
+        where: { enrolmentId_lectureId: { enrolmentId: amaraEnrolment.id, lectureId: lecture.id } },
+        update: {},
+        create: {
+          enrolmentId: amaraEnrolment.id,
+          lectureId: lecture.id,
+          state: LectureState.COMPLETED,
+          stepsCompleted: steps,
+          startedAt: new Date("2026-01-15"),
+          completedAt: new Date("2026-01-20"),
+          lastSeenAt: new Date("2026-01-20"),
+        },
+      });
+    }
+
+    // Drafting exercises — submitted then marked and returned by faculty.
+    const draftingSeeds = [
+      { lecture: lec1!, body: "The concession must be read against the current fiscal terms before advising on viability...", wordCount: 310, scorePercent: 82 },
+      { lecture: lec4!, body: "The royalty clause should adopt a sliding scale tied to realised price, not headline production...", wordCount: 240, scorePercent: 64 },
+      { lecture: lec5!, body: "A capped carry, secured against future cost oil, best balances the parties' positions here...", wordCount: 340, scorePercent: 55 },
+    ];
+    for (const d of draftingSeeds) {
+      const submission = await prisma.draftingSubmission.upsert({
+        where: { enrolmentId_lectureId_attemptNumber: { enrolmentId: amaraEnrolment.id, lectureId: d.lecture.id, attemptNumber: 1 } },
+        update: {},
+        create: {
+          enrolmentId: amaraEnrolment.id,
+          lectureId: d.lecture.id,
+          state: SubmissionState.RETURNED,
+          body: d.body,
+          wordCount: d.wordCount,
+          submittedAt: new Date("2026-01-18"),
+        },
+      });
+      const existingMark = await prisma.mark.findUnique({ where: { draftingSubmissionId: submission.id } });
+      if (!existingMark) {
+        const band = await resolveGradeBand(d.scorePercent, now, prisma);
+        await prisma.mark.create({
+          data: {
+            enrolmentId: amaraEnrolment.id,
+            kind: MarkableKind.DRAFTING,
+            draftingSubmissionId: submission.id,
+            state: MarkState.RETURNED,
+            scorePercent: d.scorePercent,
+            band,
+            feedback: "Sound on the law and clearly structured. Tighten the drafting precision on the operative clause — see the marked-up paragraph.",
+            markedByStaffId: faculty.id,
+            markedAt: now,
+          },
+        });
+      }
+      await prisma.deadline.updateMany({
+        where: { enrolmentId: amaraEnrolment.id, lectureId: d.lecture.id, kind: "DRAFTING_DUE", metAt: null },
+        data: { metAt: new Date("2026-01-18") },
+      });
+    }
+
+    // Module 1 quiz — system-graded on submission, no faculty marking involved.
+    const existingAttempt = await prisma.quizAttempt.findFirst({ where: { enrolmentId: amaraEnrolment.id, quizId: module1Quiz.id } });
+    if (!existingAttempt) {
+      await prisma.quizAttempt.create({
+        data: {
+          enrolmentId: amaraEnrolment.id,
+          quizId: module1Quiz.id,
+          scorePercent: 100,
+          passed: true,
+          startedAt: new Date("2026-01-19T09:00:00Z"),
+          submittedAt: new Date("2026-01-19T09:04:00Z"),
+        },
+      });
+    }
+    await prisma.deadline.updateMany({
+      where: { enrolmentId: amaraEnrolment.id, moduleId: module1.id, kind: "QUIZ_DUE", metAt: null },
+      data: { metAt: new Date("2026-01-19T09:04:00Z") },
+    });
+
+    // Module 2, lecture 1 — started, not finished.
+    await prisma.lectureProgress.upsert({
+      where: { enrolmentId_lectureId: { enrolmentId: amaraEnrolment.id, lectureId: module2Lectures[0].id } },
+      update: {},
+      create: {
+        enrolmentId: amaraEnrolment.id,
+        lectureId: module2Lectures[0].id,
+        state: LectureState.IN_PROGRESS,
+        stepsCompleted: [],
+        mediaPositionSeconds: 60,
+        startedAt: new Date("2026-01-21"),
+        lastSeenAt: new Date("2026-01-21"),
+      },
+    });
+
+    await recomputeProgrammeResult(amaraEnrolment.id, prisma);
+  }
 
   // A second candidate who has registered but not paid, to demonstrate
   // applicant nav gating and an incomplete profile checklist.

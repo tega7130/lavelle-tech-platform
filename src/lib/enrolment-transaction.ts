@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { PaymentStatus, EnrolmentStatus, NotificationCategory, type OfflinePaymentMode } from "@/generated/prisma/client";
 import { recordAuditEvent } from "@/lib/audit";
 import { formatNaira } from "@/lib/format";
+import { generateDeadlinesForEnrolment } from "@/lib/deadline-generation";
 
 export interface OfflinePaymentFields {
   amountMinor: number; // the actual amount received — never silently truncated to the fee (rule 7)
@@ -151,6 +152,15 @@ export async function confirmPayment(paymentId: string, opts: ConfirmPaymentOpti
           cohortId: assignedCohortId ?? enrolment.cohortId,
         },
       });
+
+      // Slice 04: deadlines are generated at enrolment (rule 6), inside
+      // this same transaction so an ACTIVE enrolment never exists without
+      // a schedule. Guarded on the PRE-update status (captured above) so
+      // a re-run of this transaction for an already-ACTIVE enrolment
+      // never generates a second, duplicate schedule.
+      if (enrolment.status !== EnrolmentStatus.ACTIVE) {
+        await generateDeadlinesForEnrolment(enrolmentId, tx);
+      }
 
       if (cohortUnavailable) {
         // No dedicated admin-task queue exists in this schema — the
