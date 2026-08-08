@@ -194,7 +194,7 @@ enum StaffStatus {
   INACTIVE
 }
 
-// The 17-permission catalogue, six categories, per the README table.
+// The 18-permission catalogue, six categories, per the README table.
 enum Permission {
   VIEW_CANDIDATES
   EDIT_CANDIDATES
@@ -205,6 +205,7 @@ enum Permission {
   MANAGE_PAYMENTS
   VIEW_GRADES
   GRADE_ASSESSMENTS
+  MODERATE_MARKS
   MANAGE_PROGRAMMES
   MANAGE_INTAKES
   ISSUE_CERTIFICATES
@@ -246,6 +247,8 @@ model Staff {
   uploadedMediaAssets     MediaAsset[]
   confirmedPayments       Payment[]        @relation("PaymentConfirmedBy")
   facultyLeadCohorts      Cohort[]         @relation("CohortFacultyLead")
+  markedMarks             Mark[]           @relation("MarkMarkedBy")
+  moderatedMarks          Mark[]           @relation("MarkModeratedBy")
 
   @@index([role])
   @@index([status])
@@ -329,6 +332,10 @@ model Programme {
   deliveryLabel    String         @default("Online + proctored exam")
   prerequisiteTier ProgrammeTier? // non-null only for ADVANCED_PRACTITIONER; Slice 06 enforces it
 
+  // Slice 05 rule 7/10: enforced in openMarkable's QUERY (the candidate's
+  // name/number are never selected), not by hiding a field in the UI.
+  blindMarking Boolean @default(false)
+
   createdByStaffId String
   createdBy        Staff  @relation("ProgrammeCreatedBy", fields: [createdByStaffId], references: [id])
 
@@ -374,6 +381,7 @@ model Module {
   lectures  Lecture[]
   questions Question[] // the Slice 00 exam question bank — a different table from Quiz below, see that model's comment
   quiz      Quiz?
+  deadlines Deadline[]
 
   @@unique([programmeId, weekNumber])
   @@index([programmeId, orderIndex])
@@ -433,7 +441,11 @@ model Lecture {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  slides Slide[]
+  slides              Slide[]
+  progress            LectureProgress[]
+  draftingSubmissions DraftingSubmission[]
+  deadlines           Deadline[]
+  rubrics             MarkRubric[]
 
   @@index([moduleId, orderIndex])
 }
@@ -484,12 +496,13 @@ model MediaAsset {
 
   // Arrays, not single relations — not @unique on the FK side above, so a
   // MediaAsset can be shared by more than one lecture/slide.
-  lectureFullNarrations Lecture[] @relation("LectureFullNarration")
-  lectureVideos         Lecture[] @relation("LectureVideo")
-  slideImages           Slide[]   @relation("SlideImage")
-  slideNarrations       Slide[]   @relation("SlideNarration")
-  receiptForPayments    Payment[] @relation("PaymentReceipt")
-  idCardPhotos          IdCard[]  @relation("IdCardPhoto")
+  lectureFullNarrations Lecture[]            @relation("LectureFullNarration")
+  lectureVideos         Lecture[]            @relation("LectureVideo")
+  slideImages           Slide[]              @relation("SlideImage")
+  slideNarrations       Slide[]              @relation("SlideNarration")
+  receiptForPayments    Payment[]            @relation("PaymentReceipt")
+  idCardPhotos          IdCard[]             @relation("IdCardPhoto")
+  draftingAttachments   DraftingSubmission[] @relation("DraftingAttachment")
 }
 
 // Module-close quizzes — auto-marked and formative. NOT the examination
@@ -507,6 +520,7 @@ model Quiz {
   updatedAt DateTime @updatedAt
 
   questions QuizQuestion[]
+  attempts  QuizAttempt[]
 }
 
 model QuizQuestion {
@@ -520,6 +534,7 @@ model QuizQuestion {
   explanation String? // shown after marking
 
   options QuizOption[]
+  answers QuizAnswer[]
 
   @@index([quizId, orderIndex])
 }
@@ -533,6 +548,8 @@ model QuizOption {
   text       String
   // Exactly one true per question — enforced in the service (upsertQuiz), not by a DB constraint.
   isCorrect  Boolean @default(false)
+
+  answers QuizAnswer[]
 
   @@index([questionId, orderIndex])
 }
@@ -662,7 +679,13 @@ model Enrolment {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  payments Payment[]
+  payments            Payment[]
+  lectureProgress     LectureProgress[]
+  draftingSubmissions DraftingSubmission[]
+  quizAttempts        QuizAttempt[]
+  deadlines           Deadline[]
+  marks               Mark[]
+  programmeResult     ProgrammeResult?
 
   // Partial unique index — a candidate cannot hold two live enrolments in
   // the same programme, but may re-enrol after withdrawing. Prisma cannot
@@ -672,6 +695,315 @@ model Enrolment {
   @@index([candidateId, status])
   @@index([cohortId, status])
   @@index([programmeId])
+}
+
+// ─── Slice 04: course player progress & deadlines ───────────────────────
+//
+// Progress is scoped to the ENROLMENT, never the candidate alone (rule 1)
+// — a re-enrolment after withdrawal starts clean while the prior record
+// survives for the registrar. Module and programme percentages are always
+// DERIVED on read from these rows against the current module/lecture
+// counts (src/lib/progress.ts) — never stored, since Slice 02 lets an
+// administrator add a lecture at any time and a stored percentage would
+// be wrong the moment they do.
+
+enum LectureState {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETED
+}
+
+model LectureProgress {
+  id          String    @id @default(uuid())
+  enrolmentId String
+  enrolment   Enrolment @relation(fields: [enrolmentId], references: [id], onDelete: Cascade)
+  lectureId   String
+  lecture     Lecture   @relation(fields: [lectureId], references: [id], onDelete: Cascade)
+
+  state LectureState @default(NOT_STARTED)
+
+  slideIndex           Int @default(0) // resume position for slide lectures
+  mediaPositionSeconds Int @default(0) // resume position for video, and within a full-lecture narration
+
+  // Subset of ['content','scenario','drafting','quiz'] — whichever steps
+  // deriveLectureSteps() returns for this lecture. A lecture completes
+  // when this set covers every authored step (rule 3), never a hardcoded
+  // four — a lecture with no drafting prompt completes in three.
+  stepsCompleted String[]
+
+  startedAt   DateTime?
+  completedAt DateTime?
+  lastSeenAt  DateTime  @default(now()) // drives "continue where you left off"
+
+  @@unique([enrolmentId, lectureId])
+  @@index([enrolmentId, lastSeenAt(sort: Desc)])
+}
+
+enum SubmissionState {
+  DRAFT
+  SUBMITTED
+  RETURNED
+  RESUBMITTED
+}
+
+// Marking fields (grade, feedback, markedByStaffId) belong to Slice 05 —
+// deliberately absent here.
+model DraftingSubmission {
+  id          String    @id @default(uuid())
+  enrolmentId String
+  enrolment   Enrolment @relation(fields: [enrolmentId], references: [id], onDelete: Cascade)
+  lectureId   String
+  lecture     Lecture   @relation(fields: [lectureId], references: [id], onDelete: Cascade)
+
+  state SubmissionState @default(DRAFT)
+
+  body      String @default("") // the candidate's text — autosaved in DRAFT state (rule 12)
+  wordCount Int    @default(0) // computed server-side; the limit is authored on the lecture
+
+  attachmentAssetId String?
+  attachmentAsset   MediaAsset? @relation("DraftingAttachment", fields: [attachmentAssetId], references: [id])
+
+  submittedAt   DateTime?
+  // Incremented on resubmission after a Refer (rule 4) — requestResubmission
+  // opens the next attempt; the prior one, and its Mark, are never overwritten.
+  attemptNumber Int       @default(1)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  mark Mark?
+
+  @@unique([enrolmentId, lectureId, attemptNumber])
+}
+
+model QuizAttempt {
+  id          String    @id @default(uuid())
+  enrolmentId String
+  enrolment   Enrolment @relation(fields: [enrolmentId], references: [id], onDelete: Cascade)
+  quizId      String
+  quiz        Quiz      @relation(fields: [quizId], references: [id], onDelete: Cascade)
+
+  attemptNumber Int @default(1)
+
+  scorePercent Int? // null until submitted
+  passed       Boolean? // against the quiz's authored passMarkPercent
+
+  startedAt   DateTime  @default(now())
+  submittedAt DateTime?
+
+  answers QuizAnswer[]
+
+  @@index([enrolmentId, quizId])
+}
+
+// isCorrect is graded SERVER-SIDE on submission (rule 4/6) — never sent to
+// or trusted from the client. See src/lib/quiz-grading.ts.
+model QuizAnswer {
+  id         String       @id @default(uuid())
+  attemptId  String
+  attempt    QuizAttempt  @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  questionId String
+  question   QuizQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  selectedOptionId String?
+  selectedOption   QuizOption? @relation(fields: [selectedOptionId], references: [id])
+
+  isCorrect Boolean
+
+  @@unique([attemptId, questionId])
+}
+
+enum DeadlineKind {
+  LECTURE_RELEASE
+  DRAFTING_DUE
+  QUIZ_DUE
+  EXAMINATION
+}
+
+// DeadlineState (UPCOMING/DUE_SOON/OVERDUE/MET/WAIVED) is computed from
+// these timestamps on read (src/lib/deadline-state.ts) — never stored, since a
+// stored state needs a cron job to stay honest and is wrong between runs
+// (rule 10).
+model Deadline {
+  id          String    @id @default(uuid())
+  enrolmentId String
+  enrolment   Enrolment @relation(fields: [enrolmentId], references: [id], onDelete: Cascade)
+
+  kind DeadlineKind
+
+  lectureId String?
+  lecture   Lecture? @relation(fields: [lectureId], references: [id])
+  moduleId  String?
+  module    Module?  @relation(fields: [moduleId], references: [id])
+
+  title String
+
+  dueAt         DateTime
+  // Never mutated (rule 7/8) — the extension audit trail lives entirely in
+  // the difference between this and dueAt.
+  originalDueAt DateTime
+
+  extendedReason String? // e.g. "Extended by 9 days — account suspended 31 July to 4 August"
+
+  metAt    DateTime?
+  waivedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([enrolmentId, dueAt])
+  @@index([dueAt])
+}
+
+// ─── Slice 05: marking, grades & the assessment record ─────────────────
+//
+// The first slice where a staff member's judgement enters the candidate's
+// permanent record, so almost every rule here is about traceability, not
+// computation: a resolved band is STORED (never re-derived once the scale
+// changes — src/lib/grading.ts resolves it once, at return time, against
+// whichever GradeBandDefinition was in force on the assessment date), and
+// a weighting snapshot travels with ProgrammeResult (never re-derived once
+// AssessmentWeighting changes).
+
+enum MarkState {
+  AWAITING
+  IN_REVIEW
+  RETURNED
+  RESUBMISSION_REQUESTED
+}
+
+enum GradeBand {
+  DISTINCTION
+  MERIT
+  PASS
+  REFER
+}
+
+enum MarkableKind {
+  DRAFTING
+  EXAMINATION_WRITTEN
+}
+
+// Bands are DATA, not constants (rule 2) — an institution changes its
+// scale, but a certificate already issued must keep the band it was
+// issued under.
+model GradeBandDefinition {
+  id         String    @id @default(uuid())
+  band       GradeBand
+  minPercent Int // inclusive floor
+  label      String // "Distinction", "Merit", "Pass", "Refer"
+
+  effectiveFrom DateTime
+  effectiveTo   DateTime? // null = current
+
+  @@index([effectiveFrom, effectiveTo])
+}
+
+// One row per marked artefact — polymorphic over the two markable kinds
+// (rule: "one queue, two sources", built so a third could be added
+// without restructuring). Resubmission never overwrites this row or its
+// submission: requestResubmission opens a NEW DraftingSubmission attempt,
+// which gets its OWN Mark row once marked — draftingSubmissionId is
+// @unique per Mark for exactly this reason, so attempt 1's referral and
+// attempt 2's remedy both survive as distinct, complete rows.
+model Mark {
+  id          String    @id @default(uuid())
+  enrolmentId String
+  enrolment   Enrolment @relation(fields: [enrolmentId], references: [id], onDelete: Cascade)
+
+  kind MarkableKind
+
+  // Exactly one of the two is non-null.
+  draftingSubmissionId String?             @unique
+  draftingSubmission   DraftingSubmission? @relation(fields: [draftingSubmissionId], references: [id], onDelete: Cascade)
+  // Slice 06's territory — no target model exists yet, so this is a plain
+  // unique column with no FK for now, exactly as the README's Mark table
+  // lists it ("String? FK -> Slice 06").
+  examWrittenAnswerId  String?             @unique
+
+  state MarkState @default(AWAITING)
+
+  scorePercent Int? // null until returned
+  band         GradeBand? // resolved at return time and stored (rule 2)
+
+  // Mandatory before RETURNED (rule 1) — enforced in returnMark, not by
+  // this column's nullability, since a rubric-only autosave draft can
+  // legitimately have no feedback yet.
+  feedback String?
+
+  // Per-criterion scores keyed by MarkRubricCriterion id — { [criterionId]: score }.
+  // Present only when a rubric is attached; criterion maxMarks sum to 100.
+  rubricScores Json?
+
+  markedByStaffId String?
+  markedByStaff   Staff?    @relation("MarkMarkedBy", fields: [markedByStaffId], references: [id])
+  markedAt        DateTime?
+
+  moderatedByStaffId String?
+  moderatedByStaff   Staff?    @relation("MarkModeratedBy", fields: [moderatedByStaffId], references: [id])
+  moderatedAt        DateTime?
+
+  // Copied from the submission at queue time (rule 5/8) — shown to the
+  // marker, never auto-penalised; whether lateness costs marks is an
+  // academic judgement, not a system rule.
+  isLate Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([state, createdAt])
+  @@index([enrolmentId])
+  @@index([markedByStaffId, markedAt])
+}
+
+// Optional per-lecture rubric — criterion maxMarks must sum to 100 so a
+// rubric score can be expressed as a percentage (enforced app-side, not a
+// DB constraint, since it's checked at author time not write time).
+model MarkRubric {
+  id        String   @id @default(uuid())
+  lectureId String?
+  lecture   Lecture? @relation(fields: [lectureId], references: [id], onDelete: Cascade)
+  name      String
+
+  criteria MarkRubricCriterion[]
+}
+
+model MarkRubricCriterion {
+  id         String     @id @default(uuid())
+  rubricId   String
+  rubric     MarkRubric @relation(fields: [rubricId], references: [id], onDelete: Cascade)
+  orderIndex Int
+  label      String // "Structure", "Authority", "Drafting precision"
+  maxMarks   Int
+}
+
+// The computed final mark for an enrolment — MATERIALISED, because it is
+// cited on a certificate that outlives both the grading scale and the
+// programme's weighting (rule 3/11).
+model ProgrammeResult {
+  id          String    @id @default(uuid())
+  enrolmentId String    @unique
+  enrolment   Enrolment @relation(fields: [enrolmentId], references: [id], onDelete: Cascade)
+
+  quizAveragePercent     Int?
+  draftingAveragePercent Int?
+  examinationPercent     Int? // from Slice 06
+
+  finalPercent Int? // half-up, to the integer, once, at the end — never per component (rule 5)
+  band         GradeBand?
+
+  // The weights used, copied at computation time (rule 3) — Slice 02 lets
+  // an administrator change a programme's weighting; without this, a
+  // recomputation years later would silently produce a final mark that
+  // disagrees with the one already printed on the certificate.
+  weightingSnapshot Json
+
+  computedAt DateTime?
+
+  // False only once every component exists and the examination is
+  // moderated (the second half is Slice 06's territory; this slice flips
+  // it purely from component presence — see recomputeProgrammeResult).
+  isProvisional Boolean @default(true)
 }
 
 // ─── Payments ────────────────────────────────────────────────────────────

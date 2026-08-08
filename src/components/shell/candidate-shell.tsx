@@ -64,8 +64,24 @@ export interface CandidateShellProps {
   children: React.ReactNode;
 }
 
+function useOnlineStatus() {
+  const [online, setOnline] = React.useState(() => (typeof navigator === "undefined" ? true : navigator.onLine));
+  React.useEffect(() => {
+    const goOnline = () => setOnline(true);
+    const goOffline = () => setOnline(false);
+    window.addEventListener("online", goOnline);
+    window.addEventListener("offline", goOffline);
+    return () => {
+      window.removeEventListener("online", goOnline);
+      window.removeEventListener("offline", goOffline);
+    };
+  }, []);
+  return online;
+}
+
 export function CandidateShell({ candidate, enrolled, crumb, onSignOut, children }: CandidateShellProps) {
   const pathname = usePathname();
+  const online = useOnlineStatus();
   const items = CANDIDATE_NAV.filter((item) => enrolled || !item.gated);
   const active = items.find((item) => pathname?.startsWith(item.href));
   const resolvedCrumb = crumb ?? { section: "Candidate Portal", title: active?.label ?? "" };
@@ -154,6 +170,17 @@ export function CandidateShell({ candidate, enrolled, crumb, onSignOut, children
             <ThemeToggle />
           </div>
         </header>
+
+        {!online && (
+          <div className="flex-none flex items-center gap-3 px-[var(--space-6)] py-2.5 bg-[#fff7e6] border-b border-[#f0d9a8] text-[#8a6013] text-[12.5px]">
+            <span className="font-semibold">You are offline.</span>
+            <span>
+              Your connection dropped. You can keep reading anything already open, but marks, submissions and new
+              lectures will not load until you are back on a network.
+            </span>
+            <span className="ml-auto text-[11px] opacity-75">Reconnecting automatically</span>
+          </div>
+        )}
 
         <main className="flex-1 overflow-y-auto p-[var(--space-6)]">{children}</main>
       </div>

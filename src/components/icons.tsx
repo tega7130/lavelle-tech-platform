@@ -164,3 +164,23 @@ export function AdminNavIcon({ name, ...p }: { name: string } & IconProps) {
     </Svg>
   );
 }
+
+export const CheckIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M3.5 9.5 7 13l7.5-8" />
+  </Svg>
+);
+
+export const LockIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <rect x="4" y="8" width="10" height="7.5" rx="1.3" />
+    <path d="M6 8V5.5a3 3 0 0 1 6 0V8" />
+  </Svg>
+);
+
+export const EyeIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M2 9s2.6-5 7-5 7 5 7 5-2.6 5-7 5-7-5-7-5Z" />
+    <circle cx="9" cy="9" r="2" />
+  </Svg>
+);

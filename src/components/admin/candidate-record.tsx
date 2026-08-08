@@ -11,11 +11,22 @@ import { Textarea } from "@/components/ui/field";
 import { formatNaira, tierLabel } from "@/lib/format";
 import { RecordPaymentDialog } from "@/components/admin/record-payment-dialog";
 import { markEnrolmentRefunded } from "@/app/actions/payment";
+import { suspendCandidateAction, reactivateCandidateAction } from "@/app/actions/candidate-admin";
 import type { getCandidateForAdmin } from "@/lib/candidate-admin-reads";
 import type { listCandidateEnrolments } from "@/lib/finance-reads";
+import type { listCandidateMarks } from "@/lib/marking-reads";
 
 type Candidate = NonNullable<Awaited<ReturnType<typeof getCandidateForAdmin>>>;
 type Enrolment = Awaited<ReturnType<typeof listCandidateEnrolments>>[number];
+type CandidateMarks = Awaited<ReturnType<typeof listCandidateMarks>>;
+
+const BAND_TAG: Record<string, TagVariant | "success" | "warning" | "danger"> = {
+  DISTINCTION: "success",
+  MERIT: "accent",
+  PASS: "warning",
+  REFER: "danger",
+};
+const BAND_LABEL: Record<string, string> = { DISTINCTION: "Distinction", MERIT: "Merit", PASS: "Pass", REFER: "Refer" };
 interface PaymentRow {
   id: string;
   internalReference: string;
@@ -45,6 +56,7 @@ const TABS = [
   { key: "overview", label: "Overview" },
   { key: "enrolments", label: "Enrolments" },
   { key: "payments", label: "Payments" },
+  { key: "grades", label: "Assessments & grades" },
 ] as const;
 
 export function CandidateRecord({
@@ -53,14 +65,14 @@ export function CandidateRecord({
   payments,
   stalePending,
   activeProgrammes,
-  canViewPayments,
+  marks,
 }: {
   candidate: Candidate;
   enrolments: Enrolment[];
   payments: PaymentRow[];
   stalePending: boolean;
   activeProgrammes: { id: string; title: string; code: string }[];
-  canViewPayments: boolean;
+  marks: CandidateMarks;
 }) {
   const router = useRouter();
   const visibleTabs = canViewPayments ? TABS : TABS.filter((t) => t.key !== "payments");
@@ -71,8 +83,34 @@ export function CandidateRecord({
   const [confirming, setConfirming] = React.useState<PaymentRow | null>(null);
   const [freshProgrammeId, setFreshProgrammeId] = React.useState("");
   const [recordingFresh, setRecordingFresh] = React.useState(false);
+  const [suspending, setSuspending] = React.useState(false);
+  const [suspendReason, setSuspendReason] = React.useState("");
 
   const name = `${candidate.firstName} ${candidate.lastName}`;
+  const isSuspended = candidate.accountStatus === "SUSPENDED";
+
+  async function submitSuspend() {
+    if (!suspendReason.trim()) return;
+    setBusy(true);
+    try {
+      await suspendCandidateAction(candidate.id, suspendReason);
+      setSuspending(false);
+      setSuspendReason("");
+      router.refresh();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function submitReactivate() {
+    setBusy(true);
+    try {
+      await reactivateCandidateAction(candidate.id);
+      router.refresh();
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function submitRefund() {
     if (!refunding || !refundReason.trim()) return;
@@ -105,7 +143,20 @@ export function CandidateRecord({
         <Tag variant={candidate.candidateNumber ? "success" : "neutral"}>
           {candidate.candidateNumber ? "Enrolled" : "Applicant"}
         </Tag>
+        {isSuspended && <Tag variant="danger">Suspended</Tag>}
+        {isSuspended ? (
+          <Button variant="secondary" className="h-[31px] px-[11px] text-xs" disabled={busy} onClick={submitReactivate}>
+            Reactivate
+          </Button>
+        ) : (
+          <Button variant="secondary" className="h-[31px] px-[11px] text-xs" onClick={() => setSuspending(true)}>
+            Suspend
+          </Button>
+        )}
       </div>
+      {isSuspended && candidate.suspendedReason && (
+        <p className="text-[12.5px] text-neutral-600 -mt-2 mb-[var(--space-4)]">Suspended: {candidate.suspendedReason}</p>
+      )}
 
       <div className="flex gap-1 border-b border-divider mb-[var(--space-4)]">
         {visibleTabs.map((t) => (
@@ -272,6 +323,88 @@ export function CandidateRecord({
         </div>
       )}
 
+      {tab === "grades" && (
+        <div className="flex flex-col gap-[var(--space-4)]">
+          <Card elev="sm" className="p-0 gap-0 overflow-x-auto">
+            <h4 className="m-0 px-[var(--space-4)] pt-[var(--space-4)] pb-2 font-heading font-semibold text-[15px]">Quizzes</h4>
+            {marks.quizzes.length === 0 ? (
+              <div className="text-neutral-500 text-[12.5px] px-[var(--space-4)] pb-[var(--space-4)]">No quiz attempts yet.</div>
+            ) : (
+              <Table>
+                <Thead>
+                  <Tr>
+                    <Th className="pl-[var(--space-4)]">Module</Th>
+                    <Th>Score</Th>
+                    <Th>Date taken</Th>
+                    <Th>Attempts</Th>
+                  </Tr>
+                </Thead>
+                <Tbody>
+                  {marks.quizzes.map((q, i) => (
+                    <Tr key={i}>
+                      <Td className="pl-[var(--space-4)] font-medium">{q.module}</Td>
+                      <Td className="tabular-nums">{q.scorePercent != null ? `${q.scorePercent}%` : "—"}</Td>
+                      <Td>{q.date?.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</Td>
+                      <Td>{q.attempts}</Td>
+                    </Tr>
+                  ))}
+                </Tbody>
+              </Table>
+            )}
+          </Card>
+
+          <Card elev="sm" className="p-0 gap-0 overflow-x-auto">
+            <h4 className="m-0 px-[var(--space-4)] pt-[var(--space-4)] pb-2 font-heading font-semibold text-[15px]">Drafting exercises</h4>
+            {marks.drafting.length === 0 ? (
+              <div className="text-neutral-500 text-[12.5px] px-[var(--space-4)] pb-[var(--space-4)]">No drafting exercises submitted yet.</div>
+            ) : (
+              <Table>
+                <Thead>
+                  <Tr>
+                    <Th className="pl-[var(--space-4)]">Lecture</Th>
+                    <Th>Submitted</Th>
+                    <Th>Grade</Th>
+                    <Th>Graded by</Th>
+                    <Th>Graded date</Th>
+                    <Th className="text-right pr-[var(--space-4)]"></Th>
+                  </Tr>
+                </Thead>
+                <Tbody>
+                  {marks.drafting.map((d) => (
+                    <Tr key={d.id}>
+                      <Td className="pl-[var(--space-4)] font-medium">{d.lecture}</Td>
+                      <Td>{d.submittedAt?.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) ?? "—"}</Td>
+                      <Td>
+                        {d.state === "RETURNED" ? (
+                          <Tag variant={(d.band ? BAND_TAG[d.band] : "neutral") as TagVariant}>
+                            {d.scorePercent}% — {d.band ? BAND_LABEL[d.band] : ""}
+                          </Tag>
+                        ) : (
+                          <Tag variant="warning">Pending review</Tag>
+                        )}
+                      </Td>
+                      <Td className="text-neutral-600">{d.markedByName ?? "—"}</Td>
+                      <Td className="text-neutral-600">
+                        {d.markedAt?.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) ?? "—"}
+                      </Td>
+                      <Td className="text-right pr-[var(--space-4)]">
+                        {d.state !== "RETURNED" && (
+                          <a href="/admin/marking">
+                            <Button variant="primary" className="h-[31px] px-[11px] text-xs">
+                              Grade now
+                            </Button>
+                          </a>
+                        )}
+                      </Td>
+                    </Tr>
+                  ))}
+                </Tbody>
+              </Table>
+            )}
+          </Card>
+        </div>
+      )}
+
       {confirming && (
         <RecordPaymentDialog
           onClose={() => setConfirming(null)}
@@ -318,6 +451,30 @@ export function CandidateRecord({
             </Button>
             <Button variant="danger" disabled={busy || !refundReason.trim()} onClick={submitRefund}>
               Process refund
+            </Button>
+          </div>
+        </Dialog>
+      )}
+
+      {suspending && (
+        <Dialog open onClose={() => setSuspending(false)} title="Suspend this account?">
+          <p>
+            The candidate is signed out everywhere immediately and cannot sign back in until reactivated. Any
+            deadline that falls during the suspension is extended by its length on reactivation.
+          </p>
+          <Textarea
+            value={suspendReason}
+            onChange={(e) => setSuspendReason(e.target.value)}
+            placeholder="Reason for suspension"
+            rows={2}
+            className="mt-3"
+          />
+          <div className="flex justify-end gap-2 mt-4">
+            <Button variant="secondary" onClick={() => setSuspending(false)}>
+              Cancel
+            </Button>
+            <Button variant="danger" disabled={busy || !suspendReason.trim()} onClick={submitSuspend}>
+              Suspend account
             </Button>
           </div>
         </Dialog>
