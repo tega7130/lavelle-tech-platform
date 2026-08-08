@@ -19,7 +19,6 @@ import {
   SupportIcon,
   SignOutIcon,
   BellIcon,
-  BackIcon,
 } from "@/components/icons";
 
 export interface CandidateShellNavItem {
@@ -183,73 +182,6 @@ export function CandidateShell({ candidate, enrolled, crumb, onSignOut, children
         )}
 
         <main className="flex-1 overflow-y-auto p-[var(--space-6)]">{children}</main>
-      </div>
-    </div>
-  );
-}
-
-export interface CoursePlayerShellProps {
-  lecture: { title: string; moduleTitle: string; duration: string };
-  progressLabel: string;
-  progressPct: number;
-  onBack: () => void;
-  onAskFaculty?: () => void;
-  children: React.ReactNode;
-}
-
-/**
- * Shell rule 2: the course player takes over the window — sidebar and header
- * chrome are replaced entirely by a dark lecture rail and a single Back
- * control, rather than being layered on top of the normal shell.
- */
-export function CoursePlayerShell({
-  lecture,
-  progressLabel,
-  progressPct,
-  onBack,
-  onAskFaculty,
-  children,
-}: CoursePlayerShellProps) {
-  return (
-    <div className="flex h-screen bg-bg text-text font-body">
-      <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
-        <header className="flex-none flex items-center justify-between gap-[var(--space-4)] px-[var(--space-5)] py-[var(--space-3)] border-b border-divider bg-bg">
-          <div className="flex items-center gap-[var(--space-4)] min-w-0">
-            <button
-              onClick={onBack}
-              aria-label="Back"
-              title="Back"
-              className="flex-none w-[38px] h-[38px] rounded-md border border-divider bg-neutral-100 text-neutral-700 flex items-center justify-center hover:bg-neutral-200 cursor-pointer"
-            >
-              <BackIcon />
-            </button>
-            <div className="min-w-0">
-              <div className="font-heading font-semibold text-base overflow-hidden text-ellipsis whitespace-nowrap">
-                {lecture.title}
-              </div>
-              <div className="text-[11.5px] text-neutral-600">
-                {lecture.moduleTitle} &middot; {lecture.duration}
-              </div>
-            </div>
-          </div>
-          <div className="flex items-center gap-[var(--space-4)] flex-none">
-            <div className="flex items-center gap-[9px]">
-              <span className="text-[11.5px] text-neutral-600">{progressLabel}</span>
-              <div className="w-[88px] h-[6px] rounded-full bg-neutral-200 overflow-hidden">
-                <div className="h-full rounded-full bg-accent" style={{ width: `${progressPct}%` }} />
-              </div>
-            </div>
-            {onAskFaculty && (
-              <button
-                onClick={onAskFaculty}
-                className="inline-flex items-center gap-[7px] h-9 px-3 rounded-md border border-neutral-300 bg-bg text-[12.5px] font-heading font-semibold cursor-pointer hover:bg-neutral-100"
-              >
-                Ask faculty
-              </button>
-            )}
-          </div>
-        </header>
-        <main className="flex-1 overflow-y-auto">{children}</main>
       </div>
     </div>
   );
