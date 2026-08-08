@@ -42,13 +42,18 @@ describe("layer 3 — requireEnrolled() (Server Action / route handler boundary)
 
 describe("layer 1 — isGatedPortalPath() (proxy.ts's route-gating decision)", () => {
   it("matches every route Handoff 00 says an applicant loses", () => {
-    for (const href of ["/portal/programme", "/portal/deadlines", "/portal/assessment", "/portal/exams", "/portal/credentials", "/portal/ai"]) {
+    for (const href of ["/portal/programme", "/portal/deadlines", "/portal/assessment", "/portal/ai"]) {
       expect(isGatedPortalPath(href)).toBe(true);
     }
   });
 
-  it("does not match the four routes an applicant keeps", () => {
-    for (const href of ["/portal/dashboard", "/portal/catalogue", "/portal/profile", "/portal/support"]) {
+  // /portal/exams and /portal/credentials are deliberately NOT in this
+  // list, unlike Handoff 00's original blanket set — Slice 06 rule 14 and
+  // Slice 07 rule 4 both make the exam-only route (no enrolment at all) a
+  // first-class pathway, so an applicant who never enrols must still be
+  // able to register for an exam and see the credential it earns.
+  it("does not match the six routes an applicant keeps", () => {
+    for (const href of ["/portal/dashboard", "/portal/catalogue", "/portal/exams", "/portal/credentials", "/portal/profile", "/portal/support"]) {
       expect(isGatedPortalPath(href)).toBe(false);
     }
   });
@@ -58,8 +63,6 @@ describe("layer 1 — isGatedPortalPath() (proxy.ts's route-gating decision)", (
   });
 
   it("the gated set is exactly what's marked gated in the nav config — no drift", () => {
-    expect(GATED_PORTAL_HREFS.sort()).toEqual(
-      ["/portal/programme", "/portal/deadlines", "/portal/assessment", "/portal/exams", "/portal/credentials", "/portal/ai"].sort()
-    );
+    expect(GATED_PORTAL_HREFS.sort()).toEqual(["/portal/programme", "/portal/deadlines", "/portal/assessment", "/portal/ai"].sort());
   });
 });

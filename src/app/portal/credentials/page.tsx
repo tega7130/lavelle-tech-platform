@@ -1,9 +1,14 @@
-import { requireEnrolledPage } from "@/lib/candidate-session";
-import { ScreenPlaceholder } from "@/components/shell/placeholder";
+import { redirect } from "next/navigation";
+import { getCurrentCandidate } from "@/lib/candidate-session";
+import { getCandidateCredentials } from "@/lib/certificate-candidate-reads";
+import { Credentials } from "@/components/portal/credentials";
 
-// Layer 2 of the applicant gate (Handoff 01 rule 5) — the proxy already
-// redirects here, this re-checks independently.
+// Deliberately no requireEnrolledPage() gate — an exam-only candidate who
+// never enrolled can still hold a valid EXAMINATION_ONLY credential
+// (Slice 07 rule 4), so must be able to see it here.
 export default async function Page() {
-  await requireEnrolledPage();
-  return <ScreenPlaceholder title="Credentials" />;
+  const candidate = await getCurrentCandidate();
+  if (!candidate) redirect("/sign-in");
+  const data = await getCandidateCredentials(candidate.id);
+  return <Credentials data={data} />;
 }

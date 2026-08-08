@@ -3,6 +3,8 @@
 // fees, dates, copy). Run via `npx prisma migrate dev` (auto-seeds) or
 // `npx prisma db seed`.
 import bcrypt from "bcryptjs";
+import fs from "node:fs/promises";
+import path from "node:path";
 import { PrismaPg } from "@prisma/adapter-pg";
 import {
   PrismaClient,
@@ -13,8 +15,9 @@ import {
   IntakeStatus,
   PaymentPurpose,
   PaymentStatus,
-  Grade,
+  GradeBand,
   CertificateStatus,
+  CredentialPathway,
   ProfessionalStatus,
   ExperienceBand,
   LectureMediaKind,
@@ -23,11 +26,28 @@ import {
   SubmissionState,
   MarkState,
   MarkableKind,
+  ExamStatus,
+  ExamQuestionType,
+  ExamQuestionStatus,
 } from "../src/generated/prisma/client";
 import { ROLE_PRESETS } from "../src/lib/permissions";
 import { generateDeadlinesForEnrolment } from "../src/lib/deadline-generation";
 import { recomputeProgrammeResult } from "../src/lib/programme-result";
 import { resolveGradeBand } from "../src/lib/grading";
+import { renderCertificatePdf } from "../src/lib/certificate-pdf";
+import { tierLabel } from "../src/lib/format";
+
+// storage.ts is marked "server-only", which throws unconditionally
+// outside Next's own bundler (there is no such build step for this
+// plain-tsx seed script, unlike the app or the Vitest suite, which
+// aliases the package to a no-op) — so this writes directly to the same
+// .local-storage/ root storage.ts itself uses, rather than importing it.
+const LOCAL_STORAGE_ROOT = path.join(process.cwd(), ".local-storage");
+async function writeSeedBlob(storageKey: string, data: Buffer) {
+  const filePath = path.join(LOCAL_STORAGE_ROOT, storageKey);
+  await fs.mkdir(path.dirname(filePath), { recursive: true });
+  await fs.writeFile(filePath, data);
+}
 
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
 const prisma = new PrismaClient({ adapter });
@@ -44,6 +64,52 @@ function slugify(name: string) {
     .replace(/&/g, "and")
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/(^-|-$)/g, "");
+}
+
+/**
+ * Renders a real PDF for a seeded certificate the same way issueCertificate
+ * does, so "Download PDF" works on the demo data too — without this, every
+ * seeded certificate would have pdfAssetId null and 404 on download, since
+ * these rows are inserted directly rather than through the real issuing
+ * transaction. Idempotent on storageKey, matching the rest of this file.
+ */
+async function seedCertificatePdf(input: {
+  certificateNumber: string;
+  holderName: string;
+  programmeTitle: string;
+  tier: ProgrammeTier;
+  band: GradeBand;
+  pathway: "PATHWAY" | "EXAMINATION_ONLY";
+  issuedAt: Date;
+  signatoryBlock: string;
+  staffId: string;
+}) {
+  const bandLabel = { DISTINCTION: "Distinction", MERIT: "Merit", PASS: "Pass", REFER: "Refer" }[input.band];
+  const pdfBytes = await renderCertificatePdf({
+    certificateNumber: input.certificateNumber,
+    holderName: input.holderName,
+    programmeTitle: input.programmeTitle,
+    tierLabel: tierLabel(input.tier),
+    bandLabel,
+    pathway: input.pathway,
+    issuedAt: input.issuedAt,
+    signatoryBlock: input.signatoryBlock,
+  });
+  const storageKey = `certificates/${input.certificateNumber}.pdf`;
+  await writeSeedBlob(storageKey, pdfBytes);
+  const asset = await prisma.mediaAsset.upsert({
+    where: { storageKey },
+    update: { bytes: pdfBytes.length },
+    create: {
+      kind: "document",
+      storageKey,
+      mimeType: "application/pdf",
+      bytes: pdfBytes.length,
+      originalFilename: `${input.certificateNumber}.pdf`,
+      uploadedByStaffId: input.staffId,
+    },
+  });
+  return asset.id;
 }
 
 async function main() {
@@ -366,20 +432,233 @@ async function main() {
     });
   }
 
-  // Examination — README "Reference data": ₦85,000 fee, 60% pass mark, 3 hours, proctored/remote.
-  await prisma.examination.upsert({
+  // ── Certifying examination (Slice 06) — README "Reference data": ₦85,000
+  // fee, 60% pass mark, 3 hours ──
+  // The bank content below is lifted verbatim from the design handoff's
+  // own QBANK/EXAM reference arrays (Lavelle Admin.dc.html / Lavelle
+  // LMS.dc.html) — the two files describe the same ELR-201 syllabus from
+  // the builder's and the candidate's side, cross-referenced here by
+  // question text. Two of Module 2's objective questions have no options
+  // listed in either mockup; their option text below is original.
+  const exam = await prisma.exam.upsert({
     where: { programmeId: elr.id },
     update: {},
     create: {
       programmeId: elr.id,
-      feeNaira: 85000,
+      status: ExamStatus.PUBLISHED,
       durationMinutes: 180,
-      passMarkPct: 60,
-      proctored: true,
-      remote: true,
-      published: true,
+      passMarkPercent: 60,
+      feeMinor: 8_500_000,
+      publishedAt: new Date("2026-06-01"),
+      publishedByStaffId: academicAdmin.id,
     },
   });
+
+  const examModules = await prisma.module.findMany({ where: { programmeId: elr.id }, orderBy: { weekNumber: "asc" } });
+  const moduleByWeek = new Map(examModules.map((m) => [m.weekNumber, m]));
+
+  type BankObjective = { week: number; prompt: string; marks: number; status: ExamQuestionStatus; options: string[]; correct: number };
+  type BankWritten = { week: number; prompt: string; marks: number; status: ExamQuestionStatus; guidance: string; wordLimit: number };
+
+  const BANK_OBJECTIVE: BankObjective[] = [
+    {
+      week: 1,
+      marks: 2,
+      status: ExamQuestionStatus.APPROVED,
+      prompt: "A joint operating agreement is silent on the consequences of a non-operator failing to pay a cash call. Which mechanism most directly protects the operator's position?",
+      options: [
+        "Forfeiture of the defaulting party's participating interest under the default clause",
+        "An application to NUPRC for reallocation of the interest",
+        "Suspension of the licence pending resolution",
+        "Termination of the underlying lease",
+      ],
+      correct: 0,
+    },
+    {
+      week: 1,
+      marks: 2,
+      status: ExamQuestionStatus.APPROVED,
+      prompt: "Which instrument governs the fiscal terms applicable to deep offshore production following the 2019 amendment?",
+      options: [
+        "The Petroleum Profits Tax Act alone",
+        "The Deep Offshore and Inland Basin Production Sharing Contract Act as amended",
+        "The Companies Income Tax Act",
+        "The Nigerian Oil and Gas Industry Content Development Act",
+      ],
+      correct: 1,
+    },
+    {
+      week: 1,
+      marks: 3,
+      status: ExamQuestionStatus.IN_REVIEW,
+      prompt: "Which factor most clearly triggers a decommissioning liability on assignment of an OML interest?",
+      options: [
+        "The assignee's first declaration of commerciality",
+        "Accrued abandonment obligations attaching to existing wells",
+        "A change in the operator's corporate ownership",
+        "Expiry of the current field development plan",
+      ],
+      correct: 1,
+    },
+    {
+      week: 2,
+      marks: 2,
+      status: ExamQuestionStatus.APPROVED,
+      prompt: "A compliance audit reveals under-reported Nigerian content for two consecutive quarters. What is the appropriate first step in advising the client?",
+      options: [
+        "Await the regulator's enforcement notice before acting",
+        "Prepare a voluntary corrective disclosure with a remediation plan",
+        "Restate only the current quarter's return",
+        "Suspend all procurement pending review",
+      ],
+      correct: 1,
+    },
+    {
+      week: 2,
+      marks: 2,
+      status: ExamQuestionStatus.APPROVED,
+      prompt: "Which filing obligation follows a change in participating interest under the NUPRC reporting cycle?",
+      options: [
+        "Notification within the next annual return only",
+        "A change-of-interest filing within the reporting cycle in which completion occurs",
+        "No filing — only the assignor's tax return need reflect it",
+        "A filing only where the change exceeds 50% of the interest",
+      ],
+      correct: 1,
+    },
+    {
+      week: 2,
+      marks: 2,
+      status: ExamQuestionStatus.DRAFT,
+      prompt: "On what basis may the regulator suspend a field development plan mid-cycle?",
+      options: [
+        "Only on the operator's own application",
+        "Material non-compliance with an approved plan or licence condition",
+        "A fall in the international oil price",
+        "A change in the operator's registered address",
+      ],
+      correct: 1,
+    },
+    {
+      week: 3,
+      marks: 3,
+      status: ExamQuestionStatus.APPROVED,
+      prompt: "On a project-financed gas processing facility, what is the primary purpose of a direct agreement with the offtaker?",
+      options: [
+        "To fix the tariff for the life of the facility",
+        "To preserve the offtake contract for lenders on enforcement, via step-in rights",
+        "To transfer construction risk to the offtaker",
+        "To satisfy local content reporting obligations",
+      ],
+      correct: 1,
+    },
+    {
+      week: 3,
+      marks: 2,
+      status: ExamQuestionStatus.APPROVED,
+      prompt: "Under a PSC, cost oil recovery is best described as?",
+      options: [
+        "A guaranteed return on the contractor's investment",
+        "Recovery of allowable costs from production, ahead of profit-oil sharing",
+        "A royalty payable to the State",
+        "A tax credit against petroleum profits tax",
+      ],
+      correct: 1,
+    },
+    {
+      week: 4,
+      marks: 2,
+      status: ExamQuestionStatus.APPROVED,
+      prompt: "An arbitration clause provides for a seat in Lagos under UNCITRAL Rules. Which court has supervisory jurisdiction over the award?",
+      options: [
+        "The Federal High Court of Nigeria",
+        "The courts of the place where the asset is located",
+        "The ICSID Secretariat",
+        "The Court of Arbitration of the ICC",
+      ],
+      correct: 0,
+    },
+    {
+      week: 4,
+      marks: 2,
+      status: ExamQuestionStatus.IN_REVIEW,
+      prompt: "Which factor most strongly favours expert determination over arbitration in a metering dispute?",
+      options: [
+        "The sums in issue are very large",
+        "The dispute is narrow, technical, and turns on measurement",
+        "One party is a State entity",
+        "The contract contains a governing-law clause",
+      ],
+      correct: 1,
+    },
+  ];
+
+  const BANK_WRITTEN: BankWritten[] = [
+    {
+      week: 2,
+      marks: 10,
+      wordLimit: 200,
+      status: ExamQuestionStatus.APPROVED,
+      prompt:
+        "A compliance audit reveals that Nigerian content reporting has been understated for two consecutive quarters. Set out the steps you would advise the board to take, in order, and explain the reasoning behind that sequence.",
+      guidance: "Marks are awarded for the order of steps and the reasoning, not for length. State any assumptions you make.",
+    },
+    {
+      week: 3,
+      marks: 15,
+      wordLimit: 300,
+      status: ExamQuestionStatus.APPROVED,
+      prompt:
+        "Your client, an indigenous exploration and production company, has been offered a farm-in on a marginal field held under an OML due for renewal in eighteen months. Advise on the regulatory approvals required before completion, and on how the renewal risk should be allocated between the parties.",
+      guidance: "Address the consent regime, the decommissioning liability that travels with the interest, and at least one drafting mechanism for allocating renewal risk. Cite the applicable guidelines where you rely on them.",
+    },
+  ];
+
+  const existingExamQuestions = await prisma.examQuestion.count({ where: { examId: exam.id } });
+  if (existingExamQuestions === 0) {
+    for (const q of BANK_OBJECTIVE) {
+      const mod = moduleByWeek.get(q.week);
+      if (!mod) continue;
+      await prisma.examQuestion.create({
+        data: {
+          examId: exam.id,
+          moduleId: mod.id,
+          type: ExamQuestionType.OBJECTIVE,
+          status: q.status,
+          prompt: q.prompt,
+          marks: q.marks,
+          options: { create: q.options.map((text, i) => ({ orderIndex: i, text, isCorrect: i === q.correct })) },
+        },
+      });
+    }
+    for (const q of BANK_WRITTEN) {
+      const mod = moduleByWeek.get(q.week);
+      if (!mod) continue;
+      await prisma.examQuestion.create({
+        data: {
+          examId: exam.id,
+          moduleId: mod.id,
+          type: ExamQuestionType.WRITTEN,
+          status: q.status,
+          prompt: q.prompt,
+          marks: q.marks,
+          guidance: q.guidance,
+          wordLimit: q.wordLimit,
+        },
+      });
+    }
+  }
+
+  // Three monthly windows.
+  const examWindowSeeds = [
+    { opensAt: new Date("2026-09-14T09:00:00Z"), closesAt: new Date("2026-09-15T09:00:00Z"), registrationDeadline: new Date("2026-09-07T23:59:00Z") },
+    { opensAt: new Date("2026-10-12T09:00:00Z"), closesAt: new Date("2026-10-13T09:00:00Z"), registrationDeadline: new Date("2026-10-05T23:59:00Z") },
+    { opensAt: new Date("2026-11-16T09:00:00Z"), closesAt: new Date("2026-11-17T09:00:00Z"), registrationDeadline: new Date("2026-11-09T23:59:00Z") },
+  ];
+  const existingWindows = await prisma.examWindow.count({ where: { examId: exam.id } });
+  if (existingWindows === 0) {
+    await prisma.examWindow.createMany({ data: examWindowSeeds.map((w) => ({ examId: exam.id, capacity: null, ...w })) });
+  }
 
   // Cohorts for the flagship active programme, across all three intakes —
   // codes match the design reference (e.g. "SPEC-ENR-03").
@@ -831,49 +1110,198 @@ async function main() {
     },
   });
 
-  // ── Certificates — Handoff 00's verify-portal register, faithfully reproduced ──
-  await prisma.certificate.upsert({
-    where: { identifier: "LVL-CERT-2025-00790" },
+  // ── Certificate template ──
+  // A placeholder artwork asset — no real file is written for it (same
+  // precedent as the rest of this seed script: no MediaAsset row here is
+  // backed by real bytes on disk). The PDF renderer draws the certificate
+  // with pdf-lib's own vector primitives rather than embedding this image,
+  // so nothing downstream needs it to resolve to a real file.
+  const certificateArtwork = await prisma.mediaAsset.upsert({
+    where: { storageKey: "seed/certificate-artwork-2026.png" },
     update: {},
     create: {
-      identifier: "LVL-CERT-2025-00790",
-      candidateId: chiamaka.id,
-      programmeId: programmes["FCE-101"]!.id,
-      tier: ProgrammeTier.FOUNDATION,
-      grade: Grade.DISTINCTION,
-      issuedAt: new Date("2025-12-09"),
-      status: CertificateStatus.ACTIVE,
+      kind: "image",
+      storageKey: `seed/certificate-artwork-2026.png`,
+      mimeType: "image/png",
+      bytes: 428_112,
+      originalFilename: "lavelle-certificate-artwork-2026.png",
+      uploadedByStaffId: academicAdmin.id,
     },
   });
-  const revoked = await prisma.certificate.upsert({
-    where: { identifier: "LVL-CERT-2025-00219" },
+  const certificateTemplate = await prisma.certificateTemplate.upsert({
+    where: { id: "seed-certificate-template-2026" },
     update: {},
     create: {
-      identifier: "LVL-CERT-2025-00219",
+      id: "seed-certificate-template-2026",
+      name: "Lavelle certificate — 2026 revision",
+      artworkAssetId: certificateArtwork.id,
+      appliesToTier: null,
+      signatoryBlock: "Registrar · Dean of Faculty",
+      printedFields: {
+        name: true,
+        programmeAndTier: true,
+        band: true,
+        certificateIdAndQr: true,
+        pathwayMark: true,
+        issueDate: true,
+      },
+      isActive: true,
+      activatedAt: new Date("2026-01-01"),
+      createdByStaffId: academicAdmin.id,
+    },
+  });
+
+  // ── Certificates — Handoff 00's verify-portal register, extended to
+  // exercise all three verification outcomes (README: "one active
+  // certificate, one revoked with a successor, and one superseded").
+  // Manually issued (sittingId null) — these predate Slice 06's exam
+  // pipeline, exactly the "edge case" manual issue exists for.
+  const activePdfAssetId = await seedCertificatePdf({
+    certificateNumber: "LVL-CERT-2025-00790",
+    holderName: `${chiamaka.firstName} ${chiamaka.lastName}`,
+    programmeTitle: programmes["FCE-101"]!.title,
+    tier: ProgrammeTier.FOUNDATION,
+    band: GradeBand.DISTINCTION,
+    pathway: "EXAMINATION_ONLY",
+    issuedAt: new Date("2025-12-09"),
+    signatoryBlock: certificateTemplate.signatoryBlock,
+    staffId: academicAdmin.id,
+  });
+  await prisma.certificate.upsert({
+    where: { certificateNumber: "LVL-CERT-2025-00790" },
+    update: { pdfAssetId: activePdfAssetId },
+    create: {
+      certificateNumber: "LVL-CERT-2025-00790",
+      candidateId: chiamaka.id,
+      programmeId: programmes["FCE-101"]!.id,
+      enrolmentId: null,
+      pathway: CredentialPathway.EXAMINATION_ONLY,
+      holderName: `${chiamaka.firstName} ${chiamaka.lastName}`,
+      candidateNumber: chiamaka.candidateNumber,
+      programmeTitle: programmes["FCE-101"]!.title,
+      tier: ProgrammeTier.FOUNDATION,
+      finalPercent: 82,
+      band: GradeBand.DISTINCTION,
+      status: CertificateStatus.ACTIVE,
+      issuedAt: new Date("2025-12-09"),
+      issuedByStaffId: academicAdmin.id,
+      templateId: certificateTemplate.id,
+      pdfAssetId: activePdfAssetId,
+    },
+  });
+
+  // A three-link chain on the same programme: issued with the wrong
+  // programme title recorded (SUPERSEDED — never invalid, corrected), the
+  // correction was later REVOKED for an integrity finding, and the
+  // appeal was upheld, producing a fresh ACTIVE certificate. Demonstrates
+  // rule 6/7's distinction: superseded and revoked are different states,
+  // and a revoked certificate can itself be re-issued.
+  const supersededPdfAssetId = await seedCertificatePdf({
+    certificateNumber: "LVL-CERT-2025-00219",
+    holderName: `${chiamaka.firstName} ${chiamaka.lastName}`,
+    programmeTitle: "Introduction to Regulatory Practise",
+    tier: ProgrammeTier.FOUNDATION,
+    band: GradeBand.MERIT,
+    pathway: "EXAMINATION_ONLY",
+    issuedAt: new Date("2025-11-08"),
+    signatoryBlock: certificateTemplate.signatoryBlock,
+    staffId: academicAdmin.id,
+  });
+  const superseded = await prisma.certificate.upsert({
+    where: { certificateNumber: "LVL-CERT-2025-00219" },
+    update: { pdfAssetId: supersededPdfAssetId },
+    create: {
+      certificateNumber: "LVL-CERT-2025-00219",
       candidateId: chiamaka.id,
       programmeId: programmes["IRP-101"]!.id,
+      enrolmentId: null,
+      pathway: CredentialPathway.EXAMINATION_ONLY,
+      holderName: `${chiamaka.firstName} ${chiamaka.lastName}`,
+      candidateNumber: chiamaka.candidateNumber,
+      programmeTitle: "Introduction to Regulatory Practise", // the misspelling that was corrected
       tier: ProgrammeTier.FOUNDATION,
-      grade: Grade.MERIT,
+      finalPercent: 64,
+      band: GradeBand.MERIT,
+      status: CertificateStatus.SUPERSEDED,
       issuedAt: new Date("2025-11-08"),
+      issuedByStaffId: academicAdmin.id,
+      templateId: certificateTemplate.id,
+      pdfAssetId: supersededPdfAssetId,
+    },
+  });
+  const revokedPdfAssetId = await seedCertificatePdf({
+    certificateNumber: "LVL-CERT-2025-00655",
+    holderName: `${chiamaka.firstName} ${chiamaka.lastName}`,
+    programmeTitle: programmes["IRP-101"]!.title,
+    tier: ProgrammeTier.FOUNDATION,
+    band: GradeBand.MERIT,
+    pathway: "EXAMINATION_ONLY",
+    issuedAt: new Date("2025-11-12"),
+    signatoryBlock: certificateTemplate.signatoryBlock,
+    staffId: academicAdmin.id,
+  });
+  const revoked = await prisma.certificate.upsert({
+    where: { certificateNumber: "LVL-CERT-2025-00655" },
+    update: { pdfAssetId: revokedPdfAssetId },
+    create: {
+      certificateNumber: "LVL-CERT-2025-00655",
+      candidateId: chiamaka.id,
+      programmeId: programmes["IRP-101"]!.id,
+      enrolmentId: null,
+      pathway: CredentialPathway.EXAMINATION_ONLY,
+      holderName: `${chiamaka.firstName} ${chiamaka.lastName}`,
+      candidateNumber: chiamaka.candidateNumber,
+      programmeTitle: programmes["IRP-101"]!.title,
+      tier: ProgrammeTier.FOUNDATION,
+      finalPercent: 64,
+      band: GradeBand.MERIT,
       status: CertificateStatus.REVOKED,
       revokedReason: "Assessment integrity finding of the examinations panel",
       revokedAt: new Date("2025-11-19"),
+      issuedAt: new Date("2025-11-12"),
+      issuedByStaffId: academicAdmin.id,
+      templateId: certificateTemplate.id,
+      replacesId: superseded.id,
+      pdfAssetId: revokedPdfAssetId,
     },
   });
-  await prisma.certificate.upsert({
-    where: { identifier: "LVL-CERT-2026-01188" },
-    update: {},
+  await prisma.certificate.update({ where: { id: superseded.id }, data: { supersededById: revoked.id } });
+
+  const reissuedPdfAssetId = await seedCertificatePdf({
+    certificateNumber: "LVL-CERT-2026-01188",
+    holderName: `${chiamaka.firstName} ${chiamaka.lastName}`,
+    programmeTitle: programmes["IRP-101"]!.title,
+    tier: ProgrammeTier.FOUNDATION,
+    band: GradeBand.MERIT,
+    pathway: "EXAMINATION_ONLY",
+    issuedAt: new Date("2026-08-04"),
+    signatoryBlock: certificateTemplate.signatoryBlock,
+    staffId: academicAdmin.id,
+  });
+  const reissued = await prisma.certificate.upsert({
+    where: { certificateNumber: "LVL-CERT-2026-01188" },
+    update: { pdfAssetId: reissuedPdfAssetId },
     create: {
-      identifier: "LVL-CERT-2026-01188",
+      certificateNumber: "LVL-CERT-2026-01188",
       candidateId: chiamaka.id,
       programmeId: programmes["IRP-101"]!.id,
+      enrolmentId: null,
+      pathway: CredentialPathway.EXAMINATION_ONLY,
+      holderName: `${chiamaka.firstName} ${chiamaka.lastName}`,
+      candidateNumber: chiamaka.candidateNumber,
+      programmeTitle: programmes["IRP-101"]!.title,
       tier: ProgrammeTier.FOUNDATION,
-      grade: Grade.MERIT,
-      issuedAt: new Date("2026-08-04"),
+      finalPercent: 64,
+      band: GradeBand.MERIT,
       status: CertificateStatus.ACTIVE,
-      replacesCertificateId: revoked.id,
+      issuedAt: new Date("2026-08-04"),
+      issuedByStaffId: academicAdmin.id,
+      templateId: certificateTemplate.id,
+      replacesId: revoked.id,
+      pdfAssetId: reissuedPdfAssetId,
     },
   });
+  await prisma.certificate.update({ where: { id: revoked.id }, data: { supersededById: reissued.id } });
 
   console.log(`Seeded. Demo password for every account: ${DEMO_PASSWORD}`);
   console.log(

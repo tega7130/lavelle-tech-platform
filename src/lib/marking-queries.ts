@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { MarkState, MarkableKind } from "@/generated/prisma/client";
+import { resolveMarkContext } from "@/lib/mark-context";
 
 // No "server-only" / staff-auth import here, deliberately — same
 // discipline as player-actions.ts / offline-recording.ts. The permission
@@ -18,21 +19,28 @@ export function blindReference(markId: string) {
 export interface ListMarkingQueueParams {
   tab: "awaiting" | "returned";
   kind?: MarkableKind;
+  // Not yet filtered — resolving a mark's programme now requires walking
+  // two different paths (enrolment, or examWrittenAnswer -> sitting ->
+  // registration -> exam), which the small queue sizes here don't yet
+  // need to pay for. Left in the params shape for a future pass.
   programmeId?: string;
   assignedToMe?: boolean;
 }
 
 /**
- * Blind marking (rule 7) is enforced HERE, in the query — candidate
- * name/number are only ever fetched for programmes with blindMarking
- * false, via a second, separate query keyed on the non-blind subset. A
- * blind row never has the candidate's identity in memory to begin with,
- * not just hidden from the return value.
+ * Blind marking (rule 7, Slice 05) is enforced HERE, in the query —
+ * candidate name/number are only ever fetched for programmes with
+ * blindMarking false, via a second, separate query keyed on the
+ * non-blind subset. A blind row never has the candidate's identity in
+ * memory to begin with, not just hidden from the return value. A mark's
+ * candidate/programme is resolved via resolveMarkContext, which knows
+ * both a DRAFTING mark's enrolment path and an EXAMINATION_WRITTEN
+ * mark's exam-registration path (rule 14, Slice 06 — an exam-only
+ * registration has no enrolment at all).
  */
 export async function listMarkingQueueQuery(params: ListMarkingQueueParams, staffId: string) {
   const baseWhere = {
     ...(params.kind ? { kind: params.kind } : {}),
-    ...(params.programmeId ? { enrolment: { programmeId: params.programmeId } } : {}),
     ...(params.assignedToMe ? { markedByStaffId: staffId } : {}),
   };
 
@@ -49,9 +57,12 @@ export async function listMarkingQueueQuery(params: ListMarkingQueueParams, staf
         createdAt: true,
         markedByStaffId: true,
         enrolmentId: true,
-        enrolment: { select: { candidateId: true, programme: { select: { title: true, code: true, blindMarking: true } } } },
+        examWrittenAnswerId: true,
         draftingSubmission: {
           select: { attemptNumber: true, submittedAt: true, lecture: { select: { title: true, module: { select: { title: true, weekNumber: true } } } } },
+        },
+        examWrittenAnswer: {
+          select: { answeredAt: true, question: { select: { prompt: true, module: { select: { title: true, weekNumber: true } } } } },
         },
       },
       orderBy: { createdAt: "asc" },
@@ -60,15 +71,17 @@ export async function listMarkingQueueQuery(params: ListMarkingQueueParams, staf
     prisma.mark.count({ where: { ...baseWhere, state: MarkState.RETURNED } }),
   ]);
 
-  const nonBlindCandidateIds = [...new Set(marks.filter((m) => !m.enrolment.programme.blindMarking).map((m) => m.enrolment.candidateId))];
+  const contexts = await Promise.all(marks.map((m) => resolveMarkContext(m, prisma)));
+  const nonBlindCandidateIds = [...new Set(contexts.filter((c) => !c.blindMarking).map((c) => c.candidateId))];
   const candidates = nonBlindCandidateIds.length
     ? await prisma.candidate.findMany({ where: { id: { in: nonBlindCandidateIds } }, select: { id: true, firstName: true, lastName: true, candidateNumber: true } })
     : [];
   const candidateById = new Map(candidates.map((c) => [c.id, c]));
 
-  const items = marks.map((m) => {
-    const blind = m.enrolment.programme.blindMarking;
-    const candidate = blind ? null : (candidateById.get(m.enrolment.candidateId) ?? null);
+  const items = marks.map((m, i) => {
+    const context = contexts[i]!;
+    const blind = context.blindMarking;
+    const candidate = blind ? null : (candidateById.get(context.candidateId) ?? null);
     return {
       id: m.id,
       kind: m.kind,
@@ -81,13 +94,17 @@ export async function listMarkingQueueQuery(params: ListMarkingQueueParams, staf
       isClaimed: m.markedByStaffId != null,
       isBlind: blind,
       candidateLabel: blind ? blindReference(m.id) : candidate ? `${candidate.firstName} ${candidate.lastName}` : "Unknown candidate",
-      programmeTitle: m.enrolment.programme.title,
+      programmeTitle: context.programmeTitle,
       source: m.draftingSubmission
         ? `${m.draftingSubmission.lecture.module.title} · ${m.draftingSubmission.lecture.title}`
-        : "Examination — written answer",
+        : m.examWrittenAnswer
+          ? `${m.examWrittenAnswer.question.module.title} · Examination written answer`
+          : "Examination — written answer",
       meta: m.draftingSubmission?.submittedAt
         ? `Submitted ${m.draftingSubmission.submittedAt.toLocaleDateString("en-GB", { day: "numeric", month: "short" })}`
-        : "",
+        : m.examWrittenAnswer?.answeredAt
+          ? `Submitted ${m.examWrittenAnswer.answeredAt.toLocaleDateString("en-GB", { day: "numeric", month: "short" })}`
+          : "",
     };
   });
 
@@ -96,9 +113,9 @@ export async function listMarkingQueueQuery(params: ListMarkingQueueParams, staf
 
 /**
  * The full marking view for one item — prompt, submission, rubric, prior
- * attempts, and (unless the programme is blind) the candidate's identity.
- * Same enforcement discipline as listMarkingQueueQuery: the identity
- * fetch is a SEPARATE query, skipped entirely when blind.
+ * attempts, and (unless the programme is blind) the candidate's
+ * identity. Same enforcement discipline as listMarkingQueueQuery: the
+ * identity fetch is a SEPARATE query, skipped entirely when blind.
  */
 export async function openMarkableQuery(markId: string) {
   const mark = await prisma.mark.findUniqueOrThrow({
@@ -117,7 +134,7 @@ export async function openMarkableQuery(markId: string) {
       moderatedByStaffId: true,
       moderatedAt: true,
       enrolmentId: true,
-      enrolment: { select: { candidateId: true, programme: { select: { id: true, title: true, blindMarking: true } } } },
+      examWrittenAnswerId: true,
       draftingSubmission: {
         select: {
           id: true,
@@ -130,13 +147,22 @@ export async function openMarkableQuery(markId: string) {
           },
         },
       },
+      examWrittenAnswer: {
+        select: {
+          id: true,
+          writtenAnswer: true,
+          answeredAt: true,
+          question: { select: { id: true, prompt: true, guidance: true, wordLimit: true, marks: true, module: { select: { title: true, weekNumber: true } } } },
+        },
+      },
     },
   });
 
-  const blind = mark.enrolment.programme.blindMarking;
+  const context = await resolveMarkContext(mark, prisma);
+  const blind = context.blindMarking;
   const candidate = blind
     ? null
-    : await prisma.candidate.findUnique({ where: { id: mark.enrolment.candidateId }, select: { firstName: true, lastName: true, candidateNumber: true } });
+    : await prisma.candidate.findUnique({ where: { id: context.candidateId }, select: { firstName: true, lastName: true, candidateNumber: true } });
 
   const [priorAttempts, rubric] = await Promise.all([
     mark.draftingSubmission
@@ -171,12 +197,13 @@ export async function openMarkableQuery(markId: string) {
     markedAt: mark.markedAt,
     moderatedByStaffId: mark.moderatedByStaffId,
     moderatedAt: mark.moderatedAt,
-    programmeTitle: mark.enrolment.programme.title,
+    programmeTitle: context.programmeTitle,
     isBlind: blind,
     candidateLabel: blind ? blindReference(mark.id) : candidate ? `${candidate.firstName} ${candidate.lastName}` : "Unknown candidate",
     candidateNumber: blind ? null : (candidate?.candidateNumber ?? null),
     submission: mark.draftingSubmission
       ? {
+          kind: "drafting" as const,
           body: mark.draftingSubmission.body,
           wordCount: mark.draftingSubmission.wordCount,
           attemptNumber: mark.draftingSubmission.attemptNumber,
@@ -186,7 +213,21 @@ export async function openMarkableQuery(markId: string) {
           lectureTitle: mark.draftingSubmission.lecture.title,
           moduleTitle: mark.draftingSubmission.lecture.module.title,
         }
-      : null,
+      : mark.examWrittenAnswer
+        ? {
+            kind: "exam" as const,
+            body: mark.examWrittenAnswer.writtenAnswer ?? "",
+            wordCount: (mark.examWrittenAnswer.writtenAnswer ?? "").trim().split(/\s+/).filter(Boolean).length,
+            attemptNumber: 1,
+            submittedAt: mark.examWrittenAnswer.answeredAt,
+            prompt: mark.examWrittenAnswer.question.prompt,
+            wordLimit: mark.examWrittenAnswer.question.wordLimit,
+            lectureTitle: null,
+            moduleTitle: mark.examWrittenAnswer.question.module.title,
+            guidance: mark.examWrittenAnswer.question.guidance,
+            marks: mark.examWrittenAnswer.question.marks,
+          }
+        : null,
     priorAttempts,
     rubric,
   };

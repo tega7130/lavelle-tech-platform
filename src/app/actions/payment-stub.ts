@@ -4,6 +4,7 @@ import crypto from "node:crypto";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { signWebhookPayload } from "@/lib/payment-provider";
+import { prisma } from "@/lib/prisma";
 
 /**
  * Fires a genuinely signed webhook at our own /api/webhooks/[provider]
@@ -28,12 +29,18 @@ async function deliverWebhook(provider: string, event: "charge.success" | "charg
   });
 }
 
+/** EXAMINATION_FEE payments return to their own exam-flavoured status page, not the enrolment one — same reference, different copy. */
+async function returnPathFor(reference: string) {
+  const payment = await prisma.payment.findUnique({ where: { internalReference: reference }, select: { purpose: true } });
+  return payment?.purpose === "EXAMINATION_FEE" ? `/portal/exams/checkout/${reference}` : `/portal/checkout/${reference}`;
+}
+
 export async function simulateProviderSuccess(provider: string, reference: string) {
   await deliverWebhook(provider, "charge.success", reference);
-  redirect(`/portal/checkout/${reference}`);
+  redirect(await returnPathFor(reference));
 }
 
 export async function simulateProviderDecline(provider: string, reference: string) {
   await deliverWebhook(provider, "charge.failed", reference, "Card declined by issuing bank.");
-  redirect(`/portal/checkout/${reference}`);
+  redirect(await returnPathFor(reference));
 }

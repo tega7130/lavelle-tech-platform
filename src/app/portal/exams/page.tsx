@@ -1,9 +1,10 @@
-import { requireEnrolledPage } from "@/lib/candidate-session";
-import { ScreenPlaceholder } from "@/components/shell/placeholder";
+import { listExamsForCandidate } from "@/lib/exam-candidate-reads";
+import { ExamCatalogue } from "@/components/portal/exam-catalogue";
 
-// Layer 2 of the applicant gate (Handoff 01 rule 5) — the proxy already
-// redirects here, this re-checks independently.
+// Deliberately no requireEnrolledPage() gate — exam-only registration is
+// a first-class pathway (Slice 06 rule 14), so an applicant who never
+// enrolled must still be able to browse and register here.
 export default async function Page() {
-  await requireEnrolledPage();
-  return <ScreenPlaceholder title="Exams" />;
+  const exams = await listExamsForCandidate();
+  return <ExamCatalogue exams={exams} />;
 }

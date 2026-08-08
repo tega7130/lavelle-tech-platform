@@ -89,7 +89,7 @@ model Candidate {
   payments                Payment[]
   idCards                 IdCard[]
   certificates            Certificate[]
-  examinationSittings     ExaminationSitting[]
+  examRegistrations       ExamRegistration[]
   contactRequests         ContactRequest[]
   adminNotes              AdminNote[]
 
@@ -249,6 +249,10 @@ model Staff {
   facultyLeadCohorts      Cohort[]         @relation("CohortFacultyLead")
   markedMarks             Mark[]           @relation("MarkMarkedBy")
   moderatedMarks          Mark[]           @relation("MarkModeratedBy")
+  publishedExams          Exam[]           @relation("ExamPublishedBy")
+  retiredExamQuestions    ExamQuestion[]   @relation("ExamQuestionRetiredBy")
+  issuedCertificates      Certificate[]    @relation("CertificateIssuedBy")
+  certificateTemplates    CertificateTemplate[] @relation("CertificateTemplateCreatedBy")
 
   @@index([role])
   @@index([status])
@@ -350,7 +354,7 @@ model Programme {
   // Programme, directly (see the README's Payment table); go through
   // enrolment.programme to reach a payment's programme.
   certificates         Certificate[]
-  examination          Examination?
+  exam                 Exam?
 
   @@index([status, tier])
   @@index([categoryId])
@@ -378,10 +382,10 @@ model Module {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  lectures  Lecture[]
-  questions Question[] // the Slice 00 exam question bank — a different table from Quiz below, see that model's comment
-  quiz      Quiz?
-  deadlines Deadline[]
+  lectures      Lecture[]
+  examQuestions ExamQuestion[] // Slice 06's certifying-exam bank — distinct from the formative Quiz below (see that model's comment)
+  quiz          Quiz?
+  deadlines     Deadline[]
 
   @@unique([programmeId, weekNumber])
   @@index([programmeId, orderIndex])
@@ -496,13 +500,15 @@ model MediaAsset {
 
   // Arrays, not single relations — not @unique on the FK side above, so a
   // MediaAsset can be shared by more than one lecture/slide.
-  lectureFullNarrations Lecture[]            @relation("LectureFullNarration")
-  lectureVideos         Lecture[]            @relation("LectureVideo")
-  slideImages           Slide[]              @relation("SlideImage")
-  slideNarrations       Slide[]              @relation("SlideNarration")
-  receiptForPayments    Payment[]            @relation("PaymentReceipt")
-  idCardPhotos          IdCard[]             @relation("IdCardPhoto")
-  draftingAttachments   DraftingSubmission[] @relation("DraftingAttachment")
+  lectureFullNarrations Lecture[]             @relation("LectureFullNarration")
+  lectureVideos         Lecture[]             @relation("LectureVideo")
+  slideImages           Slide[]               @relation("SlideImage")
+  slideNarrations       Slide[]               @relation("SlideNarration")
+  receiptForPayments    Payment[]             @relation("PaymentReceipt")
+  idCardPhotos          IdCard[]              @relation("IdCardPhoto")
+  draftingAttachments   DraftingSubmission[]  @relation("DraftingAttachment")
+  certificatePdf        Certificate?          @relation("CertificatePdf")
+  certificateArtworks   CertificateTemplate[] @relation("CertificateArtwork")
 }
 
 // Module-close quizzes — auto-marked and formative. NOT the examination
@@ -608,9 +614,8 @@ model Intake {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  cohorts             Cohort[]
-  examinationSittings ExaminationSitting[]
-  enrolments          Enrolment[]
+  cohorts    Cohort[]
+  enrolments Enrolment[]
 
   @@unique([month, year])
 }
@@ -686,6 +691,8 @@ model Enrolment {
   deadlines           Deadline[]
   marks               Mark[]
   programmeResult     ProgrammeResult?
+  examRegistrations   ExamRegistration[]
+  certificates        Certificate[]
 
   // Partial unique index — a candidate cannot hold two live enrolments in
   // the same programme, but may re-enrol after withdrawing. Prisma cannot
@@ -907,19 +914,28 @@ model GradeBandDefinition {
 // @unique per Mark for exactly this reason, so attempt 1's referral and
 // attempt 2's remedy both survive as distinct, complete rows.
 model Mark {
-  id          String    @id @default(uuid())
-  enrolmentId String
-  enrolment   Enrolment @relation(fields: [enrolmentId], references: [id], onDelete: Cascade)
+  id String @id @default(uuid())
+
+  // Required for kind=DRAFTING (a DraftingSubmission always has one).
+  // Nullable for kind=EXAMINATION_WRITTEN — an exam-only registration
+  // (Slice 06 rule 14, ExamRegistration.enrolmentId null) has no
+  // Enrolment at all; that Mark instead resolves its candidate via
+  // examWrittenAnswer -> sitting -> registration.candidateId, and never
+  // feeds a ProgrammeResult (releaseResults computes the Sitting's own
+  // totalPercent directly).
+  enrolmentId String?
+  enrolment   Enrolment? @relation(fields: [enrolmentId], references: [id], onDelete: Cascade)
 
   kind MarkableKind
 
   // Exactly one of the two is non-null.
   draftingSubmissionId String?             @unique
   draftingSubmission   DraftingSubmission? @relation(fields: [draftingSubmissionId], references: [id], onDelete: Cascade)
-  // Slice 06's territory — no target model exists yet, so this is a plain
-  // unique column with no FK for now, exactly as the README's Mark table
-  // lists it ("String? FK -> Slice 06").
+  // Slice 06's SittingAnswer, now that it exists — a written examination
+  // answer enters this same queue as MarkableKind.EXAMINATION_WRITTEN
+  // (Slice 06 rule 11), not a second marking system.
   examWrittenAnswerId  String?             @unique
+  examWrittenAnswer    SittingAnswer?      @relation(fields: [examWrittenAnswerId], references: [id], onDelete: Cascade)
 
   state MarkState @default(AWAITING)
 
@@ -1034,15 +1050,14 @@ model Payment {
   candidateId String    @db.Uuid
   candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
 
-  purpose              PaymentPurpose
-  enrolmentId          String? // null for an examination fee
-  enrolment            Enrolment?          @relation(fields: [enrolmentId], references: [id])
-  // The README's table names this examRegistrationId for a not-yet-built
-  // Slice 06 model — this codebase already has ExaminationSitting serving
-  // exactly that role (an existing, tested FK), so it is reused here
-  // rather than inventing a second, still-hypothetical model.
-  examinationSittingId String?
-  examinationSitting   ExaminationSitting? @relation(fields: [examinationSittingId], references: [id])
+  purpose          PaymentPurpose
+  enrolmentId      String? // null for an examination fee
+  enrolment        Enrolment?        @relation(fields: [enrolmentId], references: [id])
+  // The FK lives on the OTHER side (ExamRegistration.paymentId), per the
+  // Slice 06 README — a registration is created, then the fee payment is
+  // attached to it, mirroring the fact that a registration can exist
+  // (briefly) before payment. This is the reverse back-relation only.
+  examRegistration ExamRegistration?
 
   // Kobo. A snapshot of the fee at the time of payment — never read the
   // live programme fee when displaying a historic payment (rule 7).
@@ -1133,163 +1148,415 @@ model IdCard {
   @@index([candidateId])
 }
 
-// ─── Assessment: question bank & examination ────────────────────────────
+// ─── Slice 06: examinations — builder, registration, sitting & results ──
+//
+// The credentialing act — the only part of the system where a candidate
+// can lose something irreversibly (a forfeited sitting, an expired
+// window). paperSnapshot is drawn once at start and never re-drawn
+// (rule 3); expiresAt is computed once server-side and never recomputed
+// (rule 4/7) — the displayed countdown is cosmetic, every write checks
+// now() < expiresAt regardless of the client's clock.
 
-enum QuestionType {
-  MCQ
-  THEORY
+enum ExamQuestionType {
+  OBJECTIVE
+  WRITTEN
 }
 
-enum QuestionDifficulty {
-  STANDARD
-  TESTING
-  ADVANCED
-}
-
-// Business rule 8/9: retiring withdraws a question from future draws but
-// preserves the record and can be restored; editing applies to future
-// sittings only.
-enum QuestionStatus {
+// Retiring withdraws a question from future draws but preserves the
+// record and can be restored; editing applies to future sittings only
+// (rule 3/4) — paperSnapshot is what guarantees that.
+enum ExamQuestionStatus {
   DRAFT
   IN_REVIEW
   APPROVED
   RETIRED
 }
 
-model Question {
-  id       String @id @default(cuid())
-  moduleId String
-  module   Module @relation(fields: [moduleId], references: [id], onDelete: Cascade)
-
-  type       QuestionType
-  text       String
-  marks      Int
-  difficulty QuestionDifficulty?
-  minWords   Int? // theory only
-  guidance   String? // theory only — marking guidance, not shown to candidates
-
-  status    QuestionStatus @default(DRAFT)
-  retiredAt DateTime?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([moduleId, status])
+enum ExamStatus {
+  DRAFT
+  PUBLISHED
+  CLOSED
 }
 
-model Examination {
-  id          String    @id @default(cuid())
-  programmeId String    @unique
-  programme   Programme @relation(fields: [programmeId], references: [id], onDelete: Cascade)
-
-  feeNaira        Decimal @db.Decimal(12, 2)
-  durationMinutes Int
-  passMarkPct     Int     @default(60)
-  attemptsPolicy  String  @default("One resit on referral")
-
-  proctored Boolean @default(true)
-  remote    Boolean @default(true)
-
-  fullscreenRequired Boolean @default(true)
-  tabSwitchWarning   Boolean @default(true)
-  shuffleQuestions   Boolean @default(true)
-  shuffleOptions     Boolean @default(false)
-  reviewAllowed      Boolean @default(true)
-
-  // Business rule 6: publishing is blocked while any module is short on
-  // approved objective questions for its draw count.
-  published Boolean @default(false)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  sittings ExaminationSitting[]
-}
-
-// registered -> sat -> passed | referred
-//            -> forfeited (on quit)
-enum SittingStatus {
+enum SittingState {
   REGISTERED
-  SAT
-  PASSED
-  REFERRED
+  IN_PROGRESS
+  SUBMITTED
   FORFEITED
+  EXPIRED
+  MARKED
+  RELEASED
 }
 
-model ExaminationSitting {
-  id            String      @id @default(cuid())
-  examinationId String
-  examination   Examination @relation(fields: [examinationId], references: [id])
-  candidateId   String      @db.Uuid
-  candidate     Candidate   @relation(fields: [candidateId], references: [id], onDelete: Cascade)
-  intakeId      String
-  intake        Intake      @relation(fields: [intakeId], references: [id])
-
-  status SittingStatus @default(REGISTERED)
-
-  registeredAt  DateTime  @default(now())
-  satAt         DateTime?
-  // Weighted composite per business rule 7: quizzes 20%, drafting 40%,
-  // examination 40%. Grade bands: Distinction / Merit / Pass / Refer.
-  finalScorePct Decimal?  @db.Decimal(5, 2)
-  grade         Grade?
-
-  payments Payment[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([candidateId])
-  @@index([status])
-}
-
-enum Grade {
-  DISTINCTION
-  MERIT
+enum ExamOutcome {
   PASS
   REFER
 }
 
-// ─── Certificates ────────────────────────────────────────────────────────
+enum AttemptPolicy {
+  ONE_ATTEMPT
+  TWO_ATTEMPTS
+  ONE_RESIT_ON_REFERRAL
+}
 
-// active -> revoked (mandatory reason, audit-logged)
-// active -> reissued (creates a NEW identifier; the previous one is retired)
+model Exam {
+  id          String    @id @default(uuid())
+  programmeId String    @unique
+  programme   Programme @relation(fields: [programmeId], references: [id], onDelete: Cascade)
+
+  status ExamStatus @default(DRAFT)
+
+  durationMinutes Int // 60-360, in 30-minute steps
+  passMarkPercent Int           @default(60)
+  attemptPolicy   AttemptPolicy @default(ONE_RESIT_ON_REFERRAL)
+
+  feeMinor Int // kobo — a separate transaction from the programme fee (rule 5)
+
+  enforceFullScreen       Boolean @default(true)
+  warnOnTabSwitch         Boolean @default(true)
+  shuffleQuestions        Boolean @default(true)
+  shuffleOptions          Boolean @default(false)
+  allowReviewBeforeSubmit Boolean @default(true)
+
+  publishedAt        DateTime?
+  publishedByStaffId String?
+  publishedByStaff   Staff?    @relation("ExamPublishedBy", fields: [publishedByStaffId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  questions     ExamQuestion[]
+  windows       ExamWindow[]
+  registrations ExamRegistration[]
+}
+
+// The certifying-exam bank — distinct from Slice 02's QuizQuestion (a
+// quiz question is formative and auto-marked; an exam question is drawn,
+// shuffled and summative). Draw is per module and type-aware (rule 2):
+// OBJECTIVE questions are drawn to the module's examQuestionDraw; EVERY
+// approved WRITTEN question is always included, regardless of position.
+model ExamQuestion {
+  id       String @id @default(uuid())
+  examId   String
+  exam     Exam   @relation(fields: [examId], references: [id], onDelete: Cascade)
+  moduleId String
+  module   Module @relation(fields: [moduleId], references: [id])
+
+  type   ExamQuestionType
+  status ExamQuestionStatus @default(DRAFT)
+
+  prompt String
+  marks  Int
+
+  examinerNote String? // shown to the candidate after marking
+  guidance     String? // written only — what a strong answer covers
+  wordLimit    Int? // written only
+
+  retiredAt        DateTime?
+  retiredReason    String? // mandatory on retire (rule 8)
+  retiredByStaffId String?
+  retiredByStaff   Staff?    @relation("ExamQuestionRetiredBy", fields: [retiredByStaffId], references: [id])
+
+  // When a retire is really a replacement — the old question stays on
+  // the record either way.
+  supersededById String?       @unique
+  supersededBy   ExamQuestion? @relation("ExamQuestionSupersession", fields: [supersededById], references: [id])
+  supersedes     ExamQuestion? @relation("ExamQuestionSupersession")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  options ExamQuestionOption[]
+  answers SittingAnswer[]
+
+  @@index([examId, moduleId, status])
+}
+
+// Objective only. Exactly one correct — enforced app-side.
+model ExamQuestionOption {
+  id         String       @id @default(uuid())
+  questionId String
+  question   ExamQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  orderIndex Int
+  text       String
+  isCorrect  Boolean @default(false)
+
+  answers SittingAnswer[]
+}
+
+// Sittings are monthly.
+model ExamWindow {
+  id     String @id @default(uuid())
+  examId String
+  exam   Exam   @relation(fields: [examId], references: [id], onDelete: Cascade)
+
+  opensAt              DateTime
+  closesAt             DateTime
+  registrationDeadline DateTime
+  capacity             Int? // null = uncapped
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  registrations ExamRegistration[]
+
+  @@index([examId, opensAt])
+}
+
+model ExamRegistration {
+  id String @id @default(uuid())
+
+  candidateId String     @db.Uuid
+  candidate   Candidate  @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  examId      String
+  exam        Exam       @relation(fields: [examId], references: [id])
+  windowId    String
+  window      ExamWindow @relation(fields: [windowId], references: [id])
+
+  // Non-null only where the candidate took the programme — the sole
+  // difference between a PATHWAY credential and an exam-only one
+  // (rule 14). Both are valid credentials; never a status distinction.
+  enrolmentId String?
+  enrolment   Enrolment? @relation(fields: [enrolmentId], references: [id])
+
+  paymentId String?  @unique
+  payment   Payment? @relation(fields: [paymentId], references: [id])
+
+  attemptNumber Int @default(1)
+
+  registeredAt DateTime  @default(now())
+  cancelledAt  DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  sitting Sitting?
+
+  // Partial unique — one LIVE registration per candidate per window
+  // (cancelledAt IS NULL) — written as raw SQL in the migration, same
+  // discipline as Enrolment's partial unique index.
+  @@index([candidateId, examId])
+  @@index([windowId])
+}
+
+// The exam attempt itself. The server owns the clock.
+model Sitting {
+  id             String           @id @default(uuid())
+  registrationId String           @unique
+  registration   ExamRegistration @relation(fields: [registrationId], references: [id], onDelete: Cascade)
+
+  state SittingState @default(REGISTERED)
+
+  startedAt   DateTime?
+  // startedAt + durationMinutes, computed server-side at start and NEVER
+  // recomputed (rule 4/7).
+  expiresAt   DateTime?
+  submittedAt DateTime?
+  forfeitedAt DateTime?
+
+  // The exact questions, order and options served — written once at
+  // startSitting, every subsequent read serves from THIS (rule 3). Null
+  // only before the sitting has been started.
+  paperSnapshot Json?
+
+  objectivePercent Int? // auto-marked on submission
+  writtenPercent   Int? // from the Slice 05 marking queue, once returned
+  totalPercent     Int?
+  outcome          ExamOutcome?
+  band             GradeBand? // resolved and stored, per Slice 05 rule 2
+
+  releasedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  answers          SittingAnswer[]
+  proctoringEvents ProctoringEvent[]
+  certificate      Certificate?
+}
+
+// Unique (sittingId, questionId) — upsert on autosave (rule 5).
+model SittingAnswer {
+  id        String  @id @default(uuid())
+  sittingId String
+  sitting   Sitting @relation(fields: [sittingId], references: [id], onDelete: Cascade)
+
+  questionId String
+  question   ExamQuestion @relation(fields: [questionId], references: [id])
+
+  selectedOptionId String?
+  selectedOption   ExamQuestionOption? @relation(fields: [selectedOptionId], references: [id])
+  writtenAnswer    String?
+
+  flagged    Boolean  @default(false)
+  answeredAt DateTime @default(now())
+
+  // A written answer's Mark, once it enters the Slice 05 queue as
+  // MarkableKind.EXAMINATION_WRITTEN (rule 11) — the FK Slice 05's Mark
+  // model left as a plain column pointing here.
+  mark Mark?
+
+  @@unique([sittingId, questionId])
+}
+
+// Evidence, never an automatic penalty (rule 9/13) — logged and shown to
+// the invigilator; a human decides what it means.
+model ProctoringEvent {
+  id        String  @id @default(uuid())
+  sittingId String
+  sitting   Sitting @relation(fields: [sittingId], references: [id], onDelete: Cascade)
+
+  kind       String // tab_blur | fullscreen_exit | reconnect | paste_blocked
+  occurredAt DateTime @default(now())
+  detail     Json?
+
+  @@index([sittingId, occurredAt])
+}
+
+// ─── Slice 07: certificates, pathway, revocation & public verification ──
+//
+// The credential is the product — everything upstream exists to justify
+// one. A Certificate is never edited, only superseded (rule 1); every
+// displayed value is snapshotted at issue (rule 2) so a later programme
+// rename or grade-scale edit cannot rewrite what a third party already
+// verified. certificateNumber comes from a Postgres sequence per year,
+// permanent and never reused, even after revocation (rule 3).
+
 enum CertificateStatus {
   ACTIVE
   REVOKED
+  SUPERSEDED
+}
+
+// Derived once at issue from ExamRegistration.enrolmentId, then stored
+// (rule 4) — never re-derived. Both routes are valid credentials; this is
+// a prestige signal, never a hierarchy that shames the exam-only path.
+enum CredentialPathway {
+  PATHWAY
+  EXAMINATION_ONLY
 }
 
 model Certificate {
-  id         String @id @default(cuid())
-  identifier String @unique // e.g. LVL-CERT-2026-01188
+  id String @id @default(uuid())
+
+  certificateNumber String @unique // LVL-CERT-2026-01188 — permanent, never reused (rule 3)
 
   candidateId String    @db.Uuid
   candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
   programmeId String
   programme   Programme @relation(fields: [programmeId], references: [id])
 
-  tier  ProgrammeTier
-  grade Grade
+  // The examination that earned it — unique, one certificate per sitting
+  // (rule 12, the idempotency guard `issueCertificate` checks first).
+  sittingId String? @unique
+  sitting   Sitting? @relation(fields: [sittingId], references: [id])
 
-  issuedAt DateTime          @default(now())
-  status   CertificateStatus @default(ACTIVE)
+  // Non-null means the candidate took the programme (rule 4) — the FK a
+  // pathway certificate carries; null for an exam-only credential.
+  enrolmentId String?
+  enrolment   Enrolment?        @relation(fields: [enrolmentId], references: [id])
+  pathway     CredentialPathway
 
-  revokedReason    String?
+  // Every value below is a snapshot taken at issue (rule 2) — never
+  // re-read from Programme/Candidate/GradeBandDefinition afterward.
+  holderName      String
+  candidateNumber String?
+  programmeTitle  String
+  tier            ProgrammeTier
+  finalPercent    Int
+  band            GradeBand
+
+  status CertificateStatus @default(ACTIVE)
+
+  issuedAt        DateTime
+  issuedByStaffId String? // null when issued automatically on release
+  issuedByStaff   Staff?  @relation("CertificateIssuedBy", fields: [issuedByStaffId], references: [id])
+
+  // The template it was printed with — never swapped when a newer
+  // revision is activated (rule 9).
+  templateId String
+  template   CertificateTemplate @relation(fields: [templateId], references: [id])
+
   revokedAt        DateTime?
+  revokedReason    String? // mandatory on revoke (rule 6), enforced in revokeCertificate
   revokedByStaffId String?
-  revokedBy        Staff?    @relation("CertificateRevokedBy", fields: [revokedByStaffId], references: [id])
+  revokedByStaff   Staff?    @relation("CertificateRevokedBy", fields: [revokedByStaffId], references: [id])
 
-  // Reissue chain — course access is unaffected by revocation (README);
-  // only the credential document itself is retired/replaced.
-  replacesCertificateId String?      @unique
-  replaces              Certificate? @relation("CertificateReissue", fields: [replacesCertificateId], references: [id])
-  supersededBy          Certificate? @relation("CertificateReissue")
+  // Supersession is stored in both directions, independently (rule 7) —
+  // the OLD certificate's supersededById points forward to the new one;
+  // the NEW certificate's replacesId points back. Both are set together
+  // by reissueCertificate, never derived from one another.
+  supersededById String?      @unique
+  supersededBy   Certificate? @relation("CertificateSupersededBy", fields: [supersededById], references: [id])
+  supersedes     Certificate? @relation("CertificateSupersededBy")
+
+  replacesId String?      @unique
+  replaces   Certificate? @relation("CertificateReplaces", fields: [replacesId], references: [id])
+  replacedBy Certificate? @relation("CertificateReplaces")
+
+  pdfAssetId String?     @unique
+  pdfAsset   MediaAsset? @relation("CertificatePdf", fields: [pdfAssetId], references: [id])
+
+  verificationCount Int @default(0)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([candidateId])
-  @@index([status])
+  verificationLookups VerificationLookup[]
+
+  @@index([candidateId, status])
+  @@index([programmeId, issuedAt])
+}
+
+// Never edited in place once used (rule 9) — a new revision is a new row;
+// issued certificates keep the templateId they were printed with, so
+// activating a later revision alters nothing already issued.
+model CertificateTemplate {
+  id   String @id @default(uuid())
+  name String // "Lavelle certificate — 2026 revision"
+
+  artworkAssetId String
+  artworkAsset   MediaAsset @relation("CertificateArtwork", fields: [artworkAssetId], references: [id])
+
+  appliesToTier ProgrammeTier? // null = all tiers
+  signatoryBlock String
+
+  // Which fields overlay the artwork: name, programme and tier, band,
+  // certificate ID and QR, pathway mark, issue date.
+  printedFields Json
+
+  isActive    Boolean   @default(false) // one active per tier scope
+  activatedAt DateTime?
+
+  createdByStaffId String
+  createdByStaff   Staff  @relation("CertificateTemplateCreatedBy", fields: [createdByStaffId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  certificates Certificate[]
+}
+
+// The public portal's own log — every lookup, hit or miss, hashed IP
+// (rule 10: this is a public, unauthenticated endpoint, never store a raw
+// IP against it).
+model VerificationLookup {
+  id String @id @default(uuid())
+
+  queriedNumber String // what was typed, including misses
+
+  certificateId String?
+  certificate   Certificate? @relation(fields: [certificateId], references: [id])
+
+  result String // "valid" | "revoked" | "superseded" | "not_found"
+  ipHash String?
+  userAgent String?
+
+  createdAt DateTime @default(now())
+
+  @@index([certificateId, createdAt(sort: Desc)])
+  @@index([createdAt(sort: Desc)])
 }
 
 // ─── Support ─────────────────────────────────────────────────────────────

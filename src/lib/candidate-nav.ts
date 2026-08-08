@@ -23,8 +23,15 @@ export const CANDIDATE_NAV_ITEMS: CandidateNavItemMeta[] = [
   { key: "catalogue", label: "Catalogue", href: "/portal/catalogue" },
   { key: "deadlines", label: "Deadlines", href: "/portal/deadlines", gated: true },
   { key: "assessment", label: "Assessment", href: "/portal/assessment", gated: true },
-  { key: "exams", label: "Exams", href: "/portal/exams", gated: true },
-  { key: "credentials", label: "Credentials", href: "/portal/credentials", gated: true },
+  // Deliberately NOT gated, unlike Handoff 00's original blanket list —
+  // Slice 06 rule 14 makes exam-only registration (no enrolment at all) a
+  // first-class, non-shameful pathway, so an applicant who never enrols
+  // must still be able to reach and register for a certifying exam.
+  { key: "exams", label: "Exams", href: "/portal/exams" },
+  // Also deliberately not gated — Slice 07 rule 4: an exam-only candidate
+  // who never enrolled can still earn and hold a valid credential
+  // (CredentialPathway.EXAMINATION_ONLY), so must be able to see it here.
+  { key: "credentials", label: "Credentials", href: "/portal/credentials" },
   { key: "ai", label: "Lavelle AI", href: "/portal/ai", gated: true },
   { key: "profile", label: "Profile & ID", href: "/portal/profile" },
   { key: "support", label: "Contact us", href: "/portal/support" },

@@ -13,14 +13,16 @@ const finaliseUploadSchema = z.object({
   kind: z.enum(["audio", "image", "video", "document"]),
   mimeType: z.string().min(1),
   originalFilename: z.string().min(1),
-  // Mirrors /api/uploads/sign's purpose — programme media (default) or a
-  // finance receipt, each gated by a different permission.
-  purpose: z.enum(["programme", "finance"]).default("programme"),
+  // Mirrors /api/uploads/sign's purpose — programme media (default), a
+  // finance receipt, or certificate template artwork, each gated by a
+  // different permission.
+  purpose: z.enum(["programme", "finance", "certificate"]).default("programme"),
 });
 
 const PERMISSION_BY_PURPOSE = {
   programme: Permission.MANAGE_PROGRAMMES,
   finance: Permission.MANAGE_PAYMENTS,
+  certificate: Permission.ISSUE_CERTIFICATES,
 } as const;
 
 /**

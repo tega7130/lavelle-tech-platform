@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { recordAuditEvent } from "@/lib/audit";
 import { resolveGradeBand } from "@/lib/grading";
 import { recomputeProgrammeResult } from "@/lib/programme-result";
+import { resolveMarkContext } from "@/lib/mark-context";
 import type { GradeBand } from "@/generated/prisma/client";
 
 // No "server-only" / staff-auth import here, deliberately — same
@@ -56,7 +57,7 @@ export async function returnMark(markId: string, data: ReturnMarkInput, staffId:
   if (data.scorePercent < 0 || data.scorePercent > 100) throw new Error("Score must be between 0 and 100.");
 
   return prisma.$transaction(async (tx) => {
-    const mark = await tx.mark.findUniqueOrThrow({ where: { id: markId }, include: { enrolment: true } });
+    const mark = await tx.mark.findUniqueOrThrow({ where: { id: markId } });
     if (mark.state === "RETURNED") throw new AlreadyReturnedError();
 
     const now = new Date();
@@ -79,11 +80,18 @@ export async function returnMark(markId: string, data: ReturnMarkInput, staffId:
       await tx.draftingSubmission.update({ where: { id: mark.draftingSubmissionId }, data: { state: "RETURNED" } });
     }
 
-    await recomputeProgrammeResult(mark.enrolmentId, tx);
+    // A DRAFTING mark's enrolment has a rolling ProgrammeResult to keep
+    // current. An EXAMINATION_WRITTEN mark does not — its Sitting's own
+    // totalPercent is computed later, per window, by releaseResults
+    // (Slice 06 rule: results release per window, not per return).
+    if (mark.kind === "DRAFTING" && mark.enrolmentId) {
+      await recomputeProgrammeResult(mark.enrolmentId, tx);
+    }
 
+    const { candidateId } = await resolveMarkContext(mark, tx);
     await tx.notification.create({
       data: {
-        candidateId: mark.enrolment.candidateId,
+        candidateId,
         category: "ASSESSMENT",
         title: `${data.scorePercent}% — ${bandLabel(band)}`,
         body: feedback,
@@ -121,7 +129,7 @@ export async function requestResubmission(markId: string, data: RequestResubmiss
   return prisma.$transaction(async (tx) => {
     const mark = await tx.mark.findUniqueOrThrow({
       where: { id: markId },
-      include: { enrolment: true, draftingSubmission: { include: { lecture: true } } },
+      include: { draftingSubmission: { include: { lecture: true, enrolment: true } } },
     });
     if (!mark.draftingSubmission) throw new Error("Only a drafting submission can be sent back for resubmission.");
     if (mark.state === "RETURNED") throw new AlreadyReturnedError();
@@ -144,10 +152,11 @@ export async function requestResubmission(markId: string, data: RequestResubmiss
     await tx.draftingSubmission.update({ where: { id: mark.draftingSubmission.id }, data: { state: "RETURNED" } });
 
     const dueAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+    const enrolmentId = mark.draftingSubmission.enrolmentId;
     const [nextAttempt] = await Promise.all([
       tx.draftingSubmission.create({
         data: {
-          enrolmentId: mark.enrolmentId,
+          enrolmentId,
           lectureId: mark.draftingSubmission.lectureId,
           attemptNumber: mark.draftingSubmission.attemptNumber + 1,
           state: "RESUBMITTED",
@@ -156,7 +165,7 @@ export async function requestResubmission(markId: string, data: RequestResubmiss
       }),
       tx.deadline.create({
         data: {
-          enrolmentId: mark.enrolmentId,
+          enrolmentId,
           kind: "DRAFTING_DUE",
           lectureId: mark.draftingSubmission.lectureId,
           title: `${mark.draftingSubmission.lecture.title} — resubmission due`,
@@ -165,7 +174,7 @@ export async function requestResubmission(markId: string, data: RequestResubmiss
         },
       }),
       tx.notification.create({
-        data: { candidateId: mark.enrolment.candidateId, category: "ASSESSMENT", title: "Resubmission requested", body: feedback },
+        data: { candidateId: mark.draftingSubmission.enrolment.candidateId, category: "ASSESSMENT", title: "Resubmission requested", body: feedback },
       }),
     ]);
 
@@ -200,7 +209,7 @@ export async function moderateMark(markId: string, data: ModerateMarkInput, staf
   if (!reason) throw new Error("A reason is required to moderate or amend a mark.");
 
   return prisma.$transaction(async (tx) => {
-    const mark = await tx.mark.findUniqueOrThrow({ where: { id: markId }, include: { enrolment: true } });
+    const mark = await tx.mark.findUniqueOrThrow({ where: { id: markId } });
     const now = new Date();
     const isAmendment = mark.state === "RETURNED" && data.scorePercent != null && data.scorePercent !== mark.scorePercent;
     const band = data.scorePercent != null ? await resolveGradeBand(data.scorePercent, now, tx) : mark.band;
@@ -215,7 +224,9 @@ export async function moderateMark(markId: string, data: ModerateMarkInput, staf
       },
     });
 
-    if (mark.state === "RETURNED") await recomputeProgrammeResult(mark.enrolmentId, tx);
+    if (mark.state === "RETURNED" && mark.kind === "DRAFTING" && mark.enrolmentId) {
+      await recomputeProgrammeResult(mark.enrolmentId, tx);
+    }
 
     await recordAuditEvent(tx, {
       actorStaffId: staffId,
@@ -228,9 +239,10 @@ export async function moderateMark(markId: string, data: ModerateMarkInput, staf
     });
 
     if (isAmendment) {
+      const { candidateId } = await resolveMarkContext(mark, tx);
       await tx.notification.create({
         data: {
-          candidateId: mark.enrolment.candidateId,
+          candidateId,
           category: "ASSESSMENT",
           title: "A returned mark was amended",
           body: `Your mark was amended to ${data.scorePercent}%. Reason: ${reason}`,

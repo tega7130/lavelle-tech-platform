@@ -9,14 +9,16 @@ const bodySchema = z.object({
   mimeType: z.string().min(1),
   bytes: z.number().int().positive().max(MAX_UPLOAD_BYTES),
   // Which permission gates this upload — programme media (Slice 02,
-  // default, preserves every existing caller unchanged) or a finance
-  // receipt (Slice 03: offline-payment recording).
-  purpose: z.enum(["programme", "finance"]).default("programme"),
+  // default, preserves every existing caller unchanged), a finance
+  // receipt (Slice 03: offline-payment recording), or certificate
+  // template artwork (Slice 07).
+  purpose: z.enum(["programme", "finance", "certificate"]).default("programme"),
 });
 
 const PERMISSION_BY_PURPOSE = {
   programme: Permission.MANAGE_PROGRAMMES,
   finance: Permission.MANAGE_PAYMENTS,
+  certificate: Permission.ISSUE_CERTIFICATES,
 } as const;
 
 /**
