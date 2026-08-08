@@ -6,6 +6,7 @@ import { listCandidateMarks } from "@/lib/marking-reads";
 import { getSignedAssetUrl } from "@/lib/storage";
 import { CandidateRecord } from "@/components/admin/candidate-record";
 import { ProgrammeStatus } from "@/generated/prisma/client";
+import { PermissionDeniedError } from "@/lib/rbac";
 
 export default async function CandidateRecordPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -14,11 +15,19 @@ export default async function CandidateRecordPage({ params }: { params: Promise<
 
   const [enrolments, payments, stalePending, activeProgrammes, marks] = await Promise.all([
     listCandidateEnrolments(id),
-    listCandidatePayments(id),
-    candidateHasStalePendingPayment(id),
     listProgrammes({ status: ProgrammeStatus.ACTIVE }),
     listCandidateMarks(id),
   ]);
+
+  let payments: Awaited<ReturnType<typeof listCandidatePayments>> = [];
+  let stalePending = false;
+  let canViewPayments = true;
+  try {
+    [payments, stalePending] = await Promise.all([listCandidatePayments(id), candidateHasStalePendingPayment(id)]);
+  } catch (err) {
+    if (!(err instanceof PermissionDeniedError)) throw err;
+    canViewPayments = false;
+  }
 
   const paymentsWithReceipt = payments.map((p) => ({
     ...p,
