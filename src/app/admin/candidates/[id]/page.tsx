@@ -13,7 +13,7 @@ export default async function CandidateRecordPage({ params }: { params: Promise<
   const candidate = await getCandidateForAdmin(id);
   if (!candidate) notFound();
 
-  const [enrolments, payments, stalePending, activeProgrammes, marks] = await Promise.all([
+  const [enrolments, activeProgrammes, marks] = await Promise.all([
     listCandidateEnrolments(id),
     listProgrammes({ status: ProgrammeStatus.ACTIVE }),
     listCandidateMarks(id),
@@ -42,6 +42,7 @@ export default async function CandidateRecordPage({ params }: { params: Promise<
       stalePending={stalePending}
       activeProgrammes={activeProgrammes.map((p) => ({ id: p.id, title: p.title, code: p.code }))}
       marks={marks}
+      canViewPayments={canViewPayments}
     />
   );
 }

@@ -6,6 +6,15 @@ export default defineConfig({
     environment: "node",
     include: ["tests/**/*.test.ts"],
     setupFiles: ["dotenv/config"],
+    // Every test file shares the one real local Postgres database (no
+    // per-file isolation) — Vitest's default cross-file parallelism is
+    // safe as long as no test mutates genuinely global singleton state.
+    // The Slice 07 certificate-template tests are the first to do that
+    // (temporarily deactivating every active CertificateTemplate to
+    // exercise the "no active template" path), which raced concurrently
+    // running files that expect an active template to exist. Sequential
+    // file execution removes that whole class of race going forward.
+    fileParallelism: false,
   },
   resolve: {
     alias: {

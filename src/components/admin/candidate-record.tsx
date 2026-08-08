@@ -66,6 +66,7 @@ export function CandidateRecord({
   stalePending,
   activeProgrammes,
   marks,
+  canViewPayments,
 }: {
   candidate: Candidate;
   enrolments: Enrolment[];
@@ -73,6 +74,7 @@ export function CandidateRecord({
   stalePending: boolean;
   activeProgrammes: { id: string; title: string; code: string }[];
   marks: CandidateMarks;
+  canViewPayments: boolean;
 }) {
   const router = useRouter();
   const visibleTabs = canViewPayments ? TABS : TABS.filter((t) => t.key !== "payments");
