@@ -53,14 +53,17 @@ export function CandidateRecord({
   payments,
   stalePending,
   activeProgrammes,
+  canViewPayments,
 }: {
   candidate: Candidate;
   enrolments: Enrolment[];
   payments: PaymentRow[];
   stalePending: boolean;
   activeProgrammes: { id: string; title: string; code: string }[];
+  canViewPayments: boolean;
 }) {
   const router = useRouter();
+  const visibleTabs = canViewPayments ? TABS : TABS.filter((t) => t.key !== "payments");
   const [tab, setTab] = React.useState<(typeof TABS)[number]["key"]>("overview");
   const [refunding, setRefunding] = React.useState<Enrolment | null>(null);
   const [refundReason, setRefundReason] = React.useState("");
@@ -105,7 +108,7 @@ export function CandidateRecord({
       </div>
 
       <div className="flex gap-1 border-b border-divider mb-[var(--space-4)]">
-        {TABS.map((t) => (
+        {visibleTabs.map((t) => (
           <button
             key={t.key}
             onClick={() => setTab(t.key)}
@@ -191,7 +194,7 @@ export function CandidateRecord({
           </div>
         ))}
 
-      {tab === "payments" && (
+      {tab === "payments" && canViewPayments && (
         <div>
           {stalePending && (
             <div className="flex items-center gap-3 p-3.5 rounded-md bg-[#fff7e6] border border-[#f0d9a8] mb-[var(--space-4)] text-[12.5px] text-[#8a6013]">
