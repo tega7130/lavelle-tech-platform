@@ -44,34 +44,46 @@ export async function listMarkingQueueQuery(params: ListMarkingQueueParams, staf
     ...(params.assignedToMe ? { markedByStaffId: staffId } : {}),
   };
 
-  const [marks, awaitingCount, returnedCount] = await Promise.all([
-    prisma.mark.findMany({
-      where: { ...baseWhere, state: params.tab === "awaiting" ? { in: AWAITING_STATES } : MarkState.RETURNED },
-      select: {
-        id: true,
-        kind: true,
-        state: true,
-        isLate: true,
-        scorePercent: true,
-        band: true,
-        createdAt: true,
-        markedByStaffId: true,
-        enrolmentId: true,
-        examWrittenAnswerId: true,
-        draftingSubmission: {
-          select: { attemptNumber: true, submittedAt: true, lecture: { select: { title: true, module: { select: { title: true, weekNumber: true } } } } },
-        },
-        examWrittenAnswer: {
-          select: { answeredAt: true, question: { select: { prompt: true, module: { select: { title: true, weekNumber: true } } } } },
-        },
+  // programmeId can't be pushed into the Prisma `where` cheaply — a
+  // DRAFTING mark's programme lives behind its enrolment, an
+  // EXAMINATION_WRITTEN mark's behind exam registration — so both tabs
+  // are fetched and resolveMarkContext filters/counts in memory. Fine
+  // at these queue sizes (see the function comment above).
+  const allMarks = await prisma.mark.findMany({
+    where: { ...baseWhere, state: { in: [...AWAITING_STATES, MarkState.RETURNED] } },
+    select: {
+      id: true,
+      kind: true,
+      state: true,
+      isLate: true,
+      scorePercent: true,
+      band: true,
+      createdAt: true,
+      markedByStaffId: true,
+      enrolmentId: true,
+      examWrittenAnswerId: true,
+      draftingSubmission: {
+        select: { attemptNumber: true, submittedAt: true, lecture: { select: { title: true, module: { select: { title: true, weekNumber: true } } } } },
       },
-      orderBy: { createdAt: "asc" },
-    }),
-    prisma.mark.count({ where: { ...baseWhere, state: { in: AWAITING_STATES } } }),
-    prisma.mark.count({ where: { ...baseWhere, state: MarkState.RETURNED } }),
-  ]);
+      examWrittenAnswer: {
+        select: { answeredAt: true, question: { select: { prompt: true, module: { select: { title: true, weekNumber: true } } } } },
+      },
+    },
+    orderBy: { createdAt: "asc" },
+  });
 
-  const contexts = await Promise.all(marks.map((m) => resolveMarkContext(m, prisma)));
+  const allContexts = await Promise.all(allMarks.map((m) => resolveMarkContext(m, prisma)));
+
+  const scopedIndices = allMarks.map((_, i) => i).filter((i) => !params.programmeId || allContexts[i]!.programmeId === params.programmeId);
+  const awaitingCount = scopedIndices.filter((i) => AWAITING_STATES.includes(allMarks[i]!.state)).length;
+  const returnedCount = scopedIndices.filter((i) => allMarks[i]!.state === MarkState.RETURNED).length;
+
+  const tabIndices = scopedIndices.filter((i) =>
+    params.tab === "awaiting" ? AWAITING_STATES.includes(allMarks[i]!.state) : allMarks[i]!.state === MarkState.RETURNED
+  );
+  const marks = tabIndices.map((i) => allMarks[i]!);
+  const contexts = tabIndices.map((i) => allContexts[i]!);
+
   const nonBlindCandidateIds = [...new Set(contexts.filter((c) => !c.blindMarking).map((c) => c.candidateId))];
   const candidates = nonBlindCandidateIds.length
     ? await prisma.candidate.findMany({ where: { id: { in: nonBlindCandidateIds } }, select: { id: true, firstName: true, lastName: true, candidateNumber: true } })

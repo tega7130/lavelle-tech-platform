@@ -250,6 +250,28 @@
     background: linear-gradient(158deg, #0c356f 0%, #08234a 48%, #061529 100%);
   }
 
+  /* Loading skeleton — Lavelle States.dc.html's shimmer pattern (a shape
+     whose content is known but not yet loaded, never a spinner). */
+  @keyframes lv-shimmer {
+    0% {
+      background-position: -420px 0;
+    }
+    100% {
+      background-position: 420px 0;
+    }
+  }
+  .lv-skel {
+    border-radius: 6px;
+    background: linear-gradient(
+      90deg,
+      var(--color-neutral-200) 8%,
+      var(--color-neutral-100) 20%,
+      var(--color-neutral-200) 33%
+    );
+    background-size: 820px 100%;
+    animation: lv-shimmer 1.5s linear infinite;
+  }
+
   ::-webkit-scrollbar {
     width: 8px;
     height: 8px;

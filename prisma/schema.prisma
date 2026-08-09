@@ -252,31 +252,33 @@ model Staff {
 
   invitedByStaffId String?
   invitedBy        Staff?    @relation("StaffInvitedBy", fields: [invitedByStaffId], references: [id])
-  invited           Staff[]  @relation("StaffInvitedBy")
-  lastActiveAt      DateTime?
+  invited          Staff[]   @relation("StaffInvitedBy")
+  lastActiveAt     DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  permissionGrants StaffPermission[] @relation("StaffPermissionHolder")
+  permissionGrants   StaffPermission[] @relation("StaffPermissionHolder")
   grantedPermissions StaffPermission[] @relation("StaffPermissionGrantedBy")
 
   auditEvents             AuditEvent[]
-  revokedCertificates     Certificate[]    @relation("CertificateRevokedBy")
-  createdProgrammes       Programme[]      @relation("ProgrammeCreatedBy")
+  revokedCertificates     Certificate[]         @relation("CertificateRevokedBy")
+  createdProgrammes       Programme[]           @relation("ProgrammeCreatedBy")
   uploadedMediaAssets     MediaAsset[]
-  confirmedPayments       Payment[]        @relation("PaymentConfirmedBy")
-  facultyLeadCohorts      Cohort[]         @relation("CohortFacultyLead")
-  markedMarks             Mark[]           @relation("MarkMarkedBy")
-  moderatedMarks          Mark[]           @relation("MarkModeratedBy")
-  publishedExams          Exam[]           @relation("ExamPublishedBy")
-  retiredExamQuestions    ExamQuestion[]   @relation("ExamQuestionRetiredBy")
-  issuedCertificates      Certificate[]    @relation("CertificateIssuedBy")
+  confirmedPayments       Payment[]             @relation("PaymentConfirmedBy")
+  facultyLeadCohorts      Cohort[]              @relation("CohortFacultyLead")
+  markedMarks             Mark[]                @relation("MarkMarkedBy")
+  moderatedMarks          Mark[]                @relation("MarkModeratedBy")
+  publishedExams          Exam[]                @relation("ExamPublishedBy")
+  retiredExamQuestions    ExamQuestion[]        @relation("ExamQuestionRetiredBy")
+  issuedCertificates      Certificate[]         @relation("CertificateIssuedBy")
   certificateTemplates    CertificateTemplate[] @relation("CertificateTemplateCreatedBy")
-  assignedSupportRequests SupportRequest[] @relation("SupportRequestAssignedTo")
+  assignedSupportRequests SupportRequest[]      @relation("SupportRequestAssignedTo")
   supportMessages         SupportMessage[]
   candidateNotesAuthored  CandidateNote[]
   announcementsCreated    Announcement[]
+  publishedListings       ProgrammeListing[]    @relation("ListingPublishedBy")
+  enquiriesHandled        ContactEnquiry[]      @relation("EnquiryHandledBy")
 
   @@index([role])
   @@index([status])
@@ -297,7 +299,7 @@ model StaffPermission {
   permission Permission
 
   grantedByStaffId String
-  grantedByStaff   Staff  @relation("StaffPermissionGrantedBy", fields: [grantedByStaffId], references: [id])
+  grantedByStaff   Staff    @relation("StaffPermissionGrantedBy", fields: [grantedByStaffId], references: [id])
   grantedAt        DateTime @default(now())
 
   @@id([staffId, permission])
@@ -384,6 +386,9 @@ model Programme {
   // enrolment.programme to reach a payment's programme.
   certificates         Certificate[]
   exam                 Exam?
+  listing              ProgrammeListing?
+  reviews              Review[]
+  enquiries            ContactEnquiry[]
 
   @@index([status, tier])
   @@index([categoryId])
@@ -538,6 +543,7 @@ model MediaAsset {
   draftingAttachments   DraftingSubmission[]  @relation("DraftingAttachment")
   certificatePdf        Certificate?          @relation("CertificatePdf")
   certificateArtworks   CertificateTemplate[] @relation("CertificateArtwork")
+  listingHeroes         ProgrammeListing[]
 }
 
 // Module-close quizzes — auto-marked and formative. NOT the examination
@@ -1478,7 +1484,7 @@ model Certificate {
 
   // The examination that earned it — unique, one certificate per sitting
   // (rule 12, the idempotency guard `issueCertificate` checks first).
-  sittingId String? @unique
+  sittingId String?  @unique
   sitting   Sitting? @relation(fields: [sittingId], references: [id])
 
   // Non-null means the candidate took the programme (rule 4) — the FK a
@@ -1500,7 +1506,7 @@ model Certificate {
 
   issuedAt        DateTime
   issuedByStaffId String? // null when issued automatically on release
-  issuedByStaff   Staff?  @relation("CertificateIssuedBy", fields: [issuedByStaffId], references: [id])
+  issuedByStaff   Staff?   @relation("CertificateIssuedBy", fields: [issuedByStaffId], references: [id])
 
   // The template it was printed with — never swapped when a newer
   // revision is activated (rule 9).
@@ -1548,7 +1554,7 @@ model CertificateTemplate {
   artworkAssetId String
   artworkAsset   MediaAsset @relation("CertificateArtwork", fields: [artworkAssetId], references: [id])
 
-  appliesToTier ProgrammeTier? // null = all tiers
+  appliesToTier  ProgrammeTier? // null = all tiers
   signatoryBlock String
 
   // Which fields overlay the artwork: name, programme and tier, band,
@@ -1578,8 +1584,8 @@ model VerificationLookup {
   certificateId String?
   certificate   Certificate? @relation(fields: [certificateId], references: [id])
 
-  result String // "valid" | "revoked" | "superseded" | "not_found"
-  ipHash String?
+  result    String // "valid" | "revoked" | "superseded" | "not_found"
+  ipHash    String?
   userAgent String?
 
   createdAt DateTime @default(now())
@@ -1600,6 +1606,7 @@ enum RequestCategory {
   PAYMENT
   TECHNICAL
   PROGRAMME
+  ENQUIRY // Slice 09: a public marketing-site contact enquiry, not raised by a signed-in candidate
   OTHER
 }
 
@@ -1609,10 +1616,17 @@ enum RequestStatus {
   RESOLVED
 }
 
+// Slice 09: candidateId is nullable because a marketing-site enquiry
+// (submitEnquiry) has no candidate account to attach to — the visitor is
+// anonymous. guestName/guestEmail carry the enquirer's own details for
+// that case so the desk can still show who to reply to; both stay null
+// for every candidate-raised request, where candidate.* is authoritative.
 model SupportRequest {
-  id          String    @id @default(uuid())
-  candidateId String    @db.Uuid
-  candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  id          String     @id @default(uuid())
+  candidateId String?    @db.Uuid
+  candidate   Candidate? @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  guestName   String?
+  guestEmail  String?
 
   subject  String
   category RequestCategory
@@ -1633,6 +1647,7 @@ model SupportRequest {
   updatedAt DateTime @updatedAt
 
   messages SupportMessage[]
+  enquiry  ContactEnquiry?
 
   @@index([status])
   @@index([candidateId])
@@ -1784,4 +1799,115 @@ model RateLimitAttempt {
   count       Int      @default(1)
 
   @@unique([bucketKey, windowStart])
+}
+
+// ─── Slice 09: public website & publishing ─────────────────────────────
+//
+// Deliberately separate from Programme (rule 1): a programme can be
+// ACTIVE for enrolment while unlisted publicly, and a listing can be
+// edited without touching the syllabus. If these were one row,
+// unpublishing from the site would silently close enrolment.
+
+model ProgrammeListing {
+  id String @id @default(uuid())
+
+  programmeId String    @unique
+  programme   Programme @relation(fields: [programmeId], references: [id], onDelete: Cascade)
+
+  isPublished Boolean @default(false)
+  // When true the listing renders from the live Programme row (rule 2:
+  // defaults are computed, never copied, so a fee change reaches the
+  // site without republishing). When false, every override field below
+  // must be filled before publishing (checked in publishListing).
+  useDefaults Boolean @default(true)
+
+  headline       String? // overrides Programme.title
+  summary        String? // overrides Programme.summary
+  outcomes       Json? // "What you will be able to do" — string[]
+  includes       Json? // "What enrolment includes" — string[]
+  assessmentNote String?
+  paymentNote    String?
+
+  heroAssetId String?
+  heroAsset   MediaAsset? @relation(fields: [heroAssetId], references: [id])
+
+  orderIndex Int @default(0)
+
+  publishedAt        DateTime?
+  publishedByStaffId String?
+  publishedByStaff   Staff?    @relation("ListingPublishedBy", fields: [publishedByStaffId], references: [id])
+  unpublishedAt      DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isPublished, orderIndex])
+}
+
+// Real attributions only (rule 11) — an invented name is a legal risk in
+// a market this small, where people know each other.
+model Review {
+  id String @id @default(uuid())
+
+  authorName  String
+  authorTitle String // "Partner, energy practice, Lagos"
+
+  programmeId String?
+  programme   Programme? @relation(fields: [programmeId], references: [id], onDelete: SetNull)
+
+  quote  String
+  rating Int // 1-5
+
+  isPublished Boolean @default(false)
+  orderIndex  Int     @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isPublished, orderIndex])
+}
+
+model FaqEntry {
+  id String @id @default(uuid())
+
+  question String
+  answer   String
+
+  // Explicit, not alphabetical or creation-order — "Do I need to pay to
+  // register?" is deliberately first and the prerequisite question is
+  // deliberately last.
+  orderIndex Int
+
+  isPublished Boolean @default(true)
+
+  @@index([isPublished, orderIndex])
+}
+
+// Lands in the Slice 08 support desk as a SupportRequest with no
+// candidateId (see that model's comment) — a form that posts into a void
+// is worse than no form.
+model ContactEnquiry {
+  id String @id @default(uuid())
+
+  name  String
+  email String
+  phone String?
+
+  // Options come from published listings only (rule 7) — never a
+  // hardcoded list that drifts. Null means "not sure yet, please advise".
+  programmeOfInterestId String?
+  programmeOfInterest   Programme? @relation(fields: [programmeOfInterestId], references: [id], onDelete: SetNull)
+
+  message String
+
+  supportRequestId String?         @unique
+  supportRequest   SupportRequest? @relation(fields: [supportRequestId], references: [id], onDelete: SetNull)
+
+  handledByStaffId String?
+  handledByStaff   Staff?    @relation("EnquiryHandledBy", fields: [handledByStaffId], references: [id])
+  handledAt        DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
 }

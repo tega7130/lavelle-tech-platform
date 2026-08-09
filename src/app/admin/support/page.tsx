@@ -66,7 +66,8 @@ export default async function SupportPage({ searchParams }: { searchParams: Prom
               {requests.map((r) => (
                 <Tr key={r.id}>
                   <Td className="pl-[var(--space-4)]">
-                    {r.candidate.firstName} {r.candidate.lastName}
+                    {r.candidate ? `${r.candidate.firstName} ${r.candidate.lastName}` : r.guestName ?? "—"}
+                    {!r.candidate && <span className="ml-1.5 text-[10px] text-neutral-500 uppercase tracking-[0.06em]">Enquiry</span>}
                   </Td>
                   <Td className="font-medium">{r.subject}</Td>
                   <Td className="text-[12.5px] text-neutral-600">{r.category}</Td>

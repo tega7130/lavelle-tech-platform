@@ -56,10 +56,18 @@ export function SupportThread({ request }: { request: Thread }) {
           <CardKicker>{request.category}</CardKicker>
           <h1 className="font-heading text-xl">{request.subject}</h1>
           <div className="text-neutral-600 text-[12.5px]">
-            <Link href={`/admin/candidates/${request.candidate.id}`} className="text-accent">
-              {request.candidate.firstName} {request.candidate.lastName}
-            </Link>{" "}
-            &middot; {request.candidate.candidateNumber ?? request.candidate.applicantNumber} &middot; {request.candidate.email}
+            {request.candidate ? (
+              <>
+                <Link href={`/admin/candidates/${request.candidate.id}`} className="text-accent">
+                  {request.candidate.firstName} {request.candidate.lastName}
+                </Link>{" "}
+                &middot; {request.candidate.candidateNumber ?? request.candidate.applicantNumber} &middot; {request.candidate.email}
+              </>
+            ) : (
+              <>
+                {request.guestName} &middot; {request.guestEmail} &middot; <span className="uppercase tracking-[0.06em] text-[10px]">Website enquiry</span>
+              </>
+            )}
           </div>
         </div>
         <Tag variant={STATUS_TAG[request.status] as TagVariant}>{request.status.replace(/_/g, " ")}</Tag>

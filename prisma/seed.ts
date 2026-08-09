@@ -718,13 +718,31 @@ async function main() {
   // under way, which is what "part-way through the programme" requires.
   const cohort = cohortJan;
 
-  // A handful of DRAFT programmes (no modules yet) so the list screen has
-  // something to filter/search — status stays DRAFT because a programme
-  // with zero modules cannot legitimately be ACTIVE (rule 2).
+  // Three of these (TLC-201, MAL-201, RCF-101) go ACTIVE with one minimal
+  // module+lecture each — just enough to legitimately pass Slice 09's
+  // publish checks (ACTIVE, ≥1 module with ≥1 lecture, feeMinor > 0), so
+  // the website's four seeded published listings (README: "four
+  // published listings matching the seeded programmes") have a real
+  // programme behind each rather than a fabricated one. The rest stay
+  // DRAFT — a programme with zero modules cannot legitimately be ACTIVE
+  // (rule 2) — which also gives the admin publish-checks something real
+  // to refuse (CCP-101 demonstrates "programme is DRAFT" live).
   const draftSeeds = [
-    { code: "TLC-201", title: "Tax Law & Compliance", tier: ProgrammeTier.SPECIALIST, category: "Tax & Revenue", feeMinor: 45_000_000 },
-    { code: "MAL-201", title: "Maritime & Admiralty Law", tier: ProgrammeTier.SPECIALIST, category: "Maritime & Admiralty", feeMinor: 45_000_000 },
-    { code: "RCF-101", title: "Regulatory Compliance Foundations", tier: ProgrammeTier.FOUNDATION, category: "Regulatory Compliance", feeMinor: 28_000_000 },
+    {
+      code: "TLC-201", title: "Tax Law & Compliance", tier: ProgrammeTier.SPECIALIST, category: "Tax & Revenue", feeMinor: 45_000_000,
+      publishable: true,
+      summary: "Revenue practice, assessment disputes and advisory work before the tax authorities, taught by practitioners who appear before them.",
+    },
+    {
+      code: "MAL-201", title: "Maritime & Admiralty Law", tier: ProgrammeTier.SPECIALIST, category: "Maritime & Admiralty", feeMinor: 45_000_000,
+      publishable: true,
+      summary: "Carriage, charterparties, cargo claims and admiralty jurisdiction in Nigerian waters.",
+    },
+    {
+      code: "RCF-101", title: "Regulatory Compliance Foundations", tier: ProgrammeTier.FOUNDATION, category: "Regulatory Compliance", feeMinor: 28_000_000,
+      publishable: true,
+      summary: "The regulator's framework, filing obligations and the compliance advisory role, for graduates and non-lawyers in regulated industries.",
+    },
     { code: "CCP-101", title: "Corporate & Commercial Practice", tier: ProgrammeTier.FOUNDATION, category: "Corporate & Commercial", feeMinor: 28_000_000 },
     {
       code: "AEP-301",
@@ -741,22 +759,53 @@ async function main() {
 
   const programmes: Record<string, Awaited<ReturnType<typeof prisma.programme.upsert>>> = { "ELR-201": elr };
   for (const p of draftSeeds) {
+    const publishable = "publishable" in p && p.publishable;
     programmes[p.code] = await prisma.programme.upsert({
       where: { code: p.code },
-      update: {},
+      // Explicit (not {}): this row may already exist DRAFT from a run
+      // before this programme was promoted to publishable — without
+      // re-asserting status/summary here, upsert's update:{} would leave
+      // a stale DRAFT row in place forever on repeat seeds.
+      update: publishable
+        ? { status: ProgrammeStatus.ACTIVE, summary: "summary" in p ? p.summary : undefined }
+        : {},
       create: {
         code: p.code,
         title: p.title,
         categoryId: categories[p.category]!.id,
         tier: p.tier,
-        status: ProgrammeStatus.DRAFT,
-        summary: `${p.title} — programme details to be completed by faculty.`,
+        status: publishable ? ProgrammeStatus.ACTIVE : ProgrammeStatus.DRAFT,
+        summary: "summary" in p ? p.summary : `${p.title} — programme details to be completed by faculty.`,
         feeMinor: p.feeMinor,
         prerequisiteTier: "prerequisiteTier" in p ? p.prerequisiteTier : undefined,
         createdByStaffId: academicAdmin.id,
         ...TIER_DEFAULTS[p.tier],
       },
     });
+    if (publishable) {
+      const mod = await prisma.module.upsert({
+        where: { programmeId_weekNumber: { programmeId: programmes[p.code]!.id, weekNumber: 1 } },
+        update: {},
+        create: { programmeId: programmes[p.code]!.id, weekNumber: 1, title: "Week 1", orderIndex: 0 },
+      });
+      const existingLecture = await prisma.lecture.findFirst({ where: { moduleId: mod.id } });
+      if (!existingLecture) {
+        await prisma.lecture.create({
+          data: { moduleId: mod.id, orderIndex: 0, title: "Introduction", mediaKind: LectureMediaKind.SLIDES },
+        });
+      }
+      for (const [kind, weightPercent] of [
+        [AssessmentKind.QUIZ, 20],
+        [AssessmentKind.DRAFTING, 40],
+        [AssessmentKind.EXAMINATION, 40],
+      ] as const) {
+        await prisma.assessmentWeighting.upsert({
+          where: { programmeId_kind: { programmeId: programmes[p.code]!.id, kind } },
+          update: {},
+          create: { programmeId: programmes[p.code]!.id, kind, weightPercent },
+        });
+      }
+    }
   }
 
   // ── Candidates ──
@@ -1415,6 +1464,84 @@ async function main() {
       data: [
         { announcementId: announcement.id, candidateId: chiamaka.id, channel: "IN_APP", deliveredAt: new Date("2026-08-01T09:00:01Z") },
         { announcementId: announcement.id, candidateId: chiamaka.id, channel: "EMAIL", deliveredAt: new Date("2026-08-01T09:00:05Z") },
+      ],
+    });
+  }
+
+  // ── Slice 09: public website & publishing ───────────────────────────
+  const PUBLISHED_CODES = ["ELR-201", "TLC-201", "MAL-201", "RCF-101"] as const;
+  for (const [i, code] of PUBLISHED_CODES.entries()) {
+    const programme = programmes[code]!;
+    await prisma.programmeListing.upsert({
+      where: { programmeId: programme.id },
+      update: {},
+      create: {
+        programmeId: programme.id,
+        isPublished: true,
+        useDefaults: true, // renders from the live Programme row — a fee change reaches the site with no republish
+        orderIndex: i,
+        publishedAt: new Date("2026-08-01T09:00:00Z"),
+        publishedByStaffId: registrar.id,
+      },
+    });
+  }
+  // CCP-101 and AEP-301 stay unlisted — no ProgrammeListing row at all,
+  // so listListings shows them as "Not published" with nothing to unpublish.
+
+  const existingReviews = await prisma.review.count();
+  if (existingReviews === 0) {
+    await prisma.review.createMany({
+      data: [
+        {
+          authorName: "Adaeze Okonkwo", authorTitle: "Partner, commercial disputes · Lagos",
+          programmeId: programmes["ELR-201"]!.id, rating: 5, orderIndex: 0, isPublished: true,
+          quote: "Two operators now brief me directly on joint venture disputes. The drafting exercises were the difference. I was marked on the same standard my opponents work to.",
+        },
+        {
+          authorName: "Ibrahim Bello", authorTitle: "Senior associate · Abuja",
+          programmeId: programmes["TLC-201"]!.id, rating: 5, orderIndex: 1, isPublished: true,
+          quote: "My first drafting submission came back referred with three pages of notes. Bruising, and exactly what I needed. The second one passed on merit.",
+        },
+        {
+          authorName: "Funmi Nwachukwu", authorTitle: "In-house counsel, banking · Lagos",
+          programmeId: programmes["RCF-101"]!.id, rating: 5, orderIndex: 2, isPublished: true,
+          quote: "Six hours a week, mostly evenings, and nothing was padded. I never once felt I was watching a recording to tick a box.",
+        },
+      ],
+    });
+  }
+
+  const existingFaqs = await prisma.faqEntry.count();
+  if (existingFaqs === 0) {
+    // Order is explicit and fixed (README): pay-to-register first, the
+    // prerequisite question deliberately last.
+    await prisma.faqEntry.createMany({
+      data: [
+        {
+          orderIndex: 0, isPublished: true,
+          question: "Do I need to pay to register?",
+          answer: "No. Registration is free. You can register and explore every programme in full, then pay only for the specialisation you choose to begin. The certifying examination fee is charged separately, and only when you register for a sitting.",
+        },
+        {
+          orderIndex: 1, isPublished: true,
+          question: "How much time does a programme take?",
+          answer: "Twelve weeks at six to eight hours a week, delivered online. Lectures are recorded with narration so you set your own pace, but drafting exercises carry submission deadlines and the examination sits in a fixed window.",
+        },
+        {
+          orderIndex: 2, isPublished: true,
+          question: "Can an employer or client verify my credential?",
+          answer: "Yes, and without contacting us. Every certificate carries an identifier checkable on our public verification portal, which returns the holder, programme, tier, grade and issue date, and clearly shows a credential that has been revoked or superseded.",
+        },
+        {
+          orderIndex: 3, isPublished: true,
+          question: "I am not yet called to the Bar. Can I enrol?",
+          answer: "Yes. Law graduates and students may take Foundation programmes, and non-lawyers working in regulated industries are welcome on the compliance pathways. Your professional status is recorded so your credential reflects your standing accurately.",
+        },
+        {
+          orderIndex: 4, isPublished: true,
+          question: "Do I need to complete a programme before sitting an examination?",
+          answer: "At Foundation and Specialist level, no. You may register for an examination directly. At Advanced Practitioner level a completed programme at the tier below is a prerequisite. Candidates who complete the programme carry a Lavelle pathway credential, which records both the study and the examination.",
+        },
       ],
     });
   }
