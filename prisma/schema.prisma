@@ -90,8 +90,10 @@ model Candidate {
   idCards                 IdCard[]
   certificates            Certificate[]
   examRegistrations       ExamRegistration[]
-  contactRequests         ContactRequest[]
-  adminNotes              AdminNote[]
+  supportRequests         SupportRequest[]
+  supportMessages         SupportMessage[]
+  candidateNotes          CandidateNote[]
+  announcementDeliveries  AnnouncementDelivery[]
 
   @@index([accountStatus])
 }
@@ -178,47 +180,61 @@ model Session {
   @@index([candidateId, revokedAt])
 }
 
-// ─── Staff, roles & permissions ─────────────────────────────────────────
+// ─── Slice 08: Staff, roles & permissions ────────────────────────────────
+//
+// StaffRole/StaffStatus/Permission are Handoff-era scaffolding, replaced
+// wholesale here to match Slice 08's real catalogue and role set —
+// mechanically renamed throughout every prior slice's permission checks
+// (see the Slice 08 summary for the full old->new mapping).
 
 enum StaffRole {
   SUPER_ADMIN
-  OPERATIONS_ADMIN
-  FINANCE_ADMIN
+  REGISTRAR
   ACADEMIC_ADMIN
   FACULTY
-  SUPPORT_AGENT
+  FINANCE
+  SUPPORT
+  READ_ONLY
 }
 
 enum StaffStatus {
   ACTIVE
-  INACTIVE
+  INVITED
+  SUSPENDED
+  DEACTIVATED
 }
 
-// The 18-permission catalogue, six categories, per the README table.
+// The 17-permission catalogue (README table) — SUPER_ADMIN is a ROLE, not
+// a permission here (rule: "SUPER_ADMIN holds all of them implicitly —
+// but store the grants anyway", so a super admin literally holds all 17
+// StaffPermission rows rather than one bypass flag).
 enum Permission {
   VIEW_CANDIDATES
-  EDIT_CANDIDATES
-  VIEW_CONTACT_REQUESTS
-  RESOLVE_CONTACT_REQUESTS
-  ADD_ADMIN_NOTES
-  VIEW_PAYMENTS
-  MANAGE_PAYMENTS
-  VIEW_GRADES
-  GRADE_ASSESSMENTS
-  MODERATE_MARKS
+  EDIT_CANDIDATE_DETAILS
+  SUSPEND_CANDIDATES
   MANAGE_PROGRAMMES
-  MANAGE_INTAKES
+  MANAGE_INTAKES_COHORTS
+  MARK_SUBMISSIONS
+  MODERATE_GRADES
+  MANAGE_EXAMS
+  VIEW_FINANCE
+  CONFIRM_PAYMENTS
+  MANAGE_FINANCE
   ISSUE_CERTIFICATES
   REVOKE_CERTIFICATES
-  VIEW_AUDIT_LOG
-  EXPORT_DATA
+  MANAGE_ANNOUNCEMENTS
+  RESPOND_SUPPORT
   MANAGE_STAFF
-  SUPER_ADMIN
+  VIEW_AUDIT_LOG
 }
 
 model Staff {
   id String @id @default(cuid())
 
+  // Kept as one field rather than the README's firstName/lastName split —
+  // a low-stakes structural choice with no business-rule weight, and
+  // every existing display site (all seven prior slices) already reads
+  // it this way. Documented deviation, not an oversight.
   name       String
   email      String  @unique // the login
   phone      String?
@@ -230,18 +246,22 @@ model Staff {
   reports       Staff[] @relation("StaffReports")
 
   role   StaffRole
-  status StaffStatus @default(ACTIVE)
+  status StaffStatus @default(INVITED)
 
   passwordHash String
+
+  invitedByStaffId String?
+  invitedBy        Staff?    @relation("StaffInvitedBy", fields: [invitedByStaffId], references: [id])
+  invited           Staff[]  @relation("StaffInvitedBy")
+  lastActiveAt      DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  permissionGrants PermissionGrant[]
+  permissionGrants StaffPermission[] @relation("StaffPermissionHolder")
+  grantedPermissions StaffPermission[] @relation("StaffPermissionGrantedBy")
 
   auditEvents             AuditEvent[]
-  resolvedContactRequests ContactRequest[] @relation("ContactRequestResolvedBy")
-  adminNotesAuthored      AdminNote[]
   revokedCertificates     Certificate[]    @relation("CertificateRevokedBy")
   createdProgrammes       Programme[]      @relation("ProgrammeCreatedBy")
   uploadedMediaAssets     MediaAsset[]
@@ -253,25 +273,34 @@ model Staff {
   retiredExamQuestions    ExamQuestion[]   @relation("ExamQuestionRetiredBy")
   issuedCertificates      Certificate[]    @relation("CertificateIssuedBy")
   certificateTemplates    CertificateTemplate[] @relation("CertificateTemplateCreatedBy")
+  assignedSupportRequests SupportRequest[] @relation("SupportRequestAssignedTo")
+  supportMessages         SupportMessage[]
+  candidateNotesAuthored  CandidateNote[]
+  announcementsCreated    Announcement[]
 
   @@index([role])
   @@index([status])
 }
 
-// Explicit per-staff permission set. Seeded from the role's preset on
-// creation or when a preset is (re-)applied; individual toggles update
-// rows here directly and save immediately (README: "toggling saves
-// immediately and writes to the audit log"). super_admin's SUPER_ADMIN
-// grant bypasses every other check — see src/lib/permissions.ts.
-model PermissionGrant {
-  id         String     @id @default(cuid())
-  staffId    String
-  staff      Staff      @relation(fields: [staffId], references: [id], onDelete: Cascade)
-  permission Permission
-  granted    Boolean    @default(true)
-  updatedAt  DateTime   @updatedAt
+// Presence IS the grant (rule 1: "the grant is the authority") — no soft
+// `granted` boolean; revoking a permission deletes the row. Seeded from
+// the role's preset on creation or when a preset is (re-)applied;
+// individual toggles write/delete a row directly here and audit-log it.
+// SUPER_ADMIN is a StaffRole, not a Permission — a super admin holds
+// real rows for all 17 permissions (README: "store the grants anyway"),
+// not a bypass flag, so this table always has the true authorization
+// state with no special-cased exception.
+model StaffPermission {
+  staffId String
+  staff   Staff  @relation("StaffPermissionHolder", fields: [staffId], references: [id], onDelete: Cascade)
 
-  @@unique([staffId, permission])
+  permission Permission
+
+  grantedByStaffId String
+  grantedByStaff   Staff  @relation("StaffPermissionGrantedBy", fields: [grantedByStaffId], references: [id])
+  grantedAt        DateTime @default(now())
+
+  @@id([staffId, permission])
 }
 
 // ─── Programme, module, lecture ─────────────────────────────────────────
@@ -1559,47 +1588,158 @@ model VerificationLookup {
   @@index([createdAt(sort: Desc)])
 }
 
-// ─── Support ─────────────────────────────────────────────────────────────
+// ─── Slice 08: support desk, notes & announcements ───────────────────────
+//
+// Replaces the Handoff-era ContactRequest/AdminNote placeholders wholesale
+// — nothing in the app read or wrote either one yet, and Slice 08's real
+// spec needs a genuine threaded conversation (SupportMessage), which the
+// placeholder's single `message` field couldn't represent at all.
 
-enum ContactRequestStatus {
+enum RequestCategory {
+  ENROLMENT
+  PAYMENT
+  TECHNICAL
+  PROGRAMME
+  OTHER
+}
+
+enum RequestStatus {
   OPEN
+  IN_PROGRESS
   RESOLVED
 }
 
-model ContactRequest {
-  id          String    @id @default(cuid())
+model SupportRequest {
+  id          String    @id @default(uuid())
   candidateId String    @db.Uuid
   candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
 
-  category String
   subject  String
-  message  String
+  category RequestCategory
+  body     String
 
-  status            ContactRequestStatus @default(OPEN)
-  resolvedByStaffId String?
-  resolvedBy        Staff?               @relation("ContactRequestResolvedBy", fields: [resolvedByStaffId], references: [id])
-  resolvedAt        DateTime?
+  status RequestStatus @default(OPEN)
+
+  assignedStaffId String?
+  assignedStaff   Staff?  @relation("SupportRequestAssignedTo", fields: [assignedStaffId], references: [id])
+
+  // Set on the first SupportMessage with a non-null authorStaffId — an
+  // admin-overview KPI ("support requests unanswered over 24h") reads
+  // this rather than re-deriving it from the thread every time.
+  firstRespondedAt DateTime?
+  resolvedAt       DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  messages SupportMessage[]
+
   @@index([status])
+  @@index([candidateId])
 }
 
-// Internal notes on a candidate profile — distinct from contact-request
-// resolution; gated by its own permission (add_admin_notes).
-model AdminNote {
-  id          String    @id @default(cuid())
-  candidateId String    @db.Uuid
-  candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
-  staffId     String
-  staff       Staff     @relation(fields: [staffId], references: [id])
+// The thread. Exactly one of authorStaffId/authorCandidateId is set —
+// enforced in application code (a raw CHECK constraint would need a
+// migration-only addition Prisma can't express; the same discipline this
+// project already uses for a handful of other XOR-shaped columns).
+model SupportMessage {
+  id        String         @id @default(uuid())
+  requestId String
+  request   SupportRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
 
-  note String
+  authorStaffId     String?
+  authorStaff       Staff?     @relation(fields: [authorStaffId], references: [id])
+  authorCandidateId String?    @db.Uuid
+  authorCandidate   Candidate? @relation(fields: [authorCandidateId], references: [id], onDelete: Cascade)
+
+  body String
 
   createdAt DateTime @default(now())
 
-  @@index([candidateId])
+  @@index([requestId, createdAt])
+}
+
+// Internal only — never candidate-visible, never deleted or edited (a
+// correction is a new note, not a mutation of this one).
+model CandidateNote {
+  id          String    @id @default(uuid())
+  candidateId String    @db.Uuid
+  candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  authorStaffId String
+  authorStaff   Staff  @relation(fields: [authorStaffId], references: [id])
+
+  body String
+
+  createdAt DateTime @default(now())
+
+  @@index([candidateId, createdAt])
+}
+
+enum AnnouncementState {
+  DRAFT
+  SCHEDULED
+  SENT
+  WITHDRAWN
+}
+
+enum Channel {
+  IN_APP
+  EMAIL
+  WHATSAPP
+  SMS
+}
+
+model Announcement {
+  id    String @id @default(uuid())
+  title String
+  body  String
+
+  // Programme, intake, cohort, tier, status — shape is UI-defined, not
+  // fixed by this schema; previewAudience/sendAnnouncement interpret it.
+  audienceFilter Json
+
+  channels Channel[]
+  state    AnnouncementState @default(DRAFT)
+
+  scheduledFor DateTime?
+  sentAt       DateTime?
+
+  // Resolved once, at send, then frozen (rule 8) — re-resolving the
+  // filter later would give a different answer and make "who received
+  // this" unanswerable. The delivery rows are the actual record; this
+  // is the fast-read summary of them.
+  recipientCount Int?
+
+  createdByStaffId String
+  createdByStaff   Staff  @relation(fields: [createdByStaffId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  deliveries AnnouncementDelivery[]
+
+  @@index([state, scheduledFor])
+}
+
+// One row per recipient per channel (rule 8) — a candidate on two
+// channels gets two rows, so "did this candidate receive it, and how"
+// always has a concrete answer.
+model AnnouncementDelivery {
+  id             String       @id @default(uuid())
+  announcementId String
+  announcement   Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  candidateId    String       @db.Uuid
+  candidate      Candidate    @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  channel Channel
+
+  deliveredAt   DateTime?
+  failedAt      DateTime?
+  failureReason String?
+
+  @@unique([announcementId, candidateId, channel])
+  @@index([announcementId])
 }
 
 // ─── Audit ───────────────────────────────────────────────────────────────

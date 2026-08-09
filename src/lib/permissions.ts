@@ -1,6 +1,17 @@
-import { Permission, StaffRole } from "@/generated/prisma/client";
+import type { Permission, StaffRole } from "@/generated/prisma/client";
 
-export { Permission, StaffRole };
+// Deliberately no `export { Permission, StaffRole }` here — re-exporting
+// a Prisma-generated enum as a VALUE (not just a type) causes any
+// "use client" component that imports it, even transitively through this
+// file, to crash Turbopack's bundler outright ("chunking context does
+// not support external modules (request: node:module)"), reproducible
+// in both `next dev` and `next build`. Every constant below is built
+// from plain string literals cast to the enum's type instead of
+// referencing the enum object itself, and this file exports the TYPES
+// only. Call sites that need the real enum object (server-side Prisma
+// queries) import Permission/StaffRole directly from
+// "@/generated/prisma/client".
+export type { Permission, StaffRole };
 
 export interface PermissionMeta {
   key: Permission;
@@ -8,27 +19,27 @@ export interface PermissionMeta {
   description: string;
 }
 
-// The 18-permission catalogue, six categories — README "Permissions" table.
-// Every permission has a plain-English description shown beside its toggle.
+// The 17-permission catalogue, six categories — Slice 08 README
+// "Permissions" table. Every permission has a plain-English description
+// shown beside its toggle.
 export const PERMISSIONS: PermissionMeta[] = [
-  { key: Permission.VIEW_CANDIDATES, category: "Candidate management", description: "View candidate profiles and account details" },
-  { key: Permission.EDIT_CANDIDATES, category: "Candidate management", description: "Edit candidate contact details, verify email, suspend accounts" },
-  { key: Permission.VIEW_CONTACT_REQUESTS, category: "Candidate management", description: "See support requests submitted by candidates" },
-  { key: Permission.RESOLVE_CONTACT_REQUESTS, category: "Candidate management", description: "Respond to and resolve candidate contact requests" },
-  { key: Permission.ADD_ADMIN_NOTES, category: "Candidate management", description: "Add internal notes to candidate profiles" },
-  { key: Permission.VIEW_PAYMENTS, category: "Finance", description: "View payment history and transaction records" },
-  { key: Permission.MANAGE_PAYMENTS, category: "Finance", description: "Manually confirm payments, process refunds" },
-  { key: Permission.VIEW_GRADES, category: "Academic", description: "View quiz, examination and drafting exercise results" },
-  { key: Permission.GRADE_ASSESSMENTS, category: "Academic", description: "Submit and edit grades for drafting exercises and examinations" },
-  { key: Permission.MODERATE_MARKS, category: "Academic", description: "Act as second marker on a returned mark" },
-  { key: Permission.MANAGE_PROGRAMMES, category: "Academic", description: "Create, edit and publish programmes and their content" },
-  { key: Permission.MANAGE_INTAKES, category: "Academic", description: "Create and manage intake periods and cohorts" },
-  { key: Permission.ISSUE_CERTIFICATES, category: "Credentials", description: "Trigger certificate generation on programme completion" },
-  { key: Permission.REVOKE_CERTIFICATES, category: "Credentials", description: "Revoke an issued certificate with a mandatory reason" },
-  { key: Permission.VIEW_AUDIT_LOG, category: "Platform", description: "Read the admin audit log" },
-  { key: Permission.EXPORT_DATA, category: "Platform", description: "Export candidate records, grades and reports as CSV or PDF" },
-  { key: Permission.MANAGE_STAFF, category: "Platform", description: "Create staff accounts and assign or revoke permissions" },
-  { key: Permission.SUPER_ADMIN, category: "Super access", description: "Full access. Bypasses all checks. Assign with caution." },
+  { key: "VIEW_CANDIDATES" as Permission, category: "Candidate management", description: "View candidate profiles, enrolments and progress" },
+  { key: "EDIT_CANDIDATE_DETAILS" as Permission, category: "Candidate management", description: "Edit candidate contact and profile details" },
+  { key: "SUSPEND_CANDIDATES" as Permission, category: "Candidate management", description: "Suspend and reactivate candidate accounts" },
+  { key: "MANAGE_PROGRAMMES" as Permission, category: "Academic", description: "Create, edit and publish programmes and their content" },
+  { key: "MANAGE_INTAKES_COHORTS" as Permission, category: "Academic", description: "Create and manage intake periods and cohorts" },
+  { key: "MARK_SUBMISSIONS" as Permission, category: "Academic", description: "Submit and edit grades for drafting exercises and examinations" },
+  { key: "MODERATE_GRADES" as Permission, category: "Academic", description: "Act as second marker on a returned mark" },
+  { key: "MANAGE_EXAMS" as Permission, category: "Academic", description: "Build examinations and manage sittings and results" },
+  { key: "VIEW_FINANCE" as Permission, category: "Finance", description: "View payment history and transaction records" },
+  { key: "CONFIRM_PAYMENTS" as Permission, category: "Finance", description: "Manually confirm payments and record offline transactions" },
+  { key: "MANAGE_FINANCE" as Permission, category: "Finance", description: "Process refunds and adjust the ledger" },
+  { key: "ISSUE_CERTIFICATES" as Permission, category: "Credentials", description: "Trigger certificate generation on programme completion" },
+  { key: "REVOKE_CERTIFICATES" as Permission, category: "Credentials", description: "Revoke an issued certificate with a mandatory reason" },
+  { key: "MANAGE_ANNOUNCEMENTS" as Permission, category: "Communications", description: "Compose, schedule and send announcements to candidates" },
+  { key: "RESPOND_SUPPORT" as Permission, category: "Support", description: "View and respond to candidate support requests" },
+  { key: "MANAGE_STAFF" as Permission, category: "Platform", description: "Create staff accounts and assign or revoke permissions" },
+  { key: "VIEW_AUDIT_LOG" as Permission, category: "Platform", description: "Read the admin audit log" },
 ];
 
 export const PERMISSION_CATEGORIES = [...new Set(PERMISSIONS.map((p) => p.category))];
@@ -36,58 +47,74 @@ export const PERMISSION_CATEGORIES = [...new Set(PERMISSIONS.map((p) => p.catego
 // Role tag colours (white text) — README "Roles and their colours" table.
 export const ROLE_COLORS: Record<StaffRole, string> = {
   SUPER_ADMIN: "#0c356f",
-  OPERATIONS_ADMIN: "#1668e3",
-  FINANCE_ADMIN: "#a16207",
+  REGISTRAR: "#1668e3",
   ACADEMIC_ADMIN: "#0f766e",
   FACULTY: "#6d28d9",
-  SUPPORT_AGENT: "#475569",
-};
+  FINANCE: "#a16207",
+  SUPPORT: "#475569",
+  READ_ONLY: "#64748b",
+} as Record<StaffRole, string>;
 
 export const ROLE_LABELS: Record<StaffRole, string> = {
   SUPER_ADMIN: "Super Admin",
-  OPERATIONS_ADMIN: "Operations Admin",
-  FINANCE_ADMIN: "Finance Admin",
+  REGISTRAR: "Registrar",
   ACADEMIC_ADMIN: "Academic Admin",
   FACULTY: "Faculty",
-  SUPPORT_AGENT: "Support Agent",
-};
+  FINANCE: "Finance",
+  SUPPORT: "Support",
+  READ_ONLY: "Read Only",
+} as Record<StaffRole, string>;
 
-// REVOKE_CERTIFICATES, MANAGE_STAFF and SUPER_ADMIN are deliberately absent
-// from this list — per the README's role table, no preset below grants
-// them; only PERMISSIONS.map(...) (all 18, for Super Admin) does.
-const { VIEW_CANDIDATES, EDIT_CANDIDATES, VIEW_CONTACT_REQUESTS, RESOLVE_CONTACT_REQUESTS, ADD_ADMIN_NOTES, VIEW_PAYMENTS, MANAGE_PAYMENTS, VIEW_GRADES, GRADE_ASSESSMENTS, MODERATE_MARKS, MANAGE_PROGRAMMES, MANAGE_INTAKES, ISSUE_CERTIFICATES, VIEW_AUDIT_LOG, EXPORT_DATA } = Permission;
+// REVOKE_CERTIFICATES and MANAGE_STAFF are deliberately absent from every
+// preset below — per the README, no preset grants them; only
+// PERMISSIONS.map(...) (all 17, for Super Admin) does. A super admin
+// holds every permission as a real, individually-revocable row — rule 1
+// ("the grant is the authority") applies to super admins too; there is
+// no separate bypass flag.
+const VIEW_CANDIDATES = "VIEW_CANDIDATES" as Permission;
+const EDIT_CANDIDATE_DETAILS = "EDIT_CANDIDATE_DETAILS" as Permission;
+const SUSPEND_CANDIDATES = "SUSPEND_CANDIDATES" as Permission;
+const MANAGE_PROGRAMMES = "MANAGE_PROGRAMMES" as Permission;
+const MANAGE_INTAKES_COHORTS = "MANAGE_INTAKES_COHORTS" as Permission;
+const MARK_SUBMISSIONS = "MARK_SUBMISSIONS" as Permission;
+const MODERATE_GRADES = "MODERATE_GRADES" as Permission;
+const MANAGE_EXAMS = "MANAGE_EXAMS" as Permission;
+const VIEW_FINANCE = "VIEW_FINANCE" as Permission;
+const CONFIRM_PAYMENTS = "CONFIRM_PAYMENTS" as Permission;
+const MANAGE_FINANCE = "MANAGE_FINANCE" as Permission;
+const ISSUE_CERTIFICATES = "ISSUE_CERTIFICATES" as Permission;
+const MANAGE_ANNOUNCEMENTS = "MANAGE_ANNOUNCEMENTS" as Permission;
+const RESPOND_SUPPORT = "RESPOND_SUPPORT" as Permission;
+const VIEW_AUDIT_LOG = "VIEW_AUDIT_LOG" as Permission;
 
 // Applying a preset replaces the current permission set — README.
 export const ROLE_PRESETS: Record<StaffRole, Permission[]> = {
-  SUPER_ADMIN: PERMISSIONS.map((p) => p.key), // all 18
-  OPERATIONS_ADMIN: [
-    VIEW_CANDIDATES, EDIT_CANDIDATES, VIEW_CONTACT_REQUESTS, RESOLVE_CONTACT_REQUESTS, ADD_ADMIN_NOTES,
-    VIEW_PAYMENTS, VIEW_GRADES, MANAGE_INTAKES, ISSUE_CERTIFICATES, VIEW_AUDIT_LOG, EXPORT_DATA,
+  SUPER_ADMIN: PERMISSIONS.map((p) => p.key), // all 17
+  REGISTRAR: [
+    VIEW_CANDIDATES, EDIT_CANDIDATE_DETAILS, SUSPEND_CANDIDATES,
+    MANAGE_INTAKES_COHORTS, ISSUE_CERTIFICATES, MANAGE_ANNOUNCEMENTS, RESPOND_SUPPORT, VIEW_AUDIT_LOG,
   ],
-  FINANCE_ADMIN: [VIEW_CANDIDATES, VIEW_PAYMENTS, MANAGE_PAYMENTS, VIEW_AUDIT_LOG, EXPORT_DATA],
-  // MODERATE_MARKS (second-marker) sits with Academic Admin, not Faculty —
-  // Faculty are the first markers being moderated.
+  // MODERATE_GRADES (second-marker) sits with Academic Admin, not
+  // Faculty — Faculty are the first markers being moderated.
   ACADEMIC_ADMIN: [
-    VIEW_CANDIDATES, VIEW_GRADES, GRADE_ASSESSMENTS, MODERATE_MARKS, MANAGE_PROGRAMMES, MANAGE_INTAKES,
-    ISSUE_CERTIFICATES, VIEW_AUDIT_LOG,
+    VIEW_CANDIDATES, MARK_SUBMISSIONS, MODERATE_GRADES, MANAGE_PROGRAMMES, MANAGE_EXAMS,
+    MANAGE_INTAKES_COHORTS, ISSUE_CERTIFICATES, VIEW_AUDIT_LOG,
   ],
-  FACULTY: [VIEW_CANDIDATES, VIEW_GRADES, GRADE_ASSESSMENTS],
-  SUPPORT_AGENT: [VIEW_CANDIDATES, VIEW_CONTACT_REQUESTS, RESOLVE_CONTACT_REQUESTS, ADD_ADMIN_NOTES],
-};
+  FACULTY: [VIEW_CANDIDATES, MARK_SUBMISSIONS],
+  FINANCE: [VIEW_CANDIDATES, VIEW_FINANCE, CONFIRM_PAYMENTS, MANAGE_FINANCE, VIEW_AUDIT_LOG],
+  SUPPORT: [VIEW_CANDIDATES, RESPOND_SUPPORT],
+  READ_ONLY: [VIEW_CANDIDATES, VIEW_FINANCE, VIEW_AUDIT_LOG],
+} as Record<StaffRole, Permission[]>;
 
-// Only Super Admin and Operations Admin may edit staff; everyone else sees
-// the permissions card read-only (README).
-export const STAFF_EDIT_ROLES: StaffRole[] = [StaffRole.SUPER_ADMIN, StaffRole.OPERATIONS_ADMIN];
-
-/** super_admin's SUPER_ADMIN grant bypasses every other check. */
+/**
+ * Presence is the authority (rule 1) — a permission check is nothing
+ * more than "does a StaffPermission row exist for this staff/permission
+ * pair." Super admins hold all 17 rows for real (seeded by
+ * applyRolePreset), so there is no separate bypass branch here.
+ */
 export function hasPermission(
-  staff: { role: StaffRole; grants: { permission: Permission; granted: boolean }[] },
+  staff: { grants: { permission: Permission }[] },
   permission: Permission
 ): boolean {
-  if (staff.grants.some((g) => g.permission === Permission.SUPER_ADMIN && g.granted)) return true;
-  return staff.grants.some((g) => g.permission === permission && g.granted);
-}
-
-export function canEditStaff(role: StaffRole): boolean {
-  return STAFF_EDIT_ROLES.includes(role);
+  return staff.grants.some((g) => g.permission === permission);
 }

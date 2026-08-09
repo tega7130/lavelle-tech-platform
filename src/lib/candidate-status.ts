@@ -36,6 +36,29 @@ export async function suspendCandidate(candidateId: string, staffId: string, rea
   return candidate;
 }
 
+/**
+ * Contact/profile detail edit — deliberately narrow (name, phone only).
+ * Email is excluded: it's the sign-in identifier, and changing it safely
+ * needs a re-verification flow this slice doesn't build.
+ */
+export async function updateCandidateDetails(
+  candidateId: string,
+  staffId: string,
+  data: { firstName: string; lastName: string; phone: string | null },
+  ipAddress?: string | null
+) {
+  const candidate = await prisma.candidate.update({ where: { id: candidateId }, data });
+  await recordAuditEvent(prisma, {
+    actorStaffId: staffId,
+    subjectType: "candidate",
+    subjectId: candidateId,
+    action: "candidate.details_updated",
+    description: "Contact details updated",
+    ipAddress: ipAddress ?? null,
+  });
+  return candidate;
+}
+
 export async function reactivateCandidate(candidateId: string, staffId: string, ipAddress?: string | null) {
   const before = await prisma.candidate.findUniqueOrThrow({ where: { id: candidateId } });
   if (before.accountStatus !== "SUSPENDED" || !before.suspendedAt) {

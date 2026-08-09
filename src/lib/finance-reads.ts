@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireStaffPermission } from "@/lib/staff-auth";
 import { Permission, PaymentStatus, EnrolmentStatus } from "@/generated/prisma/client";
 
-// Admin-facing server functions for Finance. Gated on VIEW_PAYMENTS —
+// Admin-facing server functions for Finance. Gated on VIEW_FINANCE —
 // unlike most read functions in this codebase, financial data is
 // sensitive enough that even viewing it (not just recording/confirming)
 // is its own permission.
@@ -18,7 +18,7 @@ export interface ListLedgerParams {
 }
 
 export async function listLedger(params: ListLedgerParams = {}) {
-  await requireStaffPermission(Permission.VIEW_PAYMENTS);
+  await requireStaffPermission(Permission.VIEW_FINANCE);
   return prisma.payment.findMany({
     where: {
       ...(params.from || params.to
@@ -38,7 +38,7 @@ export async function listLedger(params: ListLedgerParams = {}) {
 }
 
 export async function getFinanceKpis() {
-  await requireStaffPermission(Permission.VIEW_PAYMENTS);
+  await requireStaffPermission(Permission.VIEW_FINANCE);
   const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
 
   const [collected, outstanding, refunded] = await Promise.all([
@@ -92,7 +92,7 @@ export async function candidateHasStalePendingPayment(candidateId: string) {
  * it corresponds to, is that task list.
  */
 export async function listUnplacedEnrolments() {
-  await requireStaffPermission(Permission.MANAGE_INTAKES);
+  await requireStaffPermission(Permission.MANAGE_INTAKES_COHORTS);
   return prisma.enrolment.findMany({
     where: { status: EnrolmentStatus.ACTIVE, cohortId: null },
     include: {
@@ -105,7 +105,7 @@ export async function listUnplacedEnrolments() {
 }
 
 export async function listCandidatePayments(candidateId: string) {
-  await requireStaffPermission(Permission.VIEW_PAYMENTS);
+  await requireStaffPermission(Permission.VIEW_FINANCE);
   return prisma.payment.findMany({
     where: { candidateId },
     include: {

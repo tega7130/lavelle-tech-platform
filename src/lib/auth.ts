@@ -27,7 +27,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
         const staff = await prisma.staff.findUnique({
           where: { email },
-          include: { permissionGrants: { where: { granted: true } } },
+          include: { permissionGrants: true },
         });
         if (!staff) return null;
         if (staff.status !== StaffStatus.ACTIVE) return null;

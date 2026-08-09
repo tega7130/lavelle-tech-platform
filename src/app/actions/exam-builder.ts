@@ -17,21 +17,21 @@ export async function listExamWindowsAction(examId: string) {
 }
 
 export async function createExamQuestionAction(examId: string, input: builder.CreateExamQuestionInput) {
-  await requireStaffPermission(Permission.MANAGE_PROGRAMMES);
+  await requireStaffPermission(Permission.MANAGE_EXAMS);
   const result = await builder.createExamQuestion(examId, input);
   revalidatePath(`/admin/exam-builder`);
   return result;
 }
 
 export async function updateExamQuestionAction(id: string, input: builder.UpdateExamQuestionInput, examId: string) {
-  await requireStaffPermission(Permission.MANAGE_PROGRAMMES);
+  await requireStaffPermission(Permission.MANAGE_EXAMS);
   const result = await builder.updateExamQuestion(id, input);
   revalidatePath(`/admin/exam-builder`);
   return result;
 }
 
 export async function retireExamQuestionAction(id: string, reason: string, examId: string) {
-  const staff = await requireStaffPermission(Permission.MANAGE_PROGRAMMES);
+  const staff = await requireStaffPermission(Permission.MANAGE_EXAMS);
   const ip = await getClientIp();
   const result = await builder.retireExamQuestion(id, reason, staff.id, ip);
   revalidatePath(`/admin/exam-builder`);
@@ -39,7 +39,7 @@ export async function retireExamQuestionAction(id: string, reason: string, examI
 }
 
 export async function restoreExamQuestionAction(id: string, examId: string) {
-  const staff = await requireStaffPermission(Permission.MANAGE_PROGRAMMES);
+  const staff = await requireStaffPermission(Permission.MANAGE_EXAMS);
   const ip = await getClientIp();
   const result = await builder.restoreExamQuestion(id, staff.id, ip);
   revalidatePath(`/admin/exam-builder`);
@@ -47,14 +47,14 @@ export async function restoreExamQuestionAction(id: string, examId: string) {
 }
 
 export async function setExamRulesAction(examId: string, rules: builder.ExamRulesInput) {
-  await requireStaffPermission(Permission.MANAGE_PROGRAMMES);
+  await requireStaffPermission(Permission.MANAGE_EXAMS);
   const result = await builder.setExamRules(examId, rules);
   revalidatePath(`/admin/exam-builder`);
   return result;
 }
 
 export async function publishExamAction(examId: string) {
-  const staff = await requireStaffPermission(Permission.MANAGE_PROGRAMMES);
+  const staff = await requireStaffPermission(Permission.MANAGE_EXAMS);
   const ip = await getClientIp();
   const result = await builder.publishExam(examId, staff.id, ip);
   revalidatePath(`/admin/exam-builder`);

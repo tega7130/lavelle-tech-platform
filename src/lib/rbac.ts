@@ -17,6 +17,17 @@ export class LastSuperAdminError extends Error {
   }
 }
 
+// Rule: staff cannot edit their own permission set — a role change or
+// permission toggle always needs another admin's hand on it, so no one
+// can silently escalate (or accidentally lock themselves out of) their
+// own access.
+export class SelfPermissionEditError extends Error {
+  constructor() {
+    super("You cannot change your own role or permissions.");
+    this.name = "SelfPermissionEditError";
+  }
+}
+
 async function staffWithGrants(staffId: string) {
   return prisma.staff.findUniqueOrThrow({
     where: { id: staffId },
@@ -24,24 +35,52 @@ async function staffWithGrants(staffId: string) {
   });
 }
 
-/** Throws PermissionDeniedError unless the staff member holds `permission` (or SUPER_ADMIN). */
+/** Throws PermissionDeniedError unless the staff member holds `permission`. */
 export async function guardPermission(staffId: string, permission: Permission) {
   const staff = await staffWithGrants(staffId);
-  const grants = staff.permissionGrants.map((g) => ({ permission: g.permission, granted: g.granted }));
-  if (!hasPermission({ role: staff.role, grants }, permission)) {
+  const grants = staff.permissionGrants.map((g) => ({ permission: g.permission }));
+  if (!hasPermission({ grants }, permission)) {
     throw new PermissionDeniedError(permission);
   }
   return staff;
 }
 
-/** Business rule 13: deactivating/removing the last active super admin is blocked outright. */
+/**
+ * Deactivating/suspending/demoting the last active super admin is
+ * blocked outright. Read-only callers (e.g. a pre-flight UI check) may
+ * call this outside a transaction, but any caller that goes on to WRITE
+ * based on the result (deactivateStaff, applyRolePreset's demote path)
+ * MUST call assertNotLastActiveSuperAdminTx with the same `tx` instead —
+ * see that function's comment for why a bare COUNT is not safe there.
+ */
 export async function assertNotLastActiveSuperAdmin(excludingStaffId: string) {
   const count = await prisma.staff.count({
     where: {
       status: StaffStatus.ACTIVE,
+      role: StaffRole.SUPER_ADMIN,
       id: { not: excludingStaffId },
-      permissionGrants: { some: { permission: Permission.SUPER_ADMIN, granted: true } },
     },
+  });
+  if (count === 0) throw new LastSuperAdminError();
+}
+
+/**
+ * The transaction-safe version. Two concurrent requests each demoting a
+ * DIFFERENT super admin (with exactly two active super admins total)
+ * would both see "one other exists" under a plain COUNT taken outside,
+ * or even inside, an ordinarily-isolated transaction, and both would
+ * proceed, leaving zero. Callers run their whole transaction at
+ * Postgres's SERIALIZABLE isolation level (see applyRolePreset /
+ * deactivateStaff) specifically so this count participates in
+ * serializable-conflict detection: if two concurrent transactions both
+ * read the super-admin count and then both write based on it, Postgres
+ * aborts one at commit with a serialization failure, which surfaces
+ * here as a thrown error — exactly like FOR UPDATE row locking would,
+ * but through the ordinary query builder rather than raw SQL.
+ */
+async function assertNotLastActiveSuperAdminTx(tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0], excludingStaffId: string) {
+  const count = await tx.staff.count({
+    where: { status: StaffStatus.ACTIVE, role: StaffRole.SUPER_ADMIN, id: { not: excludingStaffId } },
   });
   if (count === 0) throw new LastSuperAdminError();
 }
@@ -50,7 +89,9 @@ export async function assertNotLastActiveSuperAdmin(excludingStaffId: string) {
  * Replaces a staff member's permission set with the target role's preset
  * and writes the audit entry (README: "Applying a preset replaces the
  * current set and confirms first" / rule 10 on every permission change).
- * Business rule 12: only a super admin may grant super_admin.
+ * Only a super admin may promote someone to super admin; demoting the
+ * last active super admin away from the role is blocked; staff cannot
+ * apply a preset to themselves.
  */
 export async function applyRolePreset(params: {
   staffId: string;
@@ -59,37 +100,49 @@ export async function applyRolePreset(params: {
 }) {
   const { staffId, role, actingStaffId } = params;
 
+  if (staffId === actingStaffId) throw new SelfPermissionEditError();
+
   if (role === StaffRole.SUPER_ADMIN) {
-    const acting = await staffWithGrants(actingStaffId);
-    const actingIsSuperAdmin = acting.permissionGrants.some(
-      (g) => g.permission === Permission.SUPER_ADMIN && g.granted
-    );
-    if (!actingIsSuperAdmin) {
-      throw new PermissionDeniedError(Permission.SUPER_ADMIN);
+    const acting = await prisma.staff.findUniqueOrThrow({ where: { id: actingStaffId } });
+    if (acting.role !== StaffRole.SUPER_ADMIN) {
+      throw new PermissionDeniedError(Permission.MANAGE_STAFF);
     }
   }
 
   const preset = ROLE_PRESETS[role];
 
-  await prisma.$transaction(async (tx) => {
-    await tx.staff.update({ where: { id: staffId }, data: { role } });
-    await tx.permissionGrant.deleteMany({ where: { staffId } });
-    await tx.permissionGrant.createMany({
-      data: preset.map((permission) => ({ staffId, permission, granted: true })),
-    });
-    await tx.auditEvent.create({
-      data: {
-        actorStaffId: actingStaffId,
-        action: "staff.role.apply_preset",
-        subjectType: "staff",
-        subjectId: staffId,
-        description: `Applied the ${role} permission preset`,
-      },
-    });
-  });
+  await prisma.$transaction(
+    async (tx) => {
+      if (role !== StaffRole.SUPER_ADMIN) {
+        const target = await tx.staff.findUniqueOrThrow({ where: { id: staffId } });
+        if (target.role === StaffRole.SUPER_ADMIN) {
+          await assertNotLastActiveSuperAdminTx(tx, staffId);
+        }
+      }
+      await tx.staff.update({ where: { id: staffId }, data: { role } });
+      await tx.staffPermission.deleteMany({ where: { staffId } });
+      await tx.staffPermission.createMany({
+        data: preset.map((permission) => ({ staffId, permission, grantedByStaffId: actingStaffId })),
+      });
+      await tx.auditEvent.create({
+        data: {
+          actorStaffId: actingStaffId,
+          action: "staff.role.apply_preset",
+          subjectType: "staff",
+          subjectId: staffId,
+          description: `Applied the ${role} permission preset`,
+        },
+      });
+    },
+    { isolationLevel: "Serializable" }
+  );
 }
 
-/** A single permission toggle — saves immediately and audit-logs (README). */
+/**
+ * A single permission toggle — saves immediately and audit-logs
+ * (README). Presence is the authority (rule 1): granting inserts a row,
+ * revoking deletes it.
+ */
 export async function setPermission(params: {
   staffId: string;
   permission: Permission;
@@ -98,23 +151,18 @@ export async function setPermission(params: {
 }) {
   const { staffId, permission, granted, actingStaffId } = params;
 
-  if (permission === Permission.SUPER_ADMIN && granted) {
-    const acting = await staffWithGrants(actingStaffId);
-    const actingIsSuperAdmin = acting.permissionGrants.some(
-      (g) => g.permission === Permission.SUPER_ADMIN && g.granted
-    );
-    if (!actingIsSuperAdmin) throw new PermissionDeniedError(Permission.SUPER_ADMIN);
-  }
-  if (permission === Permission.SUPER_ADMIN && !granted) {
-    await assertNotLastActiveSuperAdmin(staffId);
-  }
+  if (staffId === actingStaffId) throw new SelfPermissionEditError();
 
   await prisma.$transaction(async (tx) => {
-    await tx.permissionGrant.upsert({
-      where: { staffId_permission: { staffId, permission } },
-      create: { staffId, permission, granted },
-      update: { granted },
-    });
+    if (granted) {
+      await tx.staffPermission.upsert({
+        where: { staffId_permission: { staffId, permission } },
+        create: { staffId, permission, grantedByStaffId: actingStaffId },
+        update: {},
+      });
+    } else {
+      await tx.staffPermission.deleteMany({ where: { staffId, permission } });
+    }
     await tx.auditEvent.create({
       data: {
         actorStaffId: actingStaffId,
@@ -127,22 +175,28 @@ export async function setPermission(params: {
   });
 }
 
-/** Business rule 14: deactivating a staff account requires a reason and revokes the session immediately. */
+/** Deactivating a staff account requires a reason and revokes the session immediately. */
 export async function deactivateStaff(params: { staffId: string; reason: string; actingStaffId: string }) {
   const { staffId, reason, actingStaffId } = params;
-  await assertNotLastActiveSuperAdmin(staffId);
 
-  await prisma.$transaction(async (tx) => {
-    await tx.staff.update({ where: { id: staffId }, data: { status: StaffStatus.INACTIVE } });
-    await tx.auditEvent.create({
-      data: {
-        actorStaffId: actingStaffId,
-        action: "staff.deactivate",
-        subjectType: "staff",
-        subjectId: staffId,
-        description: "Deactivated the staff account",
-        reason,
-      },
-    });
-  });
+  await prisma.$transaction(
+    async (tx) => {
+      const target = await tx.staff.findUniqueOrThrow({ where: { id: staffId } });
+      if (target.role === StaffRole.SUPER_ADMIN) {
+        await assertNotLastActiveSuperAdminTx(tx, staffId);
+      }
+      await tx.staff.update({ where: { id: staffId }, data: { status: StaffStatus.DEACTIVATED } });
+      await tx.auditEvent.create({
+        data: {
+          actorStaffId: actingStaffId,
+          action: "staff.deactivate",
+          subjectType: "staff",
+          subjectId: staffId,
+          description: "Deactivated the staff account",
+          reason,
+        },
+      });
+    },
+    { isolationLevel: "Serializable" }
+  );
 }

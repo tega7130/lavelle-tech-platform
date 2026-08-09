@@ -29,12 +29,13 @@ export async function requireStaffSession(): Promise<StaffSessionUser> {
  * Slice 02's own instruction: "Read the permission set from the staff
  * session, not from a role string" — the JWT already carries the staff
  * member's flattened permission list (set at sign-in from
- * PermissionGrant), so this checks that array directly rather than
- * re-querying the database or special-casing role names.
+ * StaffPermission), so this checks that array directly rather than
+ * re-querying the database or special-casing role names. Presence is the
+ * authority (Slice 08 rule 1) — super admins hold all 17 rows for real,
+ * so there is no separate bypass check here.
  */
 export async function requireStaffPermission(permission: Permission): Promise<StaffSessionUser> {
   const user = await requireStaffSession();
-  const has = user.permissions.includes(Permission.SUPER_ADMIN) || user.permissions.includes(permission);
-  if (!has) throw new PermissionDeniedError(permission);
+  if (!user.permissions.includes(permission)) throw new PermissionDeniedError(permission);
   return user;
 }

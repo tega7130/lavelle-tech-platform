@@ -17,7 +17,7 @@ const bodySchema = z.object({
 
 const PERMISSION_BY_PURPOSE = {
   programme: Permission.MANAGE_PROGRAMMES,
-  finance: Permission.MANAGE_PAYMENTS,
+  finance: Permission.CONFIRM_PAYMENTS,
   certificate: Permission.ISSUE_CERTIFICATES,
 } as const;
 

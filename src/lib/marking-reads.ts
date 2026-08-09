@@ -7,12 +7,12 @@ import { listMarkingQueueQuery, openMarkableQuery, type ListMarkingQueueParams }
 export type { ListMarkingQueueParams };
 
 export async function listMarkingQueue(params: ListMarkingQueueParams) {
-  const staff = await requireStaffPermission(Permission.GRADE_ASSESSMENTS);
+  const staff = await requireStaffPermission(Permission.MARK_SUBMISSIONS);
   return listMarkingQueueQuery(params, staff.id);
 }
 
 export async function openMarkable(markId: string) {
-  await requireStaffPermission(Permission.GRADE_ASSESSMENTS);
+  await requireStaffPermission(Permission.MARK_SUBMISSIONS);
   return openMarkableQuery(markId);
 }
 
@@ -79,13 +79,13 @@ export async function getCandidateResults(candidateId: string) {
 /**
  * The admin candidate-record Assessments & grades tab — quizzes,
  * examinations and drafting exercises as three separate tables (per
- * Lavelle Candidate Record.dc.html), gated on VIEW_GRADES. Unlike
+ * Lavelle Candidate Record.dc.html), gated on VIEW_CANDIDATES. Unlike
  * getCandidateResults, this shows PENDING drafting work too (a "Grade
  * now" affordance for a mark not yet RETURNED) — rule 10/12's "invisible
  * until RETURNED" is about candidate-facing endpoints, not this one.
  */
 export async function listCandidateMarks(candidateId: string) {
-  await requireStaffPermission(Permission.VIEW_GRADES);
+  await requireStaffPermission(Permission.VIEW_CANDIDATES);
 
   const enrolments = await prisma.enrolment.findMany({ where: { candidateId }, select: { id: true } });
   const enrolmentIds = enrolments.map((e) => e.id);

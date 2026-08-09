@@ -13,14 +13,14 @@ export async function openMarkableAction(markId: string) {
 }
 
 export async function claimForMarkingAction(markId: string) {
-  const staff = await requireStaffPermission(Permission.GRADE_ASSESSMENTS);
+  const staff = await requireStaffPermission(Permission.MARK_SUBMISSIONS);
   const result = await markingActions.claimForMarking(markId, staff.id);
   revalidatePath("/admin/marking");
   return result;
 }
 
 export async function returnMarkAction(markId: string, input: markingActions.ReturnMarkInput) {
-  const staff = await requireStaffPermission(Permission.GRADE_ASSESSMENTS);
+  const staff = await requireStaffPermission(Permission.MARK_SUBMISSIONS);
   const ip = await getClientIp();
   const result = await markingActions.returnMark(markId, input, staff.id, ip);
   revalidatePath("/admin/marking");
@@ -29,7 +29,7 @@ export async function returnMarkAction(markId: string, input: markingActions.Ret
 }
 
 export async function requestResubmissionAction(markId: string, input: markingActions.RequestResubmissionInput) {
-  const staff = await requireStaffPermission(Permission.GRADE_ASSESSMENTS);
+  const staff = await requireStaffPermission(Permission.MARK_SUBMISSIONS);
   const ip = await getClientIp();
   const result = await markingActions.requestResubmission(markId, input, staff.id, ip);
   revalidatePath("/admin/marking");
@@ -37,7 +37,7 @@ export async function requestResubmissionAction(markId: string, input: markingAc
 }
 
 export async function moderateMarkAction(markId: string, input: markingActions.ModerateMarkInput) {
-  const staff = await requireStaffPermission(Permission.MODERATE_MARKS);
+  const staff = await requireStaffPermission(Permission.MODERATE_GRADES);
   const ip = await getClientIp();
   const result = await markingActions.moderateMark(markId, input, staff.id, ip);
   revalidatePath("/admin/marking");

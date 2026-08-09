@@ -11,7 +11,7 @@ import { computeShortfalls, computeActualDrawTotal, type DrawableQuestion } from
  * never disagree about what can actually be assembled.
  */
 export async function listExamBank(examId: string) {
-  await requireStaffPermission(Permission.MANAGE_PROGRAMMES);
+  await requireStaffPermission(Permission.MANAGE_EXAMS);
 
   const exam = await prisma.exam.findUniqueOrThrow({ where: { id: examId }, include: { programme: true } });
   const modules = await prisma.module.findMany({ where: { programmeId: exam.programmeId }, orderBy: { weekNumber: "asc" } });
@@ -84,7 +84,7 @@ export async function listExamBank(examId: string) {
 
 /** The programme picker at the top of the builder — one Exam per programme. */
 export async function listExamsForBuilder() {
-  await requireStaffPermission(Permission.MANAGE_PROGRAMMES);
+  await requireStaffPermission(Permission.MANAGE_EXAMS);
   const exams = await prisma.exam.findMany({
     include: { programme: { select: { title: true, code: true } } },
     orderBy: { createdAt: "asc" },
@@ -94,7 +94,7 @@ export async function listExamsForBuilder() {
 
 /** Windows with their sitting counts by state — the release-results trigger point (rule 12: per window, not per candidate). */
 export async function listExamWindows(examId: string) {
-  await requireStaffPermission(Permission.MANAGE_PROGRAMMES);
+  await requireStaffPermission(Permission.MANAGE_EXAMS);
   const windows = await prisma.examWindow.findMany({
     where: { examId },
     include: { registrations: { include: { sitting: true } } },

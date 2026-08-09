@@ -57,7 +57,7 @@ export async function expireSittingIfOverdueAction(sittingId: string) {
 // enforced inside registerForExam itself.
 
 export async function releaseResultsAction(windowId: string) {
-  const staff = await requireStaffPermission(Permission.GRADE_ASSESSMENTS);
+  const staff = await requireStaffPermission(Permission.MARK_SUBMISSIONS);
   const ip = await getClientIp();
   const result = await sittingActions.releaseResults(windowId, staff.id, ip);
   revalidatePath("/admin/exam-builder");

@@ -7,7 +7,7 @@ import { signWebhookPayload } from "@/lib/payment-provider";
 
 async function seedProgramme() {
   const staff = await testPrisma.staff.create({
-    data: { name: "Test Webhook Staff", email: `webhook-test-${crypto.randomUUID()}@example.com`, role: "FINANCE_ADMIN", passwordHash: "not-a-real-hash" },
+    data: { name: "Test Webhook Staff", email: `webhook-test-${crypto.randomUUID()}@example.com`, role: "FINANCE", passwordHash: "not-a-real-hash" },
   });
   const category = await testPrisma.programmeCategory.create({
     data: { name: `Webhook Test Category ${crypto.randomUUID()}`, slug: `webhook-test-${crypto.randomUUID()}` },

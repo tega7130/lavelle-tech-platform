@@ -95,9 +95,9 @@ export async function initiatePayment(programmeId: string) {
   return { internalReference: payment.internalReference, checkoutUrl: checkout.checkoutUrl };
 }
 
-/** Finance ledger / candidate record entry point — a pending payment already exists. Irreversible; requires confirm-payments (mapped to MANAGE_PAYMENTS). */
+/** Finance ledger / candidate record entry point — a pending payment already exists. Irreversible; requires confirm-payments. */
 export async function confirmPaymentManually(paymentId: string, _prev: FormActionState, formData: FormData): Promise<FormActionState> {
-  const staff = await requireStaffPermission(Permission.MANAGE_PAYMENTS);
+  const staff = await requireStaffPermission(Permission.CONFIRM_PAYMENTS);
   const raw = formToObject(formData);
   const parsed = offlinePaymentInputSchema.safeParse(raw);
   if (!parsed.success) return { errors: fieldErrors(parsed.error), values: raw };
@@ -115,7 +115,7 @@ export async function confirmPaymentManually(paymentId: string, _prev: FormActio
 
 /** Candidate record entry point for someone who transferred before ever starting checkout — no pending payment row exists yet. */
 export async function recordOfflinePayment(_prev: FormActionState, formData: FormData): Promise<FormActionState> {
-  const staff = await requireStaffPermission(Permission.MANAGE_PAYMENTS);
+  const staff = await requireStaffPermission(Permission.CONFIRM_PAYMENTS);
   const raw = formToObject(formData);
   const parsed = recordOfflinePaymentSchema.safeParse(raw);
   if (!parsed.success) return { errors: fieldErrors(parsed.error), values: raw };
@@ -142,7 +142,7 @@ export async function recordOfflinePayment(_prev: FormActionState, formData: For
 
 /** Status and audit-log update only — Lavelle holds no candidate balances; the refund itself is settled outside the platform (rule 10). */
 export async function markEnrolmentRefunded(enrolmentId: string, reason: string) {
-  const staff = await requireStaffPermission(Permission.MANAGE_PAYMENTS);
+  const staff = await requireStaffPermission(Permission.MANAGE_FINANCE);
   const trimmedReason = reason.trim();
   if (!trimmedReason) throw new Error("A reason is required.");
 
@@ -170,7 +170,7 @@ export async function markEnrolmentRefunded(enrolmentId: string, reason: string)
 
 /** Retires the current card and creates a successor with reissuedFromId, so the history stays legible. */
 export async function reissueIdCard(candidateId: string, reason: string) {
-  const staff = await requireStaffPermission(Permission.MANAGE_PAYMENTS);
+  const staff = await requireStaffPermission(Permission.EDIT_CANDIDATE_DETAILS);
   const trimmedReason = reason.trim();
   if (!trimmedReason) throw new Error("A reason is required.");
 

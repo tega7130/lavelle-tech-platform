@@ -15,7 +15,7 @@ async function seedProgramme(feeMinor = 45_000_000) {
     data: {
       name: "Test Finance Staff",
       email: `enrol-test-${crypto.randomUUID()}@example.com`,
-      role: "FINANCE_ADMIN",
+      role: "FINANCE",
       passwordHash: "not-a-real-hash",
     },
   });

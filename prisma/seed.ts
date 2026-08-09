@@ -9,6 +9,8 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import {
   PrismaClient,
   StaffRole,
+  StaffStatus,
+  RequestCategory,
   ProgrammeTier,
   ProgrammeStatus,
   IntakeMonth,
@@ -115,15 +117,19 @@ async function seedCertificatePdf(input: {
 async function main() {
   const passwordHash = await hash(DEMO_PASSWORD);
 
-  // ── Staff — one per role, per Handoff 00's "Roles and their colours" table ──
+  // ── Staff — one per role, per Handoff 08's "Roles and their colours" table ──
   // Seeded before programmes: Programme.createdByStaffId is required.
+  // All ACTIVE (not the schema's INVITED default) — these are
+  // already-provisioned demo accounts meant to sign in immediately, not
+  // pending invitations.
   const staffSeeds = [
     { email: "a.obi@lavelle.ng", name: "Adaeze Obi", jobTitle: "Registrar", department: "Institution", role: StaffRole.SUPER_ADMIN },
-    { email: "b.eze@lavelle.ng", name: "Bassey Eze", jobTitle: "Operations Manager", department: "Operations", role: StaffRole.OPERATIONS_ADMIN },
-    { email: "f.udo@lavelle.ng", name: "Funmi Udo", jobTitle: "Finance Officer", department: "Finance", role: StaffRole.FINANCE_ADMIN },
+    { email: "b.eze@lavelle.ng", name: "Bassey Eze", jobTitle: "Operations Manager", department: "Operations", role: StaffRole.REGISTRAR },
+    { email: "f.udo@lavelle.ng", name: "Funmi Udo", jobTitle: "Finance Officer", department: "Finance", role: StaffRole.FINANCE },
     { email: "k.balogun@lavelle.ng", name: "Kemi Balogun", jobTitle: "Academic Coordinator", department: "Academic", role: StaffRole.ACADEMIC_ADMIN },
     { email: "t.nwachukwu@lavelle.ng", name: "Tunde Nwachukwu", jobTitle: "Faculty — Energy Law", department: "Faculty", role: StaffRole.FACULTY },
-    { email: "h.suleiman@lavelle.ng", name: "Hauwa Suleiman", jobTitle: "Support Agent", department: "Support", role: StaffRole.SUPPORT_AGENT },
+    { email: "h.suleiman@lavelle.ng", name: "Hauwa Suleiman", jobTitle: "Support Agent", department: "Support", role: StaffRole.SUPPORT },
+    { email: "n.adeyemi@lavelle.ng", name: "Ngozi Adeyemi", jobTitle: "Compliance Observer", department: "Compliance", role: StaffRole.READ_ONLY },
   ] as const;
 
   const staff: Record<string, Awaited<ReturnType<typeof prisma.staff.upsert>>> = {};
@@ -131,18 +137,22 @@ async function main() {
     const row = await prisma.staff.upsert({
       where: { email: s.email },
       update: {},
-      create: { ...s, passwordHash },
+      create: { ...s, passwordHash, status: StaffStatus.ACTIVE },
     });
     staff[s.email] = row;
     // Seed each staff member's permission set from their role's preset —
     // matches applyRolePreset's "replaces the current set" semantics.
-    await prisma.permissionGrant.deleteMany({ where: { staffId: row.id } });
-    await prisma.permissionGrant.createMany({
-      data: ROLE_PRESETS[s.role].map((permission) => ({ staffId: row.id, permission, granted: true })),
+    // Self-granted: there is no earlier admin to attribute a fresh seed
+    // account's own starting permissions to.
+    await prisma.staffPermission.deleteMany({ where: { staffId: row.id } });
+    await prisma.staffPermission.createMany({
+      data: ROLE_PRESETS[s.role].map((permission) => ({ staffId: row.id, permission, grantedByStaffId: row.id })),
     });
   }
+  const registrar = staff["b.eze@lavelle.ng"]!;
   const academicAdmin = staff["k.balogun@lavelle.ng"]!;
   const faculty = staff["t.nwachukwu@lavelle.ng"]!;
+  const supportAgent = staff["h.suleiman@lavelle.ng"]!;
 
   // ── Grade bands (Slice 05) — DATA, not constants (rule 2), so an
   // institution can change its scale without a migration. effectiveFrom
@@ -1084,7 +1094,7 @@ async function main() {
   // enrolment yet — ready to browse the catalogue and enrol for real
   // (Slice 03's seed requirement). Named for the finance ledger design
   // reference's own "payment still pending" candidate.
-  await prisma.candidate.upsert({
+  const ngoziAdeleke = await prisma.candidate.upsert({
     where: { email: "n.adeleke@example.com" },
     update: {},
     create: {
@@ -1302,6 +1312,112 @@ async function main() {
     },
   });
   await prisma.certificate.update({ where: { id: revoked.id }, data: { supersededById: reissued.id } });
+
+  // ── Slice 08: support desk, notes, announcements ────────────────────
+  // Guarded on an existing-rows check (like GradeBandDefinition above) —
+  // these have no natural unique key to upsert against.
+  const existingSupportRequests = await prisma.supportRequest.count();
+  if (existingSupportRequests === 0) {
+    await prisma.supportRequest.create({
+      data: {
+        candidateId: chiamaka.id,
+        subject: "Certificate shows my maiden name",
+        category: RequestCategory.OTHER,
+        body: "My certificate for IRP-101 has my maiden name on it — I updated my profile to my married name before the exam. Can this be corrected?",
+        status: "OPEN",
+      },
+    });
+
+    const inProgress = await prisma.supportRequest.create({
+      data: {
+        candidateId: ngoziAdeleke.id,
+        subject: "Payment not reflecting on my account",
+        category: RequestCategory.PAYMENT,
+        body: "I paid the ELR-201 fee via bank transfer three days ago but my dashboard still shows the programme as not enrolled.",
+        status: "IN_PROGRESS",
+        assignedStaffId: registrar.id,
+        firstRespondedAt: new Date("2026-08-05T10:00:00Z"),
+      },
+    });
+    await prisma.supportMessage.create({
+      data: {
+        requestId: inProgress.id,
+        authorCandidateId: ngoziAdeleke.id,
+        body: "I paid the ELR-201 fee via bank transfer three days ago but my dashboard still shows the programme as not enrolled.",
+        createdAt: new Date("2026-08-04T09:00:00Z"),
+      },
+    });
+    await prisma.supportMessage.create({
+      data: {
+        requestId: inProgress.id,
+        authorStaffId: registrar.id,
+        body: "Thanks for flagging this — I can see the transfer landed but wasn't matched automatically. Confirming manually now, you should see it reflected within the hour.",
+        createdAt: new Date("2026-08-05T10:00:00Z"),
+      },
+    });
+
+    const resolved = await prisma.supportRequest.create({
+      data: {
+        candidateId: chiamaka.id,
+        subject: "How do I download my ID card?",
+        category: RequestCategory.TECHNICAL,
+        body: "Where on the dashboard can I find my candidate ID card?",
+        status: "RESOLVED",
+        assignedStaffId: supportAgent.id,
+        firstRespondedAt: new Date("2026-07-20T14:00:00Z"),
+        resolvedAt: new Date("2026-07-20T14:15:00Z"),
+      },
+    });
+    await prisma.supportMessage.create({
+      data: {
+        requestId: resolved.id,
+        authorCandidateId: chiamaka.id,
+        body: "Where on the dashboard can I find my candidate ID card?",
+        createdAt: new Date("2026-07-20T13:50:00Z"),
+      },
+    });
+    await prisma.supportMessage.create({
+      data: {
+        requestId: resolved.id,
+        authorStaffId: supportAgent.id,
+        body: "It's under Dashboard > My Enrolment > ID Card — you can download a PDF from there.",
+        createdAt: new Date("2026-07-20T14:15:00Z"),
+      },
+    });
+  }
+
+  const existingNotes = await prisma.candidateNote.count();
+  if (existingNotes === 0) {
+    await prisma.candidateNote.create({
+      data: {
+        candidateId: chiamaka.id,
+        authorStaffId: registrar.id,
+        body: "Confirmed by phone that the certificate name correction is a legitimate request — marriage certificate sighted.",
+      },
+    });
+  }
+
+  const existingAnnouncements = await prisma.announcement.count();
+  if (existingAnnouncements === 0) {
+    const announcement = await prisma.announcement.create({
+      data: {
+        title: "September 2026 intake now open",
+        body: "Applications for the September 2026 intake are now open across all Foundation and Advanced tier programmes. Early enrolment closes 31 August.",
+        audienceFilter: { status: "ENROLLED" },
+        channels: ["IN_APP", "EMAIL"],
+        state: "SENT",
+        sentAt: new Date("2026-08-01T09:00:00Z"),
+        recipientCount: 1,
+        createdByStaffId: registrar.id,
+      },
+    });
+    await prisma.announcementDelivery.createMany({
+      data: [
+        { announcementId: announcement.id, candidateId: chiamaka.id, channel: "IN_APP", deliveredAt: new Date("2026-08-01T09:00:01Z") },
+        { announcementId: announcement.id, candidateId: chiamaka.id, channel: "EMAIL", deliveredAt: new Date("2026-08-01T09:00:05Z") },
+      ],
+    });
+  }
 
   console.log(`Seeded. Demo password for every account: ${DEMO_PASSWORD}`);
   console.log(

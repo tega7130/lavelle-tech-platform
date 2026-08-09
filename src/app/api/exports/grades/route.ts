@@ -19,7 +19,7 @@ function csvEscape(value: string): string {
 export async function GET(request: NextRequest) {
   let staff;
   try {
-    staff = await requireStaffPermission(Permission.EXPORT_DATA);
+    staff = await requireStaffPermission(Permission.MARK_SUBMISSIONS);
   } catch {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }

@@ -20,7 +20,7 @@ const bodySchema = z.object({
 export async function POST(request: NextRequest) {
   let staff;
   try {
-    staff = await requireStaffPermission(Permission.GRADE_ASSESSMENTS);
+    staff = await requireStaffPermission(Permission.MARK_SUBMISSIONS);
   } catch {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
