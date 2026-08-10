@@ -7,7 +7,7 @@ import { Card, CardKicker } from "@/components/ui/card";
 export default async function AdminOverviewPage() {
   const user = await requireStaffSession();
   const permissions = new Set(user.permissions);
-  const [overview, activity] = await Promise.all([getAdminOverview(permissions), getRecentActivity(10)]);
+  const [overview, activity] = await Promise.all([getAdminOverview(permissions), getRecentActivity(permissions, 10)]);
 
   const kpis = [
     { label: "Candidates", value: overview.candidateCount.toLocaleString() },

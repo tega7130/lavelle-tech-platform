@@ -6,6 +6,9 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/cn";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { AdminNavIcon, ChevronLeftIcon, ChevronRightIcon } from "@/components/icons";
+import { Dialog } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { staffSignOut } from "@/app/actions/staff-auth";
 
 export interface AdminNavItem {
   key: string;
@@ -74,6 +77,13 @@ export interface AdminShellProps {
 export function AdminShell({ staff, crumb, headerTag, children }: AdminShellProps) {
   const pathname = usePathname();
   const [railOpen, setRailOpen] = React.useState(true);
+  const [signOutOpen, setSignOutOpen] = React.useState(false);
+  const [signingOut, setSigningOut] = React.useState(false);
+
+  async function confirmSignOut() {
+    setSigningOut(true);
+    await staffSignOut();
+  }
 
   let resolvedCrumb = crumb;
   if (!resolvedCrumb) {
@@ -189,13 +199,45 @@ export function AdminShell({ staff, crumb, headerTag, children }: AdminShellProp
             {staff.initials}
           </div>
           {railOpen && (
-            <div className="min-w-0">
-              <div className="text-[13px]">{staff.name}</div>
-              <div className="text-[11px] text-neutral-500">{staff.role}</div>
-            </div>
+            <>
+              <div className="min-w-0 flex-1">
+                <div className="text-[13px]">{staff.name}</div>
+                <div className="text-[11px] text-neutral-500">{staff.role}</div>
+              </div>
+              <button
+                onClick={() => setSignOutOpen(true)}
+                aria-label="Sign out"
+                title="Sign out"
+                className="flex-none w-7 h-7 rounded-md border border-divider bg-bg text-neutral-600 flex items-center justify-center hover:bg-neutral-100 cursor-pointer"
+              >
+                <svg viewBox="0 0 18 18" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M7 15.5H4a1.5 1.5 0 0 1-1.5-1.5v-10A1.5 1.5 0 0 1 4 2.5h3" />
+                  <path d="M12 12.5 15.5 9 12 5.5" />
+                  <path d="M15.5 9H7" />
+                </svg>
+              </button>
+            </>
           )}
         </div>
       </aside>
+
+      <Dialog
+        open={signOutOpen}
+        onClose={() => setSignOutOpen(false)}
+        title="Sign out of the console?"
+        actions={
+          <>
+            <Button variant="secondary" onClick={() => setSignOutOpen(false)}>
+              Stay signed in
+            </Button>
+            <Button variant="primary" disabled={signingOut} onClick={confirmSignOut}>
+              {signingOut ? "Signing out…" : "Sign out"}
+            </Button>
+          </>
+        }
+      >
+        Any unsaved work in an open editor will be lost. You will need your staff email and password to sign in again.
+      </Dialog>
 
       <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
         <header className="flex-none flex items-center justify-between gap-[var(--space-4)] px-[var(--space-6)] py-[var(--space-4)] border-b border-divider">

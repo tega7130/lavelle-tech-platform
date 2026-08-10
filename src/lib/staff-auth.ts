@@ -1,16 +1,13 @@
 import "server-only";
-import { auth } from "@/lib/auth";
+import { getCurrentStaff, type CurrentStaff } from "@/lib/staff-session";
 import { Permission } from "@/generated/prisma/client";
 import { PermissionDeniedError } from "@/lib/rbac";
 
-export interface StaffSessionUser {
-  userType: "staff";
-  id: string;
-  name: string;
-  email: string;
-  role: string;
-  permissions: Permission[];
-}
+// Slice 10: reads the DB-backed staff session (staff-session.ts), not
+// NextAuth — every one of this file's ~30 call sites across the admin
+// console is untouched by that swap, since requireStaffSession /
+// requireStaffPermission keep the exact same signatures and shape.
+export type StaffSessionUser = CurrentStaff;
 
 export class NotStaffError extends Error {
   constructor() {
@@ -20,19 +17,19 @@ export class NotStaffError extends Error {
 }
 
 export async function requireStaffSession(): Promise<StaffSessionUser> {
-  const session = await auth();
-  if (!session || session.user.userType !== "staff") throw new NotStaffError();
-  return session.user as StaffSessionUser;
+  const staff = await getCurrentStaff();
+  if (!staff) throw new NotStaffError();
+  return staff;
 }
 
 /**
- * Slice 02's own instruction: "Read the permission set from the staff
- * session, not from a role string" — the JWT already carries the staff
- * member's flattened permission list (set at sign-in from
- * StaffPermission), so this checks that array directly rather than
- * re-querying the database or special-casing role names. Presence is the
- * authority (Slice 08 rule 1) — super admins hold all 17 rows for real,
- * so there is no separate bypass check here.
+ * "Read the permission set from the staff session, not from a role
+ * string" — the session already carries the staff member's flattened
+ * permission list (read from StaffPermission on every session lookup),
+ * so this checks that array directly rather than re-querying the
+ * database or special-casing role names. Presence is the authority
+ * (Slice 08 rule 1) — super admins hold all 17 rows for real, so there
+ * is no separate bypass check here.
  */
 export async function requireStaffPermission(permission: Permission): Promise<StaffSessionUser> {
   const user = await requireStaffSession();

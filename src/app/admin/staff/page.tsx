@@ -4,6 +4,7 @@ import { Table, Thead, Tbody, Tr, Th, Td } from "@/components/ui/table";
 import { Tag, type TagVariant } from "@/components/ui/tag";
 import { ROLE_LABELS, ROLE_COLORS } from "@/lib/permissions";
 import { InviteStaffButton } from "@/components/admin/invite-staff-button";
+import { ResendInvitationButton } from "@/components/admin/resend-invitation-button";
 
 const STATUS_TAG: Record<string, TagVariant | "success" | "warning" | "danger"> = {
   ACTIVE: "success",
@@ -35,6 +36,7 @@ export default async function StaffPage() {
                 <Th>Role</Th>
                 <Th>Access</Th>
                 <Th>Status</Th>
+                <Th>Last active</Th>
                 <Th />
               </Tr>
             </Thead>
@@ -59,10 +61,20 @@ export default async function StaffPage() {
                   <Td>
                     <Tag variant={STATUS_TAG[s.status] as TagVariant}>{s.status}</Tag>
                   </Td>
+                  <Td className="text-[12.5px] text-neutral-600 whitespace-nowrap">
+                    {s.status === "INVITED"
+                      ? "Awaiting activation"
+                      : s.lastActiveAt
+                        ? new Date(s.lastActiveAt).toLocaleString("en-NG", { dateStyle: "medium", timeStyle: "short" })
+                        : "—"}
+                  </Td>
                   <Td className="text-right pr-[var(--space-4)]">
-                    <Link href={`/admin/staff/${s.id}`} className="text-accent text-xs">
-                      Manage
-                    </Link>
+                    <div className="flex items-center justify-end gap-3">
+                      {s.status === "INVITED" && <ResendInvitationButton staffId={s.id} />}
+                      <Link href={`/admin/staff/${s.id}`} className="text-accent text-xs">
+                        Manage
+                      </Link>
+                    </div>
                   </Td>
                 </Tr>
               ))}

@@ -140,12 +140,19 @@ enum NotificationCategory {
   PROGRAMME
   ASSESSMENT
   FINANCE
+  SUPPORT
 }
 
+// Slice 10: staffId added so a support-request assignment can notify the
+// assignee through the same table/read path as every candidate
+// notification, rather than a parallel staff-only inbox. Same
+// exactly-one-owner CHECK constraint as Session.
 model Notification {
-  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  candidateId String    @db.Uuid
-  candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  id          String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  candidateId String?    @db.Uuid
+  candidate   Candidate? @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  staffId     String?
+  staff       Staff?     @relation("StaffNotifications", fields: [staffId], references: [id], onDelete: Cascade)
 
   category NotificationCategory
   title    String               @db.VarChar(160)
@@ -155,6 +162,7 @@ model Notification {
   createdAt DateTime @default(now())
 
   @@index([candidateId, createdAt(sort: Desc)])
+  @@index([staffId, createdAt(sort: Desc)])
 }
 
 // Database-backed candidate sessions — deliberately NOT a stateless JWT.
@@ -163,21 +171,30 @@ model Notification {
 // (src/lib/candidate-session.ts): revokedAt IS NOT NULL or
 // accountStatus = SUSPENDED both mean signed out. Cookie carries the
 // opaque plaintext token; only its hash is ever persisted.
+// Slice 10: one session table for both applications, not two — candidate
+// and staff sign-in remain entirely separate cookies/paths (see
+// staff-session.ts's header), but they share this table, its revocation
+// path, and its expiry semantics. Exactly one of candidateId/staffId is
+// non-null (enforced by a CHECK constraint hand-added in the migration —
+// Prisma has no first-class syntax for it yet).
 model Session {
-  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  candidateId String    @db.Uuid
-  candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  id          String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  candidateId String?    @db.Uuid
+  candidate   Candidate? @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  staffId     String?
+  staff       Staff?     @relation("StaffSessions", fields: [staffId], references: [id], onDelete: Cascade)
 
   tokenHash String   @unique
   expiresAt DateTime
 
-  revokedAt DateTime? // set on logout, on suspension, on password change
+  revokedAt DateTime? // set on logout, on suspension/deactivation, on password change
   userAgent String?
   ipAddress String?   @db.Inet
 
   createdAt DateTime @default(now())
 
   @@index([candidateId, revokedAt])
+  @@index([staffId, revokedAt])
 }
 
 // ─── Slice 08: Staff, roles & permissions ────────────────────────────────
@@ -248,7 +265,11 @@ model Staff {
   role   StaffRole
   status StaffStatus @default(INVITED)
 
-  passwordHash String
+  // Slice 10: nullable — a freshly INVITED account has no password until
+  // setStaffPassword activates it. INVITED now means "cannot sign in, no
+  // password set" (README A3), not just a display tag.
+  passwordHash String?
+  activatedAt  DateTime?
 
   invitedByStaffId String?
   invitedBy        Staff?    @relation("StaffInvitedBy", fields: [invitedByStaffId], references: [id])
@@ -280,8 +301,38 @@ model Staff {
   publishedListings       ProgrammeListing[]    @relation("ListingPublishedBy")
   enquiriesHandled        ContactEnquiry[]      @relation("EnquiryHandledBy")
 
+  sessions           Session[]              @relation("StaffSessions")
+  notifications      Notification[]         @relation("StaffNotifications")
+  invitationTokens   StaffInvitationToken[] @relation("StaffInvitationTokenHolder")
+  sentInvitations    StaffInvitationToken[] @relation("StaffInvitationTokenSender")
+  assignedByRequests SupportRequest[]       @relation("SupportRequestAssignedBy")
+  resolvedRequests   SupportRequest[]       @relation("SupportRequestResolvedBy")
+
   @@index([role])
   @@index([status])
+}
+
+// Slice 10 — mirrors EmailVerificationToken (Slice 01) deliberately:
+// same shape, same rules (hash stored, plaintext sent, single use,
+// 48-hour expiry), different subject.
+model StaffInvitationToken {
+  id      String @id @default(uuid())
+  staffId String
+  staff   Staff  @relation("StaffInvitationTokenHolder", fields: [staffId], references: [id], onDelete: Cascade)
+
+  tokenHash  String
+  expiresAt  DateTime
+  consumedAt DateTime?
+
+  // Null for a self-service password reset (requestStaffPasswordReset) —
+  // there is no inviter, the staff member requested it themselves. Set
+  // for a real invitation, where the set-password page names the inviter.
+  invitedByStaffId String?
+  invitedByStaff   Staff?  @relation("StaffInvitationTokenSender", fields: [invitedByStaffId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([staffId, consumedAt])
 }
 
 // Presence IS the grant (rule 1: "the grant is the authority") — no soft
@@ -1616,6 +1667,15 @@ enum RequestStatus {
   RESOLVED
 }
 
+// Slice 10: each state carries a stated response expectation in the UI
+// copy (five working days / one working day / four hours) — never a
+// bare label (README B5 rule 4).
+enum RequestPriority {
+  LOW
+  NORMAL
+  URGENT
+}
+
 // Slice 09: candidateId is nullable because a marketing-site enquiry
 // (submitEnquiry) has no candidate account to attach to — the visitor is
 // anonymous. guestName/guestEmail carry the enquirer's own details for
@@ -1632,10 +1692,21 @@ model SupportRequest {
   category RequestCategory
   body     String
 
-  status RequestStatus @default(OPEN)
+  status   RequestStatus   @default(OPEN)
+  priority RequestPriority @default(NORMAL)
 
-  assignedStaffId String?
-  assignedStaff   Staff?  @relation("SupportRequestAssignedTo", fields: [assignedStaffId], references: [id])
+  assignedStaffId   String?
+  assignedStaff     Staff?    @relation("SupportRequestAssignedTo", fields: [assignedStaffId], references: [id])
+  // Slice 10: who assigned it — separate from assignedStaffId (who it's
+  // assigned TO) because the two-key resolution rule needs both:
+  // assignee or assigner may resolve it, nobody else.
+  assignedByStaffId String?
+  assignedByStaff   Staff?    @relation("SupportRequestAssignedBy", fields: [assignedByStaffId], references: [id])
+  assignedAt        DateTime?
+  assignmentNote    String?
+
+  resolvedByStaffId String?
+  resolvedByStaff   Staff?  @relation("SupportRequestResolvedBy", fields: [resolvedByStaffId], references: [id])
 
   // Set on the first SupportMessage with a non-null authorStaffId — an
   // admin-overview KPI ("support requests unanswered over 24h") reads

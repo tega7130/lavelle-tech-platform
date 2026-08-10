@@ -73,9 +73,16 @@ export async function getAdminOverview(staffPermissions: Set<Permission>) {
   };
 }
 
-/** Platform-wide recent activity — the last N audit events, any subject. */
-export async function getRecentActivity(limit = 15) {
-  await requireStaffPermission(Permission.VIEW_AUDIT_LOG);
+/**
+ * Platform-wide recent activity — the last N audit events, any subject.
+ * Gated on VIEW_AUDIT_LOG like every other Overview widget (the same
+ * graceful per-permission pattern as getAdminOverview above) — a Faculty
+ * or Support account can always reach this page (VIEW_CANDIDATES is
+ * universal), but neither role holds VIEW_AUDIT_LOG, so this returns an
+ * empty list for them rather than throwing.
+ */
+export async function getRecentActivity(staffPermissions: Set<Permission>, limit = 15) {
+  if (!staffPermissions.has(Permission.VIEW_AUDIT_LOG)) return [];
   return prisma.auditEvent.findMany({
     orderBy: { createdAt: "desc" },
     take: limit,

@@ -1,0 +1,62 @@
+"use server";
+
+import { redirect } from "next/navigation";
+import { Permission } from "@/generated/prisma/client";
+import { getClientIp, getUserAgent } from "@/lib/request-info";
+import { setStaffSessionCookie, destroyStaffSession } from "@/lib/staff-session";
+import { requireStaffPermission } from "@/lib/staff-auth";
+import * as core from "@/lib/staff-auth-actions";
+import { staffSignInSchema, staffSetPasswordSchema, fieldErrors } from "@/lib/validation/staff";
+import type { FormActionState } from "@/lib/action-state";
+
+function formToObject(formData: FormData): Record<string, string> {
+  const obj: Record<string, string> = {};
+  for (const [k, v] of formData.entries()) if (typeof v === "string" && v !== "") obj[k] = v;
+  return obj;
+}
+
+export async function staffSignIn(_prev: FormActionState, formData: FormData): Promise<FormActionState> {
+  const raw = formToObject(formData);
+  const parsed = staffSignInSchema.safeParse(raw);
+  if (!parsed.success) return { errors: fieldErrors(parsed.error), values: raw };
+
+  const ip = await getClientIp();
+  const userAgent = await getUserAgent();
+  const result = await core.staffSignInCore(parsed.data.email, parsed.data.password, ip, userAgent);
+  if (!result.ok) return { values: raw, message: result.message };
+
+  await setStaffSessionCookie(result.sessionToken);
+  redirect("/admin/overview");
+}
+
+export async function staffSignOut() {
+  await destroyStaffSession();
+  redirect("/staff/sign-in?signedOut=1");
+}
+
+export async function setStaffPassword(_prev: FormActionState, formData: FormData): Promise<FormActionState> {
+  const raw = formToObject(formData);
+  const parsed = staffSetPasswordSchema.safeParse(raw);
+  if (!parsed.success) return { errors: fieldErrors(parsed.error), values: raw };
+
+  const ip = await getClientIp();
+  const userAgent = await getUserAgent();
+  const result = await core.setStaffPasswordCore(parsed.data.token, parsed.data.password, ip, userAgent);
+  if (!result.ok) return { message: "This link has expired or was already used." };
+
+  await setStaffSessionCookie(result.sessionToken);
+  // Not a redirect() — the set-password page shows an activation
+  // confirmation (role, who invited them) before the staff member moves
+  // on themselves; the session cookie is already live.
+  return { ok: true, data: { name: result.name, role: result.role } };
+}
+
+export async function resendStaffInvitation(staffId: string) {
+  const actor = await requireStaffPermission(Permission.MANAGE_STAFF);
+  await core.resendStaffInvitationCore(staffId, actor.id);
+}
+
+export async function requestStaffPasswordReset(email: string): Promise<void> {
+  const ip = await getClientIp();
+  await core.requestStaffPasswordResetCore(email.trim().toLowerCase(), ip);
+}

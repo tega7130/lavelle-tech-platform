@@ -9,6 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/field";
 import { applyRolePresetAction, setPermissionAction, deactivateStaffAction } from "@/app/actions/staff";
+import { ResendInvitationButton } from "@/components/admin/resend-invitation-button";
 import { PERMISSIONS, PERMISSION_CATEGORIES, ROLE_LABELS, ROLE_COLORS } from "@/lib/permissions";
 import type { StaffRole, Permission } from "@/lib/permissions";
 
@@ -77,6 +78,12 @@ export function StaffPermissionEditor({
         <div>
           <h1 className="font-heading text-xl mb-0">{staff.name}</h1>
           <div className="text-neutral-600 text-[12.5px]">{staff.email}</div>
+          {staff.status === "INVITED" && (
+            <div className="mt-1.5 flex items-center gap-2.5 text-[12px]">
+              <span className="text-[#a16207]">Awaiting activation</span>
+              <ResendInvitationButton staffId={staff.id} />
+            </div>
+          )}
         </div>
         {staff.status !== "DEACTIVATED" && (
           <Button variant="danger" className="h-[31px] px-[11px] text-xs" disabled={locked} onClick={() => setDeactivating(true)}>

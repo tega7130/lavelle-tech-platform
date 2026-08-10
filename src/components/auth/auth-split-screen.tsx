@@ -3,12 +3,18 @@ import * as React from "react";
 export interface AuthSplitScreenProps {
   kicker: string;
   title: string;
-  body: string;
+  body?: string;
   /** The ladder (Register) or assurances list (Sign in) — brand-panel content below the intro copy. */
   children?: React.ReactNode;
   topRight: React.ReactNode;
   formChildren: React.ReactNode;
   formMaxWidth?: string;
+  /** Overrides the panel's background — the admin console uses a darker ground than the candidate portal so the two are never confused (Slice 10 README A6). Defaults to the brand's standard institutional gradient. */
+  panelClassName?: string;
+  /** The small caps line under the wordmark — "Professional Specialization" for candidates, "Administration" for staff. */
+  logoSubtitle?: string;
+  /** Overrides the panel's bottom-left footer row. Defaults to the candidate portal's own. */
+  footer?: React.ReactNode;
 }
 
 /** Shared split-screen shell for Register/Sign in — the deep-blue institutional panel plus the form column. */
@@ -20,10 +26,15 @@ export function AuthSplitScreen({
   topRight,
   formChildren,
   formMaxWidth = "452px",
+  panelClassName = "lv-gradient",
+  logoSubtitle = "Professional Specialization",
+  footer,
 }: AuthSplitScreenProps) {
   return (
     <div className="flex min-h-screen bg-surface text-text font-body max-[900px]:flex-col">
-      <div className="relative flex w-[42%] min-w-[360px] flex-none flex-col overflow-hidden p-12 text-white lv-gradient max-[900px]:w-auto max-[900px]:min-h-0 max-[900px]:px-6 max-[900px]:py-7">
+      <div
+        className={`relative flex w-[42%] min-w-[360px] flex-none flex-col overflow-hidden p-12 text-white max-[900px]:w-auto max-[900px]:min-h-0 max-[900px]:px-6 max-[900px]:py-7 ${panelClassName}`}
+      >
         <div
           className="pointer-events-none absolute -top-[140px] -right-[120px] h-[420px] w-[420px] rounded-full"
           style={{ background: "radial-gradient(circle, rgba(22,104,227,.42), rgba(22,104,227,0) 70%)" }}
@@ -39,7 +50,7 @@ export function AuthSplitScreen({
           </div>
           <div>
             <div className="font-heading text-lg font-bold tracking-[0.02em]">LAVELLE INSTITUTE</div>
-            <div className="text-[10px] tracking-[0.14em] text-white/62 uppercase">Professional Specialization</div>
+            <div className="text-[10px] tracking-[0.14em] text-white/62 uppercase">{logoSubtitle}</div>
           </div>
         </div>
 
@@ -48,14 +59,18 @@ export function AuthSplitScreen({
           <h1 className="mt-3.5 max-w-[20ch] text-[34px] leading-[1.18] tracking-[-0.02em] text-white text-balance">
             {title}
           </h1>
-          <p className="mt-4 max-w-[42ch] text-sm leading-[1.65] text-white/72 text-pretty">{body}</p>
+          {body && <p className="mt-4 max-w-[42ch] text-sm leading-[1.65] text-white/72 text-pretty">{body}</p>}
 
           {children}
         </div>
 
         <div className="relative mt-auto flex gap-6 pt-12 text-[11px] text-white/45 max-[900px]:hidden">
-          <span>Intakes: January · April · September</span>
-          <span>candidates@lavelle.ng</span>
+          {footer ?? (
+            <>
+              <span>Intakes: January · April · September</span>
+              <span>candidates@lavelle.ng</span>
+            </>
+          )}
         </div>
       </div>
 

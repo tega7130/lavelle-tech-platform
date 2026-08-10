@@ -3,6 +3,7 @@
 // fees, dates, copy). Run via `npx prisma migrate dev` (auto-seeds) or
 // `npx prisma db seed`.
 import bcrypt from "bcryptjs";
+import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { PrismaPg } from "@prisma/adapter-pg";
@@ -58,6 +59,13 @@ const DEMO_PASSWORD = "Lavelle2026!";
 
 async function hash(plain: string) {
   return bcrypt.hash(plain, 10);
+}
+
+// Mirrors staff-invitation.ts's hashToken exactly (sha256 of the
+// plaintext) — not imported directly since that file is "server-only"
+// and throws outside Next's own bundler, same reason as storage.ts above.
+function hashInvitationToken(token: string) {
+  return crypto.createHash("sha256").update(token).digest("hex");
 }
 
 function slugify(name: string) {
@@ -149,6 +157,45 @@ async function main() {
       data: ROLE_PRESETS[s.role].map((permission) => ({ staffId: row.id, permission, grantedByStaffId: row.id })),
     });
   }
+  // Slice 10: one INVITED account with a live, unexpired, unconsumed
+  // token — so the Staff screen's amber "Invited" tag, "Awaiting
+  // activation" and "Resend invitation" all have something real to show,
+  // and the activation flow (/staff/set-password) can be exercised
+  // end-to-end against a genuine seeded link. Also holds respond_support,
+  // giving the assign dialog a third assignable name.
+  const invitedEmail = "n.balogun@lavelle.ng";
+  const invitedStaff = await prisma.staff.upsert({
+    where: { email: invitedEmail },
+    update: {},
+    create: {
+      email: invitedEmail,
+      name: "Ngozi Balogun",
+      jobTitle: "Support Agent",
+      department: "Support",
+      role: StaffRole.SUPPORT,
+      status: StaffStatus.INVITED,
+      passwordHash: null,
+      invitedByStaffId: staff["a.obi@lavelle.ng"]!.id,
+    },
+  });
+  await prisma.staffPermission.deleteMany({ where: { staffId: invitedStaff.id } });
+  await prisma.staffPermission.createMany({
+    data: ROLE_PRESETS[StaffRole.SUPPORT].map((permission) => ({ staffId: invitedStaff.id, permission, grantedByStaffId: staff["a.obi@lavelle.ng"]!.id })),
+  });
+  const existingInvitationTokens = await prisma.staffInvitationToken.count({ where: { staffId: invitedStaff.id } });
+  if (existingInvitationTokens === 0) {
+    const invitationToken = crypto.randomBytes(32).toString("base64url");
+    await prisma.staffInvitationToken.create({
+      data: {
+        staffId: invitedStaff.id,
+        invitedByStaffId: staff["a.obi@lavelle.ng"]!.id,
+        tokenHash: hashInvitationToken(invitationToken),
+        expiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
+      },
+    });
+    console.log(`[seed] Ngozi Balogun's activation link: http://localhost:3000/api/staff/activate?token=${invitationToken}`);
+  }
+
   const registrar = staff["b.eze@lavelle.ng"]!;
   const academicAdmin = staff["k.balogun@lavelle.ng"]!;
   const faculty = staff["t.nwachukwu@lavelle.ng"]!;

@@ -1,13 +1,13 @@
 import { redirect } from "next/navigation";
-import { auth } from "@/lib/auth";
+import { getCurrentStaff } from "@/lib/staff-session";
 import { ROLE_LABELS } from "@/lib/permissions";
 import { AdminShell } from "@/components/shell/admin-shell";
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
-  const session = await auth();
-  if (!session || session.user.userType !== "staff") redirect("/");
+  const staff = await getCurrentStaff();
+  if (!staff) redirect("/staff/sign-in");
 
-  const initials = session.user.name
+  const initials = staff.name
     .split(" ")
     .map((part) => part[0])
     .join("")
@@ -16,7 +16,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   return (
     <AdminShell
-      staff={{ name: session.user.name, initials, role: ROLE_LABELS[session.user.role] }}
+      staff={{ name: staff.name, initials, role: ROLE_LABELS[staff.role] }}
       headerTag="September 2026 intake"
     >
       {children}

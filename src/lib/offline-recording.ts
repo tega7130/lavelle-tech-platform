@@ -25,9 +25,10 @@ export interface OfflineRecordingInput {
  * enrol on a part payment.
  *
  * Deliberately kept free of any staff-auth import (unlike the Server
- * Actions that call it) — pulling in staff-auth.ts drags in next-auth,
- * which breaks importing this function from a plain Vitest test. The
- * permission check belongs to the caller, same as confirmPayment itself.
+ * Actions that call it) — pulling in staff-auth.ts drags in next/headers
+ * (via staff-session.ts's cookies() read), which breaks importing this
+ * function from a plain Vitest test. The permission check belongs to
+ * the caller, same as confirmPayment itself.
  */
 export async function applyOfflineRecording(
   paymentId: string,

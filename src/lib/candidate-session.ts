@@ -157,7 +157,7 @@ export async function resolveCandidateFromToken(token: string): Promise<CurrentC
     where: { tokenHash },
     include: { candidate: { include: { profile: true } } },
   });
-  if (!session) return null;
+  if (!session || !session.candidate) return null;
   if (session.revokedAt || session.expiresAt < new Date()) return null;
 
   const candidate = session.candidate;

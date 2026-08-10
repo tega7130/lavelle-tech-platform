@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { Permission } from "@/generated/prisma/client";
 import { requireStaffPermission } from "@/lib/staff-auth";
-import { auth } from "@/lib/auth";
+import { getCurrentStaff } from "@/lib/staff-session";
 import { getCurrentCandidate } from "@/lib/candidate-session";
 import { getClientIp } from "@/lib/request-info";
 import { prisma } from "@/lib/prisma";
@@ -15,14 +15,13 @@ import { listCertificates, listCertificateTemplates, type CertificateFilters } f
 /**
  * Either the certificate's own candidate, or any signed-in staff member
  * (viewing from the admin register) may mint a download link — a plain
- * NextAuth peek rather than requireStaffPermission, since no specific
+ * session peek rather than requireStaffPermission, since no specific
  * permission is named for "can staff view a certificate PDF" and the
  * link itself carries no more authority than a 5-minute signed GET.
  */
 export async function getCertificateDownloadUrlAction(certificateId: string) {
-  const [candidate, session] = await Promise.all([getCurrentCandidate(), auth()]);
-  const isStaff = !!session?.user && session.user.userType === "staff";
-  if (!candidate && !isStaff) throw new Error("Sign in required.");
+  const [candidate, staff] = await Promise.all([getCurrentCandidate(), getCurrentStaff()]);
+  if (!candidate && !staff) throw new Error("Sign in required.");
 
   if (candidate) {
     const certificate = await prisma.certificate.findUniqueOrThrow({ where: { id: certificateId } });

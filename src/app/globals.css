@@ -250,6 +250,12 @@
     background: linear-gradient(158deg, #0c356f 0%, #08234a 48%, #061529 100%);
   }
 
+  /* Slice 10: darker ground for staff auth screens (sign-in, set password)
+     so the console is never visually confused with the candidate portal. */
+  .lv-gradient-dark {
+    background: linear-gradient(158deg, #0b1a33 0%, #08152b 48%, #050e1f 100%);
+  }
+
   /* Loading skeleton — Lavelle States.dc.html's shimmer pattern (a shape
      whose content is known but not yet loaded, never a spinner). */
   @keyframes lv-shimmer {

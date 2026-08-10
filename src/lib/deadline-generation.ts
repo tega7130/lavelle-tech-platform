@@ -3,11 +3,11 @@ import type { Prisma, PrismaClient } from "@/generated/prisma/client";
 
 // No "server-only" guard here, deliberately — matching src/lib/offline-recording.ts's
 // precedent. Importing anything with "server-only" (or anything that pulls in
-// staff-auth.ts/next-auth) breaks under plain Node/tsx (the seed script) and
-// under Vitest, both of which lack the bundler condition that turns "server-only"
-// into a no-op. Nothing client-side ever imports a raw DB-writing lib function
-// directly — Client Components only ever call a "use server" Action — so this
-// carries no real safety cost.
+// staff-auth.ts, which reads next/headers via staff-session.ts) breaks under
+// plain Node/tsx (the seed script) and under Vitest, both of which lack the
+// bundler condition that turns "server-only" into a no-op. Nothing client-side
+// ever imports a raw DB-writing lib function directly — Client Components only
+// ever call a "use server" Action — so this carries no real safety cost.
 
 type Db = PrismaClient | Prisma.TransactionClient;
 

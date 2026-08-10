@@ -1,17 +1,16 @@
-import crypto from "node:crypto";
 import { prisma } from "@/lib/prisma";
-import { hashPassword } from "@/lib/password";
 import { recordAuditEvent } from "@/lib/audit";
 import { ROLE_PRESETS } from "@/lib/permissions";
+import { createInvitationTokenRecord, logStaffInvitationEmail } from "@/lib/staff-invitation";
 import type { StaffRole } from "@/generated/prisma/client";
 
 /**
- * Creates the account in INVITED status with the role's preset applied.
- * There is no outbound-email infrastructure anywhere in this app (every
- * prior slice's "notification" is an in-app Notification row, never a
- * real email send) — so this stops at creating the account rather than
- * building a real invite-acceptance/password-set flow. Documented as
- * out of scope, not an oversight; see the Slice 08 closing summary.
+ * Creates the account in INVITED status with the role's preset applied,
+ * with no password (Slice 10: INVITED now means "cannot sign in, no
+ * password set" — see staff-auth.ts). A real StaffInvitationToken is
+ * issued in the same transaction and the invitation link is sent via the
+ * same dev-stand-in email path as every other "email" in this app
+ * (verification-token.ts's logVerificationEmail).
  */
 export async function inviteStaff(params: {
   invitedByStaffId: string;
@@ -21,10 +20,7 @@ export async function inviteStaff(params: {
   jobTitle?: string;
   department?: string;
 }) {
-  const temporaryPassword = crypto.randomBytes(24).toString("hex");
-  const passwordHash = await hashPassword(temporaryPassword);
-
-  return prisma.$transaction(async (tx) => {
+  const { staff, token } = await prisma.$transaction(async (tx) => {
     const staff = await tx.staff.create({
       data: {
         name: params.name,
@@ -32,7 +28,6 @@ export async function inviteStaff(params: {
         role: params.role,
         jobTitle: params.jobTitle,
         department: params.department,
-        passwordHash,
         status: "INVITED",
         invitedByStaffId: params.invitedByStaffId,
       },
@@ -40,6 +35,7 @@ export async function inviteStaff(params: {
     await tx.staffPermission.createMany({
       data: ROLE_PRESETS[params.role].map((permission) => ({ staffId: staff.id, permission, grantedByStaffId: params.invitedByStaffId })),
     });
+    const token = await createInvitationTokenRecord(tx, staff.id, params.invitedByStaffId);
     await recordAuditEvent(tx, {
       actorStaffId: params.invitedByStaffId,
       subjectType: "staff",
@@ -47,6 +43,9 @@ export async function inviteStaff(params: {
       action: "staff.invited",
       description: `Invited ${params.name} as ${params.role}`,
     });
-    return staff;
+    return { staff, token };
   });
+
+  logStaffInvitationEmail(staff.email, token);
+  return staff;
 }

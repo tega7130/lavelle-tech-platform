@@ -2,6 +2,7 @@ import "server-only";
 import { prisma } from "@/lib/prisma";
 import { Permission, StaffRole, StaffStatus } from "@/generated/prisma/client";
 import { ROLE_PRESETS, hasPermission } from "@/lib/permissions";
+import { revokeAllStaffSessions } from "@/lib/staff-session";
 
 export class PermissionDeniedError extends Error {
   constructor(permission: Permission) {
@@ -186,6 +187,10 @@ export async function deactivateStaff(params: { staffId: string; reason: string;
         await assertNotLastActiveSuperAdminTx(tx, staffId);
       }
       await tx.staff.update({ where: { id: staffId }, data: { status: StaffStatus.DEACTIVATED } });
+      // Slice 10 rule 6: deactivating must revoke live sessions immediately,
+      // not just block future sign-ins — the next request from an already
+      // signed-in browser must be treated as signed out.
+      await revokeAllStaffSessions(staffId, tx);
       await tx.auditEvent.create({
         data: {
           actorStaffId: actingStaffId,

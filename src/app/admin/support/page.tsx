@@ -11,6 +11,9 @@ const STATUS_TAG: Record<string, TagVariant | "success" | "warning" | "danger"> 
   RESOLVED: "success",
 };
 
+const PRIORITY_LABEL: Record<string, string> = { LOW: "Low", NORMAL: "Normal", URGENT: "Urgent" };
+const PRIORITY_TAG: Record<string, TagVariant | "success" | "warning" | "danger"> = { LOW: "neutral", NORMAL: "accent", URGENT: "danger" };
+
 const STATUS_FILTERS = [
   { value: undefined, label: "All" },
   { value: "OPEN", label: "Open" },
@@ -58,6 +61,7 @@ export default async function SupportPage({ searchParams }: { searchParams: Prom
                 <Th>Subject</Th>
                 <Th>Category</Th>
                 <Th>Assigned to</Th>
+                <Th>Priority</Th>
                 <Th>Status</Th>
                 <Th />
               </Tr>
@@ -72,6 +76,9 @@ export default async function SupportPage({ searchParams }: { searchParams: Prom
                   <Td className="font-medium">{r.subject}</Td>
                   <Td className="text-[12.5px] text-neutral-600">{r.category}</Td>
                   <Td className="text-[12.5px] text-neutral-600">{r.assignedStaff?.name ?? "Unassigned"}</Td>
+                  <Td>
+                    <Tag variant={PRIORITY_TAG[r.priority]}>{PRIORITY_LABEL[r.priority]}</Tag>
+                  </Td>
                   <Td>
                     <Tag variant={STATUS_TAG[r.status] as TagVariant}>{r.status.replace(/_/g, " ")}</Tag>
                   </Td>
