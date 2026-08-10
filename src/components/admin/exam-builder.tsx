@@ -113,6 +113,9 @@ export function ExamBuilder({ exams, bank: initialBank }: { exams: ExamListItem[
 
   const [windows, setWindows] = React.useState<ExamWindow[]>([]);
   const [releasingId, setReleasingId] = React.useState<string | null>(null);
+  const [capacityValue, setCapacityValue] = React.useState("");
+  const [uncapped, setUncapped] = React.useState(true);
+  const capacitySeeded = React.useRef(false);
 
   async function refreshBank() {
     const fresh = await listExamBankAction(bank.exam.id);
@@ -122,6 +125,24 @@ export function ExamBuilder({ exams, bank: initialBank }: { exams: ExamListItem[
   React.useEffect(() => {
     listExamWindowsAction(bank.exam.id).then(setWindows);
   }, [bank.exam.id]);
+
+  // Places available at this sitting (Slice 11 Part A) is a per-window
+  // field, but the rules panel edits it for the ONE window this builder
+  // is currently configuring — the soonest window still open for
+  // registration, or the most recent one if none is upcoming.
+  const currentWindow = React.useMemo(() => {
+    const now = Date.now();
+    const upcoming = windows.filter((w) => new Date(w.closesAt).getTime() >= now).sort((a, b) => new Date(a.opensAt).getTime() - new Date(b.opensAt).getTime());
+    return upcoming[0] ?? windows[0] ?? null;
+  }, [windows]);
+
+  React.useEffect(() => {
+    if (currentWindow && !capacitySeeded.current) {
+      capacitySeeded.current = true;
+      setUncapped(currentWindow.capacity == null);
+      setCapacityValue(currentWindow.capacity != null ? String(currentWindow.capacity) : "");
+    }
+  }, [currentWindow]);
 
   async function release(windowId: string) {
     setReleasingId(windowId);
@@ -210,7 +231,9 @@ export function ExamBuilder({ exams, bank: initialBank }: { exams: ExamListItem[
   async function saveRules() {
     setBusy(true);
     try {
-      await setExamRulesAction(bank.exam.id, rules);
+      const capacity = uncapped ? null : capacityValue.trim() ? Number(capacityValue) : null;
+      await setExamRulesAction(bank.exam.id, { ...rules, capacityWindowId: currentWindow?.id ?? null, capacity });
+      setWindows(await listExamWindowsAction(bank.exam.id));
       await refreshBank();
       router.refresh();
     } finally {
@@ -432,6 +455,38 @@ export function ExamBuilder({ exams, bank: initialBank }: { exams: ExamListItem[
                   onChange={(e) => setRules((r) => ({ ...r, feeMinor: Math.round(Number(e.target.value || 0) * 100) }))}
                   placeholder="Naira"
                 />
+              </div>
+              <div>
+                <Label>
+                  Places available{currentWindow ? ` — window opening ${new Date(currentWindow.opensAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}` : ""}
+                </Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="number"
+                    className="flex-1"
+                    value={capacityValue}
+                    disabled={uncapped || !currentWindow}
+                    placeholder="Uncapped"
+                    onChange={(e) => setCapacityValue(e.target.value)}
+                  />
+                  <label className="flex-none flex items-center gap-1.5 text-[12px] text-neutral-700 cursor-pointer whitespace-nowrap">
+                    <input
+                      type="checkbox"
+                      checked={uncapped}
+                      disabled={!currentWindow}
+                      onChange={(e) => setUncapped(e.target.checked)}
+                      className="w-[15px] h-[15px] flex-none accent-accent"
+                    />
+                    <span>Uncapped</span>
+                  </label>
+                </div>
+                <div className="text-neutral-500 text-[11.5px] mt-1.5 leading-snug">
+                  {!currentWindow
+                    ? "No window to configure yet."
+                    : uncapped
+                    ? "Any eligible candidate may register for this sitting. Proctoring capacity is not checked."
+                    : `Registration closes automatically once ${capacityValue || "0"} places are taken. Candidates beyond that are offered the next window.`}
+                </div>
               </div>
               <Button variant="secondary" onClick={saveRules} disabled={busy}>
                 Save rules

@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { recordAuditEvent } from "@/lib/audit";
-import { RequestStatus, type RequestPriority } from "@/generated/prisma/client";
+import { RequestStatus, type RequestPriority, type RequestCategory } from "@/generated/prisma/client";
 
 /**
  * Reply to a support request. Sets firstRespondedAt on the request's
@@ -141,6 +141,31 @@ export async function reopenRequest(requestId: string, actingStaffId: string | n
       action: "support_request.reopened",
       description: actingStaffId ? "Reopened by a staff member" : "Reopened automatically by a candidate reply",
     });
+    // README F rule 1: reopening notifies whoever closed it — captured
+    // BEFORE the update above clears resolvedByStaffId, and only when a
+    // candidate's own reply triggered the reopen (a staff member
+    // reopening it themselves doesn't need telling).
+    if (!actingStaffId && request.resolvedByStaffId) {
+      await tx.notification.create({
+        data: {
+          staffId: request.resolvedByStaffId,
+          category: "SUPPORT",
+          title: "A request you resolved was reopened",
+          body: `"${request.subject}" was reopened by a candidate reply.`,
+        },
+      });
+    }
+  });
+}
+
+/** README F: the "New request" form for a signed-in candidate — distinct from the anonymous marketing-site enquiry (enquiry.ts), which has no candidateId. */
+export async function submitCandidateRequest(candidateId: string, input: { subject: string; category: RequestCategory; body: string }) {
+  const subject = input.subject.trim();
+  const body = input.body.trim();
+  if (!subject || !body) throw new Error("Subject and message are required.");
+
+  return prisma.supportRequest.create({
+    data: { candidateId, subject, category: input.category, body },
   });
 }
 

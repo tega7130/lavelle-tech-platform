@@ -64,8 +64,13 @@ export interface CandidateShellProps {
 }
 
 function useOnlineStatus() {
-  const [online, setOnline] = React.useState(() => (typeof navigator === "undefined" ? true : navigator.onLine));
+  // Starts true to match the server-rendered default — reading
+  // navigator.onLine here would run during the client's first render too
+  // and mismatch whenever the browser's real value isn't true, causing a
+  // hydration error. The real value is only read after mount, below.
+  const [online, setOnline] = React.useState(true);
   React.useEffect(() => {
+    setOnline(navigator.onLine);
     const goOnline = () => setOnline(true);
     const goOffline = () => setOnline(false);
     window.addEventListener("online", goOnline);

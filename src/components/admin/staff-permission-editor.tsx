@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/field";
-import { applyRolePresetAction, setPermissionAction, deactivateStaffAction } from "@/app/actions/staff";
+import { applyRolePresetAction, setPermissionAction, deactivateStaffAction, suspendStaffAction, liftSuspensionAction } from "@/app/actions/staff";
 import { ResendInvitationButton } from "@/components/admin/resend-invitation-button";
 import { PERMISSIONS, PERMISSION_CATEGORIES, ROLE_LABELS, ROLE_COLORS } from "@/lib/permissions";
 import type { StaffRole, Permission } from "@/lib/permissions";
@@ -31,10 +31,12 @@ export function StaffPermissionEditor({
   const [role, setRole] = React.useState<StaffRole>(staff.role);
   const [busy, setBusy] = React.useState(false);
   const [deactivating, setDeactivating] = React.useState(false);
+  const [suspending, setSuspending] = React.useState(false);
   const [reason, setReason] = React.useState("");
+  const [suspendReason, setSuspendReason] = React.useState("");
   const grants = new Set(staff.permissions);
 
-  const locked = isSelf || staff.status === "DEACTIVATED";
+  const locked = isSelf || staff.status === "DEACTIVATED" || staff.status === "SUSPENDED";
 
   async function applyPreset() {
     setBusy(true);
@@ -68,6 +70,28 @@ export function StaffPermissionEditor({
     }
   }
 
+  async function submitSuspend() {
+    if (!suspendReason.trim()) return;
+    setBusy(true);
+    try {
+      await suspendStaffAction(staff.id, suspendReason);
+      setSuspending(false);
+      router.refresh();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function submitLiftSuspension() {
+    setBusy(true);
+    try {
+      await liftSuspensionAction(staff.id);
+      router.refresh();
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div className="max-w-[720px]">
       <Link href="/admin/staff" className="text-accent text-xs">
@@ -84,11 +108,28 @@ export function StaffPermissionEditor({
               <ResendInvitationButton staffId={staff.id} />
             </div>
           )}
+          {staff.status === "SUSPENDED" && <div className="mt-1.5 text-[12px] text-[#a16207]">Suspended</div>}
         </div>
         {staff.status !== "DEACTIVATED" && (
-          <Button variant="danger" className="h-[31px] px-[11px] text-xs" disabled={locked} onClick={() => setDeactivating(true)}>
-            Deactivate
-          </Button>
+          <div className="flex gap-2">
+            {staff.status === "SUSPENDED" ? (
+              <Button variant="secondary" className="h-[31px] px-[11px] text-xs" disabled={isSelf || busy} onClick={submitLiftSuspension}>
+                Lift suspension
+              </Button>
+            ) : (
+              <Button
+                variant="secondary"
+                className="h-[31px] px-[11px] text-xs border-[#f0d9a8] text-[#a16207]"
+                disabled={isSelf}
+                onClick={() => setSuspending(true)}
+              >
+                Suspend
+              </Button>
+            )}
+            <Button variant="danger" className="h-[31px] px-[11px] text-xs" disabled={isSelf} onClick={() => setDeactivating(true)}>
+              Deactivate
+            </Button>
+          </div>
         )}
       </div>
 
@@ -154,7 +195,10 @@ export function StaffPermissionEditor({
 
       {deactivating && (
         <Dialog open onClose={() => setDeactivating(false)} title="Deactivate this account?">
-          <p>The staff member is signed out and can no longer sign in. This does not delete their history — every action they took remains in the audit log.</p>
+          <p>
+            The staff member is signed out and can no longer sign in. This does not delete their history — every
+            action they took remains in the audit log. Use this when someone has left Lavelle.
+          </p>
           <Textarea value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Reason for deactivation" rows={2} className="mt-3" />
           <div className="flex justify-end gap-2 mt-4">
             <Button variant="secondary" onClick={() => setDeactivating(false)}>
@@ -162,6 +206,29 @@ export function StaffPermissionEditor({
             </Button>
             <Button variant="danger" disabled={busy || !reason.trim()} onClick={submitDeactivate}>
               Deactivate account
+            </Button>
+          </div>
+        </Dialog>
+      )}
+
+      {suspending && (
+        <Dialog open onClose={() => setSuspending(false)} title="Suspend this staff account?">
+          <p>
+            {staff.name} will be signed out immediately and cannot sign in while suspended. Use this for leave, or
+            while a matter is under investigation — it is fully reversible and nothing is removed. For someone
+            leaving Lavelle, deactivate the account instead.
+          </p>
+          <Textarea value={suspendReason} onChange={(e) => setSuspendReason(e.target.value)} placeholder="Reason for suspension" rows={2} className="mt-3" />
+          <div className="flex justify-end gap-2 mt-4">
+            <Button variant="secondary" onClick={() => setSuspending(false)}>
+              Cancel
+            </Button>
+            <Button
+              disabled={busy || !suspendReason.trim()}
+              onClick={submitSuspend}
+              className="bg-[#a16207] border-[#a16207] text-white hover:bg-[#8a5306]"
+            >
+              Suspend account
             </Button>
           </div>
         </Dialog>

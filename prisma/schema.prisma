@@ -94,6 +94,7 @@ model Candidate {
   supportMessages         SupportMessage[]
   candidateNotes          CandidateNote[]
   announcementDeliveries  AnnouncementDelivery[]
+  reviews                 Review[]
 
   @@index([accountStatus])
 }
@@ -276,6 +277,18 @@ model Staff {
   invited          Staff[]   @relation("StaffInvitedBy")
   lastActiveAt     DateTime?
 
+  // Slice 11 Part G: suspension is reversible (leave, an investigation)
+  // and distinct from DEACTIVATED (the person has left) — both revoke
+  // sessions immediately and both refuse sign-in indistinguishably from a
+  // wrong password (README G2/G3). suspendedReason is mandatory at the
+  // action layer, not the schema, matching every other "required reason"
+  // field in this codebase (statusReason, declineReason, etc.).
+  suspendedAt        DateTime?
+  suspendedReason    String?
+  suspendedByStaffId String?
+  suspendedByStaff   Staff?     @relation("StaffSuspendedBy", fields: [suspendedByStaffId], references: [id])
+  suspendedStaff     Staff[]    @relation("StaffSuspendedBy")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -307,6 +320,8 @@ model Staff {
   sentInvitations    StaffInvitationToken[] @relation("StaffInvitationTokenSender")
   assignedByRequests SupportRequest[]       @relation("SupportRequestAssignedBy")
   resolvedRequests   SupportRequest[]       @relation("SupportRequestResolvedBy")
+  reviewedSittings   Sitting[]              @relation("SittingReviewedBy")
+  moderatedReviews   Review[]               @relation("ReviewModeratedBy")
 
   @@index([role])
   @@index([status])
@@ -779,6 +794,7 @@ model Enrolment {
   programmeResult     ProgrammeResult?
   examRegistrations   ExamRegistration[]
   certificates        Certificate[]
+  reviews             Review[]
 
   // Partial unique index — a candidate cannot hold two live enrolments in
   // the same programme, but may re-enrol after withdrawing. Prisma cannot
@@ -1426,6 +1442,15 @@ model ExamRegistration {
   @@index([windowId])
 }
 
+// Slice 11 Part B: a human's read of the ProctoringEvent trail for one
+// sitting. Evidence, never a threshold — nothing sets this but the
+// invigilation screen's Clear/Refer actions (README B3 rule 2).
+enum ConductReview {
+  PENDING
+  CLEARED
+  REFERRED
+}
+
 // The exam attempt itself. The server owns the clock.
 model Sitting {
   id             String           @id @default(uuid())
@@ -1453,6 +1478,19 @@ model Sitting {
   band             GradeBand? // resolved and stored, per Slice 05 rule 2
 
   releasedAt DateTime?
+
+  // Slice 11 Part B: invigilatorFinding is mandatory before conductReview
+  // can move off PENDING (enforced in clearSitting/referSitting, not by a
+  // DB constraint — the same discipline as every other "required before"
+  // rule in this codebase). A REFERRED sitting is excluded from
+  // releaseResults (rule 3) until the examinations panel resolves it
+  // through some later process — this slice does not build that path.
+  conductReview      ConductReview @default(PENDING)
+  invigilatorFinding String?
+  reviewedByStaffId  String?
+  reviewedByStaff    Staff?        @relation("SittingReviewedBy", fields: [reviewedByStaffId], references: [id])
+  reviewedAt         DateTime?
+  referredAt         DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1915,10 +1953,30 @@ model ProgrammeListing {
   @@index([isPublished, orderIndex])
 }
 
+// Slice 11 Part D: three states, not two — a DECLINED review and one
+// nobody has looked at yet are different things, and the queue is
+// unusable if they collapse together. Replaces isPublished (migrated
+// true -> PUBLISHED, false -> PENDING, then dropped).
+enum ReviewState {
+  PENDING
+  PUBLISHED
+  DECLINED
+}
+
 // Real attributions only (rule 11) — an invented name is a legal risk in
 // a market this small, where people know each other.
 model Review {
   id String @id @default(uuid())
+
+  // Slice 11 Part D: nullable — Slice 09 seeded marketing testimonials
+  // with no real submitter behind them; a genuine submission (submitReview,
+  // gated on a COMPLETED enrolment) sets both. authorName/authorTitle stay
+  // the display copy either way, populated from the candidate at
+  // submission time for a real review.
+  candidateId String?    @db.Uuid
+  candidate   Candidate? @relation(fields: [candidateId], references: [id], onDelete: SetNull)
+  enrolmentId String?
+  enrolment   Enrolment? @relation(fields: [enrolmentId], references: [id], onDelete: SetNull)
 
   authorName  String
   authorTitle String // "Partner, energy practice, Lagos"
@@ -1929,13 +1987,20 @@ model Review {
   quote  String
   rating Int // 1-5
 
-  isPublished Boolean @default(false)
-  orderIndex  Int     @default(0)
+  state              ReviewState @default(PENDING)
+  moderatedByStaffId String?
+  moderatedByStaff   Staff?      @relation("ReviewModeratedBy", fields: [moderatedByStaffId], references: [id])
+  moderatedAt        DateTime?
+  // Internal only — never shown to the candidate (rule 7); the
+  // conversation about a declined review belongs in support.
+  declineReason      String?
+
+  orderIndex Int @default(0)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([isPublished, orderIndex])
+  @@index([state, orderIndex])
 }
 
 model FaqEntry {

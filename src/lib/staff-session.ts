@@ -19,7 +19,11 @@ import type { Permission, Prisma, PrismaClient, StaffRole, StaffStatus } from "@
 
 export const STAFF_SESSION_COOKIE = "lavelle_staff_session";
 const COOKIE_NAME = STAFF_SESSION_COOKIE;
-const SESSION_MAX_AGE_SECONDS = 60 * 60 * 2; // 2 hours — README's staff sign-in notice: "sessions end after two hours of inactivity"
+// Slice 11 Part H: 24 hours absolute, no idle timeout — symmetrical with
+// candidate-session.ts. Replaces Slice 10's 2-hour placeholder now that
+// the policy has actually been decided. No exam carve-out here: that
+// exception belongs to a candidate's sitting, never a staff session.
+const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24;
 
 function sessionSecret() {
   const secret = process.env.STAFF_SESSION_SECRET;
@@ -99,6 +103,8 @@ export interface CurrentStaff {
   email: string;
   role: StaffRole;
   permissions: Permission[];
+  /** For the client-side 15-minutes-remaining warning (README H3 rule 5). */
+  sessionExpiresAt: Date;
 }
 
 /**
@@ -131,6 +137,7 @@ export async function resolveStaffFromToken(token: string): Promise<CurrentStaff
     email: staff.email,
     role: staff.role,
     permissions: staff.permissionGrants.map((g) => g.permission),
+    sessionExpiresAt: session.expiresAt,
   };
 }
 

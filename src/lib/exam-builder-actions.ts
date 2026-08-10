@@ -150,6 +150,15 @@ export interface ExamRulesInput {
   shuffleQuestions: boolean;
   shuffleOptions: boolean;
   allowReviewBeforeSubmit: boolean;
+  // Slice 11 Part A: ExamWindow.capacity already exists and is already
+  // enforced by registerForExam — it just had no input. Capacity is a
+  // per-window field, but the rules panel edits it for the one window the
+  // builder is currently configuring (capacityWindowId, chosen by the
+  // caller — see exam-builder.tsx's "current window" pick), so this one
+  // action still carries the whole rules panel in a single call rather
+  // than adding a second action (README A: "No new action").
+  capacityWindowId?: string | null;
+  capacity?: number | null; // null = uncapped
 }
 
 export async function setExamRules(examId: string, rules: ExamRulesInput) {
@@ -158,8 +167,18 @@ export async function setExamRules(examId: string, rules: ExamRulesInput) {
   }
   if (rules.passMarkPercent < 1 || rules.passMarkPercent > 100) throw new Error("Pass mark must be between 1 and 100.");
   if (rules.feeMinor < 0) throw new Error("Fee cannot be negative.");
+  if (rules.capacity != null && rules.capacity < 1) throw new Error("Capacity must be at least 1, or left uncapped.");
 
-  return prisma.exam.update({ where: { id: examId }, data: rules });
+  const { capacityWindowId, capacity, ...examFields } = rules;
+  const updated = await prisma.exam.update({ where: { id: examId }, data: examFields });
+
+  if (capacityWindowId) {
+    const window = await prisma.examWindow.findUniqueOrThrow({ where: { id: capacityWindowId } });
+    if (window.examId !== examId) throw new Error("That window does not belong to this examination.");
+    await prisma.examWindow.update({ where: { id: capacityWindowId }, data: { capacity: capacity ?? null } });
+  }
+
+  return updated;
 }
 
 /** Blocked while any module has fewer approved objective questions than its draw (rule 1) — names the offending modules. */

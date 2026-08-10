@@ -386,8 +386,11 @@ export async function expireSittingIfOverdue(sittingId: string, candidateId: str
 export async function releaseResults(windowId: string, staffId: string, ipAddress: string | null) {
   const window = await prisma.examWindow.findUniqueOrThrow({ where: { id: windowId }, include: { exam: true } });
 
+  // Slice 11 Part B rule 3: a sitting referred to the examinations panel
+  // is held back from release entirely, not just its certificate — the
+  // panel's decision on the paper itself hasn't been made yet.
   const sittings = await prisma.sitting.findMany({
-    where: { registration: { windowId }, state: "SUBMITTED" },
+    where: { registration: { windowId }, state: "SUBMITTED", conductReview: { not: "REFERRED" } },
     include: { registration: true, answers: { include: { question: true } } },
   });
 

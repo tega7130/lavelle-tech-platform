@@ -31,6 +31,9 @@ export async function listListings() {
     tierLabel: tierLabel(p.tier),
     fee: formatNaira(p.feeMinor),
     isPublished: p.listing?.isPublished ?? false,
+    // Slice 11 Part C: derived on every read, never a stored flag (README
+    // C2 rule 2) — an archive via any other path can't leave this stale.
+    isArchived: p.status === "ARCHIVED",
     hasListing: !!p.listing,
     orderIndex: p.listing?.orderIndex ?? 0,
   }));

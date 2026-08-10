@@ -155,6 +155,9 @@ export const ADMIN_NAV_PATHS: Record<string, string> = {
   comms: "M3 7.3v3.4l8 3.4V3.9zM12.8 7.6v2.8M15 6.9v4.2",
   certs:
     "M9 2.6 11 4l2.3-.2.6 2.2 1.6 1.7-1.2 1.9.2 2.3-2.2.6L10.7 15 9 13.9 6.6 15 5 12.5l-2.2-.6.2-2.3L1.8 7.7l1.6-1.7L4 3.8 6.3 4z",
+  invigilation: "M1.8 9S4.4 4.4 9 4.4 16.2 9 16.2 9 13.6 13.6 9 13.6 1.8 9 1.8 9ZM9 11.2a2.2 2.2 0 1 0 0-4.4 2.2 2.2 0 0 0 0 4.4Z",
+  reviews:
+    "M9 1.8l1.9 3.9 4.3.6-3.1 3 .7 4.3L9 11.6l-3.8 2 .7-4.3-3.1-3 4.3-.6z",
 };
 
 export function AdminNavIcon({ name, ...p }: { name: string } & IconProps) {

@@ -26,7 +26,11 @@ export async function staffSignIn(_prev: FormActionState, formData: FormData): P
   if (!result.ok) return { values: raw, message: result.message };
 
   await setStaffSessionCookie(result.sessionToken);
-  redirect("/admin/overview");
+  // README H3 rule 16 — same discipline as the candidate sign-in: `next`
+  // only ever comes from proxy.ts's own redirect (a same-origin /admin
+  // path).
+  const next = raw.next;
+  redirect(next && next.startsWith("/admin/") ? next : "/admin/overview");
 }
 
 export async function staffSignOut() {

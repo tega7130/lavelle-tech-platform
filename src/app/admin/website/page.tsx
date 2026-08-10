@@ -23,6 +23,10 @@ export default async function AdminWebsitePage({ searchParams }: { searchParams:
 
   const selected = selectedId ?? listings[0]!.programmeId;
   const listing = await getListingForEditor(selected);
+  // Slice 11 Part C: archiving a programme never unpublishes its listing
+  // (README C1) — this is the derived warning that tells a human when a
+  // live listing needs a decision, computed fresh on every render.
+  const archivedLive = listings.filter((l) => l.isPublished && l.isArchived);
 
   return (
     <div className="max-w-[1400px]">
@@ -38,6 +42,31 @@ export default async function AdminWebsitePage({ searchParams }: { searchParams:
           View public site
         </a>
       </div>
+
+      {archivedLive.length > 0 && (
+        <div className="flex items-start gap-3 px-5 py-4 rounded-md bg-[#fff7e6] border border-[#f0d9a8] mb-[var(--space-5)]">
+          <span className="flex-none w-[26px] h-[26px] rounded-full bg-[#fdf0d2] text-[#a16207] flex items-center justify-center text-[14px] font-bold">!</span>
+          <div className="flex-1 min-w-0">
+            <div className="font-heading font-semibold text-[13.5px] text-[#7a4d06]">
+              {archivedLive.length === 1 ? "A live listing has an archived programme" : `${archivedLive.length} live listings have an archived programme`}
+            </div>
+            <div className="text-[12.5px] leading-relaxed text-[#8a6013] mt-1">
+              {archivedLive.map((l) => l.title).join(", ")} — enrolment is closed on the listing, but it remains visible on the public site until unpublished.
+            </div>
+            <div className="flex gap-2 mt-2.5 flex-wrap">
+              {archivedLive.map((l) => (
+                <a
+                  key={l.programmeId}
+                  href={`/admin/website?programme=${l.programmeId}`}
+                  className={buttonClassName("secondary", "h-[32px] px-3 text-[12px]")}
+                >
+                  Review {l.title}
+                </a>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-[var(--space-5)] items-start">
         {/* programme list */}

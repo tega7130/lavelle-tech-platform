@@ -14,11 +14,14 @@ import { Checkbox } from "@/components/ui/checkbox";
 const ASSURANCES = [
   "Programme progress, deadlines and drafting submissions stay exactly as you left them.",
   "Certificates remain verifiable on the public portal whether or not you are signed in.",
-  "Sessions on shared devices end automatically after thirty minutes of inactivity.",
+  "Sessions end automatically 24 hours after signing in, with no exception for a paper you are still sitting.",
 ];
 
 function SignInForm() {
-  const signedOut = useSearchParams().get("signedOut") === "1";
+  const searchParams = useSearchParams();
+  const signedOut = searchParams.get("signedOut") === "1";
+  const expired = searchParams.get("expired") === "1";
+  const nextPath = searchParams.get("next");
   const [state, formAction, pending] = useActionState(signInCandidate, emptyActionState);
   const [values, setValues] = React.useState({ email: "", password: "", remember: true });
   const [errors, setErrors] = React.useState<Record<string, string>>({});
@@ -60,7 +63,22 @@ function SignInForm() {
       formChildren={
         <>
           <form action={formAction} className="rounded-xl border border-divider bg-bg p-8 pb-7 shadow-md">
-            {signedOut && !suspended && (
+            <input type="hidden" name="next" value={nextPath ?? ""} />
+
+            {expired && !suspended && (
+              <div className="mb-5 flex items-start gap-2.5 rounded-md border border-warning-border bg-warning-bg px-3.5 py-3">
+                <span className="flex-none text-sm font-bold text-warning-text">!</span>
+                <div className="text-xs leading-[1.55] text-warning-text text-pretty">
+                  <div className="font-heading font-semibold">You were signed out for security</div>
+                  <div className="mt-1">
+                    Sessions end after 24 hours. Anything you had saved is intact — sign in again to pick up exactly
+                    where you left off.
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {signedOut && !suspended && !expired && (
               <div className="mb-5 flex items-start gap-2.5 rounded-md border border-accent-200 bg-accent-100 px-3.5 py-2.5">
                 <span className="flex-none text-xs font-bold text-accent">✓</span>
                 <div className="text-xs leading-[1.55] text-accent-800 text-pretty">

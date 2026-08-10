@@ -162,7 +162,12 @@ export async function signInCandidate(
 
   await prisma.candidate.update({ where: { id: candidate.id }, data: { lastLoginAt: new Date() } });
   await createCandidateSession(candidate.id, data.remember);
-  redirect("/portal/dashboard");
+  // README H3 rule 16: expiry must return the candidate to where they
+  // were, not a bare dashboard — `next` only ever came from proxy.ts's
+  // own redirect (a same-origin /portal path), never taken at face value
+  // from an open field.
+  const next = raw.next;
+  redirect(next && next.startsWith("/portal/") ? next : "/portal/dashboard");
 }
 
 export async function signOutCandidate() {

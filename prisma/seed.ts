@@ -1541,17 +1541,17 @@ async function main() {
       data: [
         {
           authorName: "Adaeze Okonkwo", authorTitle: "Partner, commercial disputes · Lagos",
-          programmeId: programmes["ELR-201"]!.id, rating: 5, orderIndex: 0, isPublished: true,
+          programmeId: programmes["ELR-201"]!.id, rating: 5, orderIndex: 0, state: "PUBLISHED",
           quote: "Two operators now brief me directly on joint venture disputes. The drafting exercises were the difference. I was marked on the same standard my opponents work to.",
         },
         {
           authorName: "Ibrahim Bello", authorTitle: "Senior associate · Abuja",
-          programmeId: programmes["TLC-201"]!.id, rating: 5, orderIndex: 1, isPublished: true,
+          programmeId: programmes["TLC-201"]!.id, rating: 5, orderIndex: 1, state: "PUBLISHED",
           quote: "My first drafting submission came back referred with three pages of notes. Bruising, and exactly what I needed. The second one passed on merit.",
         },
         {
           authorName: "Funmi Nwachukwu", authorTitle: "In-house counsel, banking · Lagos",
-          programmeId: programmes["RCF-101"]!.id, rating: 5, orderIndex: 2, isPublished: true,
+          programmeId: programmes["RCF-101"]!.id, rating: 5, orderIndex: 2, state: "PUBLISHED",
           quote: "Six hours a week, mostly evenings, and nothing was padded. I never once felt I was watching a recording to tick a box.",
         },
       ],
@@ -1591,6 +1591,148 @@ async function main() {
         },
       ],
     });
+  }
+
+  // ── Slice 11 fixtures ──
+  //
+  // Sittings, conduct review and review-moderation examples — none of
+  // Slice 06's seed data ever produced an actual Sitting row, so the
+  // invigilation and review screens had nothing to show.
+  const superAdmin = await prisma.staff.findUniqueOrThrow({ where: { email: "a.obi@lavelle.ng" } });
+  const sepWindow = await prisma.examWindow.findFirstOrThrow({ where: { examId: exam.id }, orderBy: { opensAt: "asc" } });
+  const sepCohort = await prisma.cohort.findUniqueOrThrow({ where: { code: "SPEC-ENR-03" } });
+  const sepIntake = await prisma.intake.findUniqueOrThrow({ where: { month_year: { month: IntakeMonth.SEPTEMBER, year: 2026 } } });
+
+  async function seedCompletedCandidate(input: {
+    email: string; applicantNumber: string; candidateNumber: string; firstName: string; lastName: string;
+  }) {
+    const candidate = await prisma.candidate.upsert({
+      where: { email: input.email },
+      update: {},
+      create: {
+        applicantNumber: input.applicantNumber,
+        candidateNumber: input.candidateNumber,
+        firstName: input.firstName,
+        lastName: input.lastName,
+        email: input.email,
+        passwordHash,
+        acceptedTermsAt: new Date("2026-01-05"),
+        emailVerifiedAt: new Date("2026-01-05"),
+        profile: { create: { professionalStatus: ProfessionalStatus.PRACTISING_LAWYER, yearOfCall: 2018, handbookAcknowledgedAt: new Date("2026-01-05"), completedAt: new Date("2026-01-05") } },
+        enrolments: {
+          create: {
+            programmeId: elr.id,
+            cohortId: sepCohort.id,
+            intakeId: sepIntake.id,
+            status: "COMPLETED",
+            enrolledAt: new Date("2026-01-14"),
+            completedAt: new Date("2026-08-01"),
+          },
+        },
+      },
+      include: { enrolments: true },
+    });
+    return { candidate, enrolment: candidate.enrolments[0]! };
+  }
+
+  const { candidate: tolu, enrolment: toluEnrolment } = await seedCompletedCandidate({
+    email: "t.fashola@chambers.ng", applicantNumber: "LVL-APP-2026-05512", candidateNumber: "LVL/2026/00318", firstName: "Tolu", lastName: "Fashola",
+  });
+  const { candidate: emeka } = await seedCompletedCandidate({
+    email: "e.obiora@chambers.ng", applicantNumber: "LVL-APP-2026-05519", candidateNumber: "LVL/2026/00319", firstName: "Emeka", lastName: "Obiora",
+  });
+
+  async function seedSitting(candidateId: string, opts: { flagged: boolean; conductReview: "PENDING" | "REFERRED" }) {
+    // No compound-unique on (candidateId, examId) to upsert against —
+    // guard with an existence check instead.
+    let registration = await prisma.examRegistration.findFirst({ where: { candidateId, examId: exam.id } });
+    if (!registration) {
+      registration = await prisma.examRegistration.create({
+        data: { candidateId, examId: exam.id, windowId: sepWindow.id, registeredAt: new Date("2026-08-01T09:00:00Z") },
+      });
+    }
+    const startedAt = new Date("2026-09-14T09:05:00Z");
+    const submittedAt = new Date("2026-09-14T11:58:00Z");
+    const existing = await prisma.sitting.findUnique({ where: { registrationId: registration.id } });
+    if (existing) return existing;
+    const sitting = await prisma.sitting.create({
+      data: {
+        registrationId: registration.id,
+        state: "SUBMITTED",
+        startedAt,
+        expiresAt: new Date("2026-09-14T12:05:00Z"),
+        submittedAt,
+        objectivePercent: 78,
+        totalPercent: 78,
+        outcome: "PASS",
+        band: GradeBand.MERIT,
+        conductReview: opts.conductReview,
+        invigilatorFinding: opts.conductReview === "REFERRED" ? "Four full-screen exits in the final twenty minutes, two immediately after the written question loaded. Pattern is consistent with reference material off-screen — referring for the panel's view of the written answer." : null,
+        reviewedByStaffId: opts.conductReview === "REFERRED" ? superAdmin.id : null,
+        reviewedAt: opts.conductReview === "REFERRED" ? new Date("2026-09-15T10:00:00Z") : null,
+        referredAt: opts.conductReview === "REFERRED" ? new Date("2026-09-15T10:00:00Z") : null,
+      },
+    });
+    if (opts.flagged) {
+      await prisma.proctoringEvent.createMany({
+        data: [
+          { sittingId: sitting.id, kind: "tab_switch", occurredAt: new Date("2026-09-14T09:18:00Z") },
+          { sittingId: sitting.id, kind: "fullscreen_exit", occurredAt: new Date("2026-09-14T11:40:00Z") },
+          ...(opts.conductReview === "REFERRED"
+            ? [
+                { sittingId: sitting.id, kind: "fullscreen_exit", occurredAt: new Date("2026-09-14T11:44:00Z") },
+                { sittingId: sitting.id, kind: "fullscreen_exit", occurredAt: new Date("2026-09-14T11:46:00Z") },
+              ]
+            : []),
+        ],
+      });
+    }
+    return sitting;
+  }
+
+  await seedSitting(tolu.id, { flagged: true, conductReview: "PENDING" });
+  await seedSitting(emeka.id, { flagged: true, conductReview: "REFERRED" });
+
+  // Review moderation queue — one awaiting, one declined (the candidate is
+  // never told why, per rule 7; the reason stays internal).
+  const existingSlice11Reviews = await prisma.review.count({ where: { candidateId: { not: null } } });
+  if (existingSlice11Reviews === 0) {
+    await prisma.review.create({
+      data: {
+        candidateId: tolu.id, enrolmentId: toluEnrolment.id, programmeId: elr.id,
+        authorName: "Tolu Fashola", authorTitle: "Associate, energy practice · Lagos",
+        quote: "The drafting exercises were harder than anything in my day job. Worth every week.",
+        rating: 5, state: "PENDING",
+      },
+    });
+    await prisma.review.create({
+      data: {
+        candidateId: emeka.id, programmeId: elr.id,
+        authorName: "Emeka Obiora", authorTitle: "In-house counsel · Abuja",
+        quote: "Fine programme but the marking turnaround was slower than I expected some weeks.",
+        rating: 3, state: "DECLINED", declineReason: "Names a specific marking-turnaround complaint we're addressing directly with the candidate — publishing it reads as an unresolved institutional issue rather than a review.",
+        moderatedByStaffId: superAdmin.id, moderatedAt: new Date("2026-08-05T10:00:00Z"),
+      },
+    });
+  }
+
+  // A suspended staff member — distinct from the deactivated ones Slice 10
+  // already seeds, to exercise Part G's own status and dialog.
+  await prisma.staff.upsert({
+    where: { email: "y.coker@lavelle.ng" },
+    update: {},
+    create: {
+      name: "Yewande Coker", email: "y.coker@lavelle.ng", role: StaffRole.SUPPORT, status: StaffStatus.SUSPENDED,
+      passwordHash, activatedAt: new Date("2026-06-01"),
+      suspendedAt: new Date("2026-08-04T09:00:00Z"), suspendedReason: "Extended leave — returning 1 September.", suspendedByStaffId: superAdmin.id,
+      permissionGrants: { create: ROLE_PRESETS[StaffRole.SUPPORT].map((permission) => ({ permission, grantedByStaffId: superAdmin.id })) },
+    },
+  });
+
+  // An archived programme whose listing is still live — Part C's derived
+  // admin warning has nothing to show without this.
+  if (programmes["MAL-201"]) {
+    await prisma.programme.update({ where: { id: programmes["MAL-201"]!.id }, data: { status: "ARCHIVED" } });
   }
 
   console.log(`Seeded. Demo password for every account: ${DEMO_PASSWORD}`);

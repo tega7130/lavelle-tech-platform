@@ -10,7 +10,10 @@ import { Button } from "@/components/ui/button";
 import { Label, Input, FieldError } from "@/components/ui/field";
 
 function SignInForm() {
-  const signedOut = useSearchParams().get("signedOut") === "1";
+  const searchParams = useSearchParams();
+  const signedOut = searchParams.get("signedOut") === "1";
+  const expired = searchParams.get("expired") === "1";
+  const nextPath = searchParams.get("next");
   const [state, formAction, pending] = useActionState(staffSignIn, emptyActionState);
   const [values, setValues] = React.useState({ email: "", password: "" });
   const [errors, setErrors] = React.useState<Record<string, string>>({});
@@ -58,7 +61,17 @@ function SignInForm() {
       formChildren={
         view === "form" ? (
           <div className="rounded-xl border border-divider bg-bg p-8 pb-7 shadow-md">
-            {signedOut && (
+            {expired && (
+              <div className="mb-5 flex items-start gap-2.5 rounded-md border border-warning-border bg-warning-bg px-3.5 py-3">
+                <span className="flex-none text-sm font-bold text-warning-text">!</span>
+                <div className="text-xs leading-[1.55] text-warning-text text-pretty">
+                  <div className="font-heading font-semibold">You were signed out for security</div>
+                  <div className="mt-1">Sessions end after 24 hours. Sign in again to pick up where you left off.</div>
+                </div>
+              </div>
+            )}
+
+            {signedOut && !expired && (
               <div className="mb-5 flex items-start gap-2.5 rounded-md border border-accent-200 bg-accent-100 px-3.5 py-2.5">
                 <span className="flex-none text-xs font-bold text-accent">✓</span>
                 <div className="text-xs leading-[1.55] text-accent-800 text-pretty">
@@ -80,6 +93,7 @@ function SignInForm() {
             )}
 
             <form action={formAction} className="flex flex-col gap-4">
+              <input type="hidden" name="next" value={nextPath ?? ""} />
               <div>
                 <Label htmlFor="email">Staff email address</Label>
                 <Input

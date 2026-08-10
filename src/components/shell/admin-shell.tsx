@@ -2,13 +2,14 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/cn";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { AdminNavIcon, ChevronLeftIcon, ChevronRightIcon } from "@/components/icons";
 import { Dialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { staffSignOut } from "@/app/actions/staff-auth";
+import { listStaffNotificationsAction, markNotificationReadAction, markAllNotificationsReadAction } from "@/app/actions/notifications";
 
 export interface AdminNavItem {
   key: string;
@@ -36,6 +37,7 @@ export const ADMIN_NAV: AdminNavGroup[] = [
     items: [
       { key: "marking", label: "Marking queue", href: "/admin/marking", badge: "12" },
       { key: "exambuilder", label: "Exam builder", href: "/admin/exam-builder" },
+      { key: "invigilation", label: "Invigilation", href: "/admin/invigilation" },
     ],
   },
   {
@@ -55,7 +57,10 @@ export const ADMIN_NAV: AdminNavGroup[] = [
   },
   {
     label: "Marketing",
-    items: [{ key: "website", label: "Website", href: "/admin/website" }],
+    items: [
+      { key: "website", label: "Website", href: "/admin/website" },
+      { key: "reviews", label: "Reviews", href: "/admin/reviews" },
+    ],
   },
   {
     label: "Administration",
@@ -66,23 +71,69 @@ export const ADMIN_NAV: AdminNavGroup[] = [
   },
 ];
 
+export interface StaffNotificationItem {
+  id: string;
+  title: string;
+  body: string;
+  unread: boolean;
+  createdAt: Date;
+  href: string;
+}
+
 export interface AdminShellProps {
   staff: { name: string; initials: string; role: string };
   /** Overrides the breadcrumb derived from the active nav item's group/label. */
   crumb?: { section: string; title: string };
   headerTag?: string;
+  initialNotifications?: { unreadCount: number; items: StaffNotificationItem[] };
   children: React.ReactNode;
 }
 
-export function AdminShell({ staff, crumb, headerTag, children }: AdminShellProps) {
+function relativeTime(d: Date) {
+  const ms = Date.now() - new Date(d).getTime();
+  const mins = Math.floor(ms / 60_000);
+  if (mins < 1) return "Just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
+}
+
+export function AdminShell({ staff, crumb, headerTag, initialNotifications, children }: AdminShellProps) {
+  const router = useRouter();
   const pathname = usePathname();
   const [railOpen, setRailOpen] = React.useState(true);
   const [signOutOpen, setSignOutOpen] = React.useState(false);
   const [signingOut, setSigningOut] = React.useState(false);
+  const [inboxOpen, setInboxOpen] = React.useState(false);
+  const [inbox, setInbox] = React.useState(initialNotifications ?? { unreadCount: 0, items: [] });
 
   async function confirmSignOut() {
     setSigningOut(true);
     await staffSignOut();
+  }
+
+  async function toggleInbox() {
+    const next = !inboxOpen;
+    setInboxOpen(next);
+    if (next) setInbox(await listStaffNotificationsAction());
+  }
+
+  async function openNotification(n: StaffNotificationItem) {
+    setInboxOpen(false);
+    if (n.unread) {
+      await markNotificationReadAction(n.id);
+      setInbox((cur) => ({
+        unreadCount: Math.max(0, cur.unreadCount - 1),
+        items: cur.items.map((i) => (i.id === n.id ? { ...i, unread: false } : i)),
+      }));
+    }
+    router.push(n.href);
+  }
+
+  async function markAllRead() {
+    await markAllNotificationsReadAction();
+    setInbox((cur) => ({ unreadCount: 0, items: cur.items.map((i) => ({ ...i, unread: false })) }));
   }
 
   let resolvedCrumb = crumb;
@@ -253,6 +304,55 @@ export function AdminShell({ staff, crumb, headerTag, children }: AdminShellProp
                 {headerTag}
               </span>
             )}
+            <div className="relative">
+              <button
+                onClick={toggleInbox}
+                aria-label="Notifications"
+                title="Notifications"
+                className="relative flex items-center justify-center h-9 px-[11px] rounded-md border border-neutral-300 bg-bg text-neutral-700 hover:bg-neutral-100 cursor-pointer"
+              >
+                <svg viewBox="0 0 18 18" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M9 2.6a4.4 4.4 0 0 0-4.4 4.4c0 3.4-1.3 4.6-1.3 4.6h11.4s-1.3-1.2-1.3-4.6A4.4 4.4 0 0 0 9 2.6ZM7.4 14.2a1.7 1.7 0 0 0 3.2 0" />
+                </svg>
+                {inbox.unreadCount > 0 && (
+                  <span className="absolute top-[3px] right-[4px] min-w-[15px] h-[15px] px-1 box-border rounded-full bg-accent text-white text-[9.5px] font-bold flex items-center justify-center tabular-nums">
+                    {inbox.unreadCount}
+                  </span>
+                )}
+              </button>
+              {inboxOpen && (
+                <div className="absolute top-[calc(100%+8px)] right-0 z-[60] w-[390px] max-h-[440px] overflow-y-auto rounded-md bg-bg border border-divider shadow-lg">
+                  <div className="flex justify-between items-center gap-3 px-4 pt-4 pb-3 border-b border-dashed border-neutral-300 sticky top-0 bg-bg">
+                    <div className="font-heading font-semibold text-[13.5px]">Your notifications</div>
+                    <button onClick={markAllRead} className="text-[11.5px] font-medium text-accent hover:underline cursor-pointer">
+                      Mark all read
+                    </button>
+                  </div>
+                  <div className="flex flex-col">
+                    {inbox.items.map((n) => (
+                      <button
+                        key={n.id}
+                        onClick={() => openNotification(n)}
+                        className={`flex gap-[11px] px-4 py-3 text-left border-b border-dashed border-neutral-300 cursor-pointer hover:bg-neutral-100 ${n.unread ? "bg-accent-100" : ""}`}
+                      >
+                        <span className={`flex-none w-[7px] h-[7px] mt-1.5 rounded-full ${n.unread ? "bg-accent" : "bg-neutral-300"}`} />
+                        <div className="flex-1 min-w-0">
+                          <div className={`text-[12.5px] leading-snug ${n.unread ? "font-semibold" : "font-normal"}`}>{n.title}</div>
+                          <div className="text-neutral-500 text-[11.5px] leading-snug mt-0.5">{n.body}</div>
+                          <div className="text-neutral-500 text-[10.5px] mt-1">{relativeTime(n.createdAt)}</div>
+                        </div>
+                      </button>
+                    ))}
+                    {inbox.items.length === 0 && (
+                      <div className="px-4 py-6 text-center">
+                        <div className="font-heading font-semibold text-[13px]">Nothing waiting</div>
+                        <div className="text-neutral-500 text-[11.5px] mt-[3px]">Assignments and escalations arrive here.</div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
             <ThemeToggle />
           </div>
         </header>

@@ -8,7 +8,7 @@ import { getCurrentCandidate } from "@/lib/candidate-session";
 import { getClientIp } from "@/lib/request-info";
 import { recordAuditEvent } from "@/lib/audit";
 import { createProviderCheckout, generateInternalReference } from "@/lib/payment-provider";
-import { LiveEnrolmentExistsError, PaymentNotPendingError } from "@/lib/payment-errors";
+import { LiveEnrolmentExistsError, PaymentNotPendingError, assertProgrammeOpenForEnrolment } from "@/lib/payment-errors";
 import { applyOfflineRecording } from "@/lib/offline-recording";
 import { offlinePaymentInputSchema, recordOfflinePaymentSchema, fieldErrors } from "@/lib/validation/payment";
 import { getPaymentStatus } from "@/lib/catalogue-reads";
@@ -76,7 +76,7 @@ export async function initiatePayment(programmeId: string) {
   if (!candidate) throw new Error("Sign in required.");
 
   const programme = await prisma.programme.findUniqueOrThrow({ where: { id: programmeId } });
-  if (programme.status !== "ACTIVE") throw new Error("This programme is not open for enrolment.");
+  assertProgrammeOpenForEnrolment(programme);
 
   const existing = await prisma.enrolment.findFirst({
     where: { candidateId: candidate.id, programmeId, status: { notIn: [EnrolmentStatus.WITHDRAWN, EnrolmentStatus.REFUNDED] } },

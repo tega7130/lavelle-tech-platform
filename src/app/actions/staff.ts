@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { Permission, StaffRole } from "@/generated/prisma/client";
 import { requireStaffPermission } from "@/lib/staff-auth";
-import { applyRolePreset, setPermission, deactivateStaff } from "@/lib/rbac";
+import { applyRolePreset, setPermission, deactivateStaff, suspendStaff, liftSuspension } from "@/lib/rbac";
 import { inviteStaff } from "@/lib/staff-invite";
 
 export async function inviteStaffAction(params: { name: string; email: string; role: StaffRole; jobTitle?: string; department?: string }) {
@@ -34,5 +34,17 @@ export async function deactivateStaffAction(targetStaffId: string, reason: strin
   const trimmed = reason.trim();
   if (!trimmed) throw new Error("A reason is required.");
   await deactivateStaff({ staffId: targetStaffId, reason: trimmed, actingStaffId: staff.id });
+  revalidatePath("/admin/staff");
+}
+
+export async function suspendStaffAction(targetStaffId: string, reason: string) {
+  const staff = await requireStaffPermission(Permission.MANAGE_STAFF);
+  await suspendStaff({ staffId: targetStaffId, reason, actingStaffId: staff.id });
+  revalidatePath("/admin/staff");
+}
+
+export async function liftSuspensionAction(targetStaffId: string) {
+  const staff = await requireStaffPermission(Permission.MANAGE_STAFF);
+  await liftSuspension({ staffId: targetStaffId, actingStaffId: staff.id });
   revalidatePath("/admin/staff");
 }

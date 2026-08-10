@@ -23,6 +23,7 @@ function makeCandidate(isEnrolled: boolean): CurrentCandidate {
       doneCount: 1,
       allDone: false,
     },
+    sessionExpiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
   };
 }
 

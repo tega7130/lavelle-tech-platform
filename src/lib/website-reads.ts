@@ -89,6 +89,9 @@ export async function getListingDetail(code: string) {
     code: programme.code,
     tier: programme.tier,
     tierLabel: tierLabel(programme.tier),
+    // Slice 11 Part C: the listing itself stays live and visible on
+    // archiving (README C1) — only the enrol action changes.
+    isArchived: programme.status === "ARCHIVED",
     title: content.headline,
     pitch: content.summary,
     fee: formatNaira(programme.feeMinor),
@@ -119,7 +122,7 @@ export async function getListingDetail(code: string) {
 
 export async function getPublishedReviews() {
   const rows = await prisma.review.findMany({
-    where: { isPublished: true },
+    where: { state: "PUBLISHED" },
     orderBy: { orderIndex: "asc" },
     include: { programme: { select: { title: true, tier: true } } },
   });

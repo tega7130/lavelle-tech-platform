@@ -139,13 +139,26 @@ export default async function ProgrammeDetailPage({ params }: { params: Promise<
                   </div>
                 )}
 
-                <Link href="/register" className={cn(buttonClassName("primary"), "w-full mt-5 rounded-[9px]")}>
-                  Apply for this programme
-                </Link>
-                <Link href="/contact" className={buttonClassName("secondary", "w-full h-11 mt-[10px] text-[13.5px]")}>
-                  Speak to a representative
-                </Link>
-                <div className="text-[11px] text-neutral-700 text-center mt-[14px]">Registration is free · you pay only when you enrol</div>
+                {detail.isArchived ? (
+                  <>
+                    <div className="px-4 py-3 rounded-[9px] bg-neutral-100 border border-divider text-[12.5px] text-neutral-700 leading-relaxed text-center">
+                      This programme is not currently open for enrolment.
+                    </div>
+                    <Link href="/#programmes" className={cn(buttonClassName("secondary"), "w-full h-11 mt-[10px] text-[13.5px]")}>
+                      Browse open specializations
+                    </Link>
+                  </>
+                ) : (
+                  <>
+                    <Link href="/register" className={cn(buttonClassName("primary"), "w-full mt-5 rounded-[9px]")}>
+                      Apply for this programme
+                    </Link>
+                    <Link href="/contact" className={buttonClassName("secondary", "w-full h-11 mt-[10px] text-[13.5px]")}>
+                      Speak to a representative
+                    </Link>
+                    <div className="text-[11px] text-neutral-700 text-center mt-[14px]">Registration is free · you pay only when you enrol</div>
+                  </>
+                )}
               </div>
             </div>
           </div>

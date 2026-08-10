@@ -203,12 +203,24 @@ export async function setProgrammeStatus(id: string, status: ProgrammeStatus) {
   }
 
   const updated = await prisma.programme.update({ where: { id }, data: { status } });
+
+  // Slice 11 Part C rule 3: archiving must name the affected listing so
+  // whoever archived it knows what they just changed — the listing stays
+  // live with enrolment closed (README C1), it is not unpublished here.
+  let description = `Changed ${programme.code} status from ${programme.status} to ${status}`;
+  if (status === "ARCHIVED") {
+    const listing = await prisma.programmeListing.findUnique({ where: { programmeId: id } });
+    if (listing?.isPublished) {
+      description += ` — its listing "${programme.title}" remains live with enrolment now closed`;
+    }
+  }
+
   await recordAuditEvent(prisma, {
     actorStaffId: staff.id,
     subjectType: "programme",
     subjectId: id,
     action: "programme.status_changed",
-    description: `Changed ${programme.code} status from ${programme.status} to ${status}`,
+    description,
   });
 
   revalidatePath(`/programmes/${id}/content`);

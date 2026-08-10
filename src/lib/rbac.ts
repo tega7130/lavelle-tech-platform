@@ -205,3 +205,65 @@ export async function deactivateStaff(params: { staffId: string; reason: string;
     { isolationLevel: "Serializable" }
   );
 }
+
+/**
+ * Slice 11 Part G: suspension and deactivation are kept distinct in
+ * meaning (leave / an investigation vs. the person has left) but
+ * identical in mechanism — a mandatory reason, immediate session
+ * revocation, and the same last-active-super-admin guard under the same
+ * Serializable isolation (README G3 rule 2: "it is easy to guard only
+ * one path" — this mirrors deactivateStaff exactly rather than
+ * duplicating the guard with different discipline).
+ */
+export async function suspendStaff(params: { staffId: string; reason: string; actingStaffId: string }) {
+  const { staffId, reason, actingStaffId } = params;
+  const trimmed = reason.trim();
+  if (!trimmed) throw new Error("A reason is required to suspend a staff account.");
+
+  await prisma.$transaction(
+    async (tx) => {
+      const target = await tx.staff.findUniqueOrThrow({ where: { id: staffId } });
+      if (target.role === StaffRole.SUPER_ADMIN) {
+        await assertNotLastActiveSuperAdminTx(tx, staffId);
+      }
+      const now = new Date();
+      await tx.staff.update({
+        where: { id: staffId },
+        data: { status: StaffStatus.SUSPENDED, suspendedAt: now, suspendedReason: trimmed, suspendedByStaffId: actingStaffId },
+      });
+      await revokeAllStaffSessions(staffId, tx);
+      await tx.auditEvent.create({
+        data: {
+          actorStaffId: actingStaffId,
+          action: "staff.suspend",
+          subjectType: "staff",
+          subjectId: staffId,
+          description: "Suspended the staff account",
+          reason: trimmed,
+        },
+      });
+    },
+    { isolationLevel: "Serializable" }
+  );
+}
+
+/** Lifting a suspension is a single action, no reason required (README G3 rule 4). */
+export async function liftSuspension(params: { staffId: string; actingStaffId: string }) {
+  const { staffId, actingStaffId } = params;
+
+  await prisma.$transaction(async (tx) => {
+    await tx.staff.update({
+      where: { id: staffId },
+      data: { status: StaffStatus.ACTIVE, suspendedAt: null, suspendedReason: null, suspendedByStaffId: null },
+    });
+    await tx.auditEvent.create({
+      data: {
+        actorStaffId: actingStaffId,
+        action: "staff.suspension_lifted",
+        subjectType: "staff",
+        subjectId: staffId,
+        description: "Lifted the suspension on the staff account",
+      },
+    });
+  });
+}

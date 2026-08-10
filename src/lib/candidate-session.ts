@@ -23,7 +23,10 @@ import type {
 
 export const CANDIDATE_SESSION_COOKIE = "lavelle_candidate_session";
 const COOKIE_NAME = CANDIDATE_SESSION_COOKIE;
-const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30; // 30 days, an absolute cap regardless of "remember me"
+// Slice 11 Part H: 24 hours absolute, no idle timeout, same for staff
+// (staff-session.ts) — set once at creation and never extended (rule 1),
+// with exactly one bounded exception below (the exam carve-out, rule 4).
+const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24;
 
 function sessionSecret() {
   const secret = process.env.CANDIDATE_SESSION_SECRET;
@@ -125,6 +128,8 @@ export interface CurrentCandidate {
   isEnrolled: boolean;
   profile: CandidateProfile | null;
   checklist: Record<ChecklistKey, boolean> & { doneCount: number; allDone: boolean };
+  /** For the client-side 15-minutes-remaining warning (README H3 rule 5) — the session row's own expiresAt, post any exam-carve-out extension. */
+  sessionExpiresAt: Date;
 }
 
 function computeChecklist(
@@ -158,7 +163,29 @@ export async function resolveCandidateFromToken(token: string): Promise<CurrentC
     include: { candidate: { include: { profile: true } } },
   });
   if (!session || !session.candidate) return null;
-  if (session.revokedAt || session.expiresAt < new Date()) return null;
+  if (session.revokedAt) return null;
+
+  let expiresAt = session.expiresAt;
+  const now = new Date();
+  if (expiresAt < now) {
+    // README H2 — the ONE exception to "expiresAt never slides": a
+    // sitting in progress holds the session open until it's submitted,
+    // expires or is forfeited. Gated on `session.expiresAt < sitting
+    // .expiresAt` (not just "does an active sitting exist") so this can
+    // only ever fire once — after the extension, expiresAt is past the
+    // sitting's own boundary and this condition is false on every later
+    // check, for this sitting or any other (rule 15: bounded, once).
+    const activeSitting = await prisma.sitting.findFirst({
+      where: { state: "IN_PROGRESS", expiresAt: { gt: now }, registration: { candidateId: session.candidateId! } },
+      select: { expiresAt: true },
+    });
+    if (activeSitting?.expiresAt && session.expiresAt < activeSitting.expiresAt) {
+      expiresAt = new Date(activeSitting.expiresAt.getTime() + 10 * 60_000);
+      await prisma.session.update({ where: { id: session.id }, data: { expiresAt } });
+    } else {
+      return null; // genuinely expired — no exam in progress to hold it open
+    }
+  }
 
   const candidate = session.candidate;
   if (candidate.accountStatus === "SUSPENDED") {
@@ -180,6 +207,7 @@ export async function resolveCandidateFromToken(token: string): Promise<CurrentC
     isEnrolled: candidate.candidateNumber !== null,
     profile: candidate.profile,
     checklist: computeChecklist(candidate, candidate.profile),
+    sessionExpiresAt: expiresAt,
   };
 }
 

@@ -107,6 +107,7 @@ export async function listExamWindows(examId: string) {
       id: w.id,
       opensAt: w.opensAt,
       closesAt: w.closesAt,
+      capacity: w.capacity,
       registered: w.registrations.length,
       submitted: sittings.filter((s) => s.state === "SUBMITTED").length,
       released: sittings.filter((s) => s.state === "RELEASED").length,

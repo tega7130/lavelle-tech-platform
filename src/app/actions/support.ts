@@ -1,10 +1,20 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { Permission, type RequestPriority } from "@/generated/prisma/client";
+import { Permission, type RequestPriority, type RequestCategory } from "@/generated/prisma/client";
 import { requireStaffPermission } from "@/lib/staff-auth";
-import { respondToRequest, resolveRequest, reopenRequest, assignRequest, addCandidateNote, type AssignRequestInput } from "@/lib/support";
-import { listAssignableStaff } from "@/lib/support-reads";
+import { getCurrentCandidate } from "@/lib/candidate-session";
+import {
+  respondToRequest,
+  resolveRequest,
+  reopenRequest,
+  assignRequest,
+  addCandidateNote,
+  submitCandidateRequest,
+  submitCandidateReply,
+  type AssignRequestInput,
+} from "@/lib/support";
+import { listAssignableStaff, listMyRequests, getMyRequestThread } from "@/lib/support-reads";
 
 function revalidateSupport(requestId: string) {
   revalidatePath(`/admin/support/${requestId}`);
@@ -50,4 +60,35 @@ export async function addCandidateNoteAction(candidateId: string, body: string) 
   if (!trimmed) throw new Error("A note is required.");
   await addCandidateNote(candidateId, staff.id, trimmed);
   revalidatePath(`/admin/candidates/${candidateId}/notes`);
+}
+
+// ── Candidate-facing (Slice 11 Part F) ──────────────────────────────────
+
+export async function listMyRequestsAction() {
+  const candidate = await getCurrentCandidate();
+  if (!candidate) throw new Error("Sign in required.");
+  return listMyRequests(candidate.id);
+}
+
+export async function getMyRequestThreadAction(requestId: string) {
+  const candidate = await getCurrentCandidate();
+  if (!candidate) throw new Error("Sign in required.");
+  return getMyRequestThread(requestId, candidate.id);
+}
+
+export async function submitCandidateRequestAction(input: { subject: string; category: RequestCategory; body: string }) {
+  const candidate = await getCurrentCandidate();
+  if (!candidate) throw new Error("Sign in required.");
+  const request = await submitCandidateRequest(candidate.id, input);
+  revalidatePath("/portal/support");
+  return request;
+}
+
+export async function submitCandidateReplyAction(requestId: string, body: string) {
+  const candidate = await getCurrentCandidate();
+  if (!candidate) throw new Error("Sign in required.");
+  const trimmed = body.trim();
+  if (!trimmed) throw new Error("A message is required.");
+  await submitCandidateReply(requestId, candidate.id, trimmed);
+  revalidatePath("/portal/support");
 }
