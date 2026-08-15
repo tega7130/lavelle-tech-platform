@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { requireStaffPermission } from "@/lib/staff-auth";
+import { getCurrentCandidate } from "@/lib/candidate-session";
 import { Permission } from "@/generated/prisma/client";
 import { createPresignedUpload, MAX_UPLOAD_BYTES } from "@/lib/storage";
+
+const MAX_PHOTO_BYTES = 8 * 1024 * 1024; // 8MB — a profile photo, not a lecture asset
 
 const bodySchema = z.object({
   kind: z.enum(["audio", "image", "video", "document"]),
@@ -10,9 +13,11 @@ const bodySchema = z.object({
   bytes: z.number().int().positive().max(MAX_UPLOAD_BYTES),
   // Which permission gates this upload — programme media (Slice 02,
   // default, preserves every existing caller unchanged), a finance
-  // receipt (Slice 03: offline-payment recording), or certificate
-  // template artwork (Slice 07).
-  purpose: z.enum(["programme", "finance", "certificate"]).default("programme"),
+  // receipt (Slice 03: offline-payment recording), certificate template
+  // artwork (Slice 07), or a candidate's own profile photo (candidate-
+  // gated, not staff-gated — the only purpose below with no staff
+  // permission at all).
+  purpose: z.enum(["programme", "finance", "certificate", "candidate_photo"]).default("programme"),
 });
 
 const PERMISSION_BY_PURPOSE = {
@@ -35,10 +40,18 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "invalid_request", issues: parsed.error.issues }, { status: 400 });
   }
 
-  try {
-    await requireStaffPermission(PERMISSION_BY_PURPOSE[parsed.data.purpose]);
-  } catch {
-    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  if (parsed.data.purpose === "candidate_photo") {
+    if (parsed.data.kind !== "image" || parsed.data.bytes > MAX_PHOTO_BYTES) {
+      return NextResponse.json({ error: "invalid_request" }, { status: 400 });
+    }
+    const candidate = await getCurrentCandidate();
+    if (!candidate) return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  } else {
+    try {
+      await requireStaffPermission(PERMISSION_BY_PURPOSE[parsed.data.purpose]);
+    } catch {
+      return NextResponse.json({ error: "forbidden" }, { status: 403 });
+    }
   }
 
   return NextResponse.json(createPresignedUpload(parsed.data));

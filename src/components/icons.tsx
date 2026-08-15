@@ -187,3 +187,11 @@ export const EyeIcon = (p: IconProps) => (
     <circle cx="9" cy="9" r="2" />
   </Svg>
 );
+
+export const EyeOffIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M2 9s2.6-5 7-5 7 5 7 5-2.6 5-7 5-7-5-7-5Z" />
+    <circle cx="9" cy="9" r="2" />
+    <path d="M2.5 2.5l13 13" />
+  </Svg>
+);

@@ -26,6 +26,7 @@ import {
   invalidateOutstandingTokens,
 } from "@/lib/verification-token";
 import { recordAuditEvent } from "@/lib/audit";
+import { p2002Target } from "@/lib/prisma-errors";
 import type { FormActionState } from "@/lib/action-state";
 
 function formToObject(formData: FormData): Record<string, string> {
@@ -108,7 +109,7 @@ export async function registerCandidate(
       return { ok: true, data: { applicantNumber: result.candidate.applicantNumber } };
     } catch (e) {
       if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
-        const target = (e.meta?.target as string[] | undefined) ?? [];
+        const target = p2002Target(e);
         if (target.includes("email")) {
           return { errors: { email: "An account with this email already exists" }, values: raw };
         }
@@ -134,9 +135,11 @@ export async function signInCandidate(
   const ip = await getClientIp();
 
   try {
-    await enforceRateLimit("signIn", { ip, email: raw.email }, { limit: 10, windowSeconds: 15 * 60 });
+    await enforceRateLimit("signIn", { ip, email: raw.email }, { limit: 5, windowSeconds: 5 * 60 });
   } catch (e) {
-    if (e instanceof RateLimitError) return { values: raw, message: e.message };
+    if (e instanceof RateLimitError) {
+      return { values: raw, message: "Too many attempts. Try again in 5 minutes." };
+    }
     throw e;
   }
 

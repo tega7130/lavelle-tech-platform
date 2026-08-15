@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { updateProfile, resendVerification } from "@/app/actions/candidate-auth";
 import { emptyActionState } from "@/lib/action-state";
 import type { CurrentCandidate } from "@/lib/candidate-session";
@@ -84,6 +85,7 @@ type ModalStage = "welcome" | "form" | "done" | "closed";
 export function ApplicantDashboard({ candidate }: { candidate: CurrentCandidate }) {
   const { checklist } = candidate;
   const firstName = candidate.firstName;
+  const searchParams = useSearchParams();
 
   const [stage, setStage] = React.useState<ModalStage>("closed");
   const [showNudge, setShowNudge] = React.useState(false);
@@ -94,18 +96,22 @@ export function ApplicantDashboard({ candidate }: { candidate: CurrentCandidate 
   const [band, setBand] = React.useState<string | null>(null);
   const [place, setPlace] = React.useState("");
   const [saving, setSaving] = React.useState(false);
-  const [photoUrlInput, setPhotoUrlInput] = React.useState<string | null>(null);
   const [resendMessage, setResendMessage] = React.useState<string | null>(null);
-  const [localDone, setLocalDone] = React.useState({
-    photo: checklist.photo,
-    handbook: checklist.handbook,
-  });
 
   React.useEffect(() => {
     // A genuine one-time read from an external system (localStorage isn't
     // available during render/SSR, so this can't be computed during
     // render like the error-state syncing elsewhere in this file) —
     // exactly what effects are for, per react.dev/learn/synchronizing-with-effects.
+    // The Profile & ID page's "Edit"/"Add details" link lands here with
+    // ?complete=professional — that takes priority over the localStorage
+    // dismissal, since the candidate just asked to edit this specific step.
+    if (searchParams.get("complete") === "professional") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setStep(1);
+      setStage("form");
+      return;
+    }
     if (checklist.allDone) return;
     const dismissed = typeof window !== "undefined" && window.localStorage.getItem(DISMISSED_KEY);
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -147,24 +153,6 @@ export function ApplicantDashboard({ candidate }: { candidate: CurrentCandidate 
     setStage("done");
   }
 
-  async function markHandbookRead() {
-    const fd = new FormData();
-    fd.set("handbookAcknowledged", "true");
-    const result = await updateProfile(emptyActionState, fd);
-    if (result.ok) setLocalDone((d) => ({ ...d, handbook: true }));
-  }
-
-  async function savePhotoUrl() {
-    if (!photoUrlInput) return;
-    const fd = new FormData();
-    fd.set("photoUrl", photoUrlInput);
-    const result = await updateProfile(emptyActionState, fd);
-    if (result.ok) {
-      setLocalDone((d) => ({ ...d, photo: true }));
-      setPhotoUrlInput(null);
-    }
-  }
-
   async function handleResend() {
     setResendMessage("Sending…");
     const res = await resendVerification();
@@ -175,9 +163,9 @@ export function ApplicantDashboard({ candidate }: { candidate: CurrentCandidate 
   const finalDoneCount =
     (checklist.account ? 1 : 0) +
     (professionalDone ? 1 : 0) +
-    (localDone.photo ? 1 : 0) +
+    (checklist.photo ? 1 : 0) +
     (checklist.email ? 1 : 0) +
-    (localDone.handbook ? 1 : 0);
+    (checklist.handbook ? 1 : 0);
   const allDone = finalDoneCount === 5;
   const pct = Math.round((finalDoneCount / 5) * 100);
 
@@ -188,28 +176,28 @@ export function ApplicantDashboard({ candidate }: { candidate: CurrentCandidate 
       label: "Professional details",
       meta: "Tell us about your background",
       done: professionalDone,
-      action: professionalDone ? null : { label: "Start", onClick: openModal },
+      action: professionalDone ? null : { label: "Start", onClick: openModal, href: undefined },
     },
     {
       key: "photo",
       label: "Profile photo",
       meta: "Used to generate your Candidate ID card",
-      done: localDone.photo,
-      action: localDone.photo ? null : { label: "Upload", onClick: () => setPhotoUrlInput("") },
+      done: checklist.photo,
+      action: checklist.photo ? null : { label: "Upload", href: "/portal/profile", onClick: undefined },
     },
     {
       key: "email",
       label: "Email verification",
       meta: "Confirm your email address",
       done: checklist.email,
-      action: checklist.email ? null : { label: "Resend", onClick: handleResend },
+      action: checklist.email ? null : { label: "Resend", onClick: handleResend, href: undefined },
     },
     {
       key: "handbook",
       label: "Candidate handbook",
       meta: "Acknowledge the candidate handbook",
-      done: localDone.handbook,
-      action: localDone.handbook ? null : { label: "Read", onClick: markHandbookRead },
+      done: checklist.handbook,
+      action: checklist.handbook ? null : { label: "Read", href: "/portal/profile", onClick: undefined },
     },
   ];
 
@@ -317,7 +305,12 @@ export function ApplicantDashboard({ candidate }: { candidate: CurrentCandidate 
                   </div>
                   <div className="text-xs leading-[1.5] text-neutral-600">{it.meta}</div>
                 </div>
-                {it.action && (
+                {it.action?.href && (
+                  <Link href={it.action.href} className="mt-px flex-none text-xs font-medium text-accent">
+                    {it.action.label}
+                  </Link>
+                )}
+                {it.action?.onClick && (
                   <button
                     onClick={it.action.onClick}
                     className="mt-px flex-none text-xs font-medium text-accent"
@@ -329,20 +322,6 @@ export function ApplicantDashboard({ candidate }: { candidate: CurrentCandidate 
             ))}
           </div>
           {resendMessage && <div className="mt-3 text-xs text-neutral-600">{resendMessage}</div>}
-          {photoUrlInput !== null && (
-            <div className="mt-3 flex gap-2">
-              <input
-                autoFocus
-                value={photoUrlInput}
-                onChange={(e) => setPhotoUrlInput(e.target.value)}
-                placeholder="https://…"
-                className="h-9 flex-1 rounded-md border border-neutral-300 bg-bg px-2.5 text-sm"
-              />
-              <Button variant="secondary" onClick={savePhotoUrl} className="h-9">
-                Save
-              </Button>
-            </div>
-          )}
           <div className="mt-3 text-[11.5px] text-neutral-600">
             A complete profile is required before a Candidate ID card can be issued.
           </div>
@@ -614,9 +593,14 @@ export function ApplicantDashboard({ candidate }: { candidate: CurrentCandidate 
                   Thank you, {firstName}. Your professional details are on record and your programme recommendations
                   now reflect your standing.
                 </p>
-                <Button onClick={() => setStage("closed")} className="mt-[22px] h-11">
-                  Go to dashboard
-                </Button>
+                <div className="mt-[22px] flex flex-col items-center gap-2.5">
+                  <Link href="/portal/catalogue" className={buttonClassName("primary", "h-11 px-5")}>
+                    Browse programmes →
+                  </Link>
+                  <button onClick={() => setStage("closed")} className="text-xs text-neutral-600">
+                    Go to dashboard instead
+                  </button>
+                </div>
               </div>
             )}
           </div>

@@ -12,6 +12,7 @@ import { LiveEnrolmentExistsError, PaymentNotPendingError, assertProgrammeOpenFo
 import { applyOfflineRecording } from "@/lib/offline-recording";
 import { offlinePaymentInputSchema, recordOfflinePaymentSchema, fieldErrors } from "@/lib/validation/payment";
 import { getPaymentStatus } from "@/lib/catalogue-reads";
+import { p2002Target } from "@/lib/prisma-errors";
 import type { FormActionState } from "@/lib/action-state";
 
 /** Thin Server Action wrapper so the checkout return page's client-side poll can call the server function (rule 6 — this, not the redirect URL, is the authority). */
@@ -60,9 +61,57 @@ async function createPendingPaymentAndEnrolment(candidateId: string, programmeId
       });
     } catch (e) {
       if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
-        const target = JSON.stringify(e.meta?.target ?? "");
+        const target = p2002Target(e);
         if (target.includes("internalReference") && attempt < 2) continue; // reference collision — regenerate and retry
         throw new LiveEnrolmentExistsError(); // the partial unique index caught an existing live enrolment
+      }
+      throw e;
+    }
+  }
+  throw new Error("Could not generate a unique payment reference. Try again.");
+}
+
+/**
+ * A PENDING_PAYMENT enrolment whose latest payment attempt FAILED is
+ * abandoned, not live — the candidate must be able to try again, and a
+ * second enrolment row would collide with the one-live-enrolment-per-
+ * programme index anyway. Retrying reuses that same enrolment and adds a
+ * fresh Payment row rather than creating a second enrolment.
+ */
+async function resolveEnrolmentForPayment(candidateId: string, programmeId: string, feeMinor: number) {
+  const existing = await prisma.enrolment.findFirst({
+    where: { candidateId, programmeId, status: { notIn: [EnrolmentStatus.WITHDRAWN, EnrolmentStatus.REFUNDED] } },
+    include: { payments: { orderBy: { createdAt: "desc" }, take: 1 } },
+  });
+  if (!existing) return createPendingPaymentAndEnrolment(candidateId, programmeId, feeMinor);
+
+  const latestStatus = existing.payments[0]?.status;
+  if (existing.status !== EnrolmentStatus.PENDING_PAYMENT || latestStatus !== PaymentStatus.FAILED) {
+    throw new LiveEnrolmentExistsError();
+  }
+  const payment = await createRetryPayment(existing.id, candidateId, feeMinor);
+  return { enrolment: existing, payment };
+}
+
+async function createRetryPayment(enrolmentId: string, candidateId: string, feeMinor: number) {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const internalReference = generateInternalReference();
+    try {
+      return await prisma.payment.create({
+        data: {
+          candidateId,
+          purpose: PaymentPurpose.PROGRAMME_FEE,
+          enrolmentId,
+          amountMinor: feeMinor,
+          provider: "paystack",
+          internalReference,
+          status: PaymentStatus.PENDING,
+        },
+      });
+    } catch (e) {
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
+        const target = p2002Target(e);
+        if (target.includes("internalReference") && attempt < 2) continue; // reference collision — regenerate and retry
       }
       throw e;
     }
@@ -78,12 +127,7 @@ export async function initiatePayment(programmeId: string) {
   const programme = await prisma.programme.findUniqueOrThrow({ where: { id: programmeId } });
   assertProgrammeOpenForEnrolment(programme);
 
-  const existing = await prisma.enrolment.findFirst({
-    where: { candidateId: candidate.id, programmeId, status: { notIn: [EnrolmentStatus.WITHDRAWN, EnrolmentStatus.REFUNDED] } },
-  });
-  if (existing) throw new LiveEnrolmentExistsError();
-
-  const { payment } = await createPendingPaymentAndEnrolment(candidate.id, programmeId, programme.feeMinor);
+  const { payment } = await resolveEnrolmentForPayment(candidate.id, programmeId, programme.feeMinor);
   const checkout = createProviderCheckout({
     provider: payment.provider,
     internalReference: payment.internalReference,
@@ -122,16 +166,14 @@ export async function recordOfflinePayment(_prev: FormActionState, formData: For
   const data = parsed.data;
 
   const programme = await prisma.programme.findUniqueOrThrow({ where: { id: data.programmeId } });
-  const existing = await prisma.enrolment.findFirst({
-    where: {
-      candidateId: data.candidateId,
-      programmeId: data.programmeId,
-      status: { notIn: [EnrolmentStatus.WITHDRAWN, EnrolmentStatus.REFUNDED] },
-    },
-  });
-  if (existing) return { message: new LiveEnrolmentExistsError().message };
 
-  const { payment } = await createPendingPaymentAndEnrolment(data.candidateId, data.programmeId, programme.feeMinor);
+  let payment;
+  try {
+    ({ payment } = await resolveEnrolmentForPayment(data.candidateId, data.programmeId, programme.feeMinor));
+  } catch (e) {
+    if (e instanceof LiveEnrolmentExistsError) return { message: e.message };
+    throw e;
+  }
 
   const ip = await getClientIp();
   const result = await applyOfflineRecording(payment.id, data, staff.id, ip);

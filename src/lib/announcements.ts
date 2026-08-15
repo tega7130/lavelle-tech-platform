@@ -64,6 +64,21 @@ export async function sendAnnouncement(announcementId: string, staffId: string) 
       ),
       skipDuplicates: true,
     });
+    // IN_APP is the only channel this app actually renders anywhere
+    // (EMAIL/WHATSAPP/SMS are delivery-tracking only, no provider wired
+    // up) — that channel's deliveries double as the candidate's
+    // notification-bell entry, in the same Notification table every
+    // other candidate-facing notification already uses.
+    if (announcement.channels.includes("IN_APP")) {
+      await tx.notification.createMany({
+        data: recipients.map((r) => ({
+          candidateId: r.id,
+          category: "ANNOUNCEMENT" as const,
+          title: announcement.title,
+          body: announcement.body,
+        })),
+      });
+    }
     await tx.announcement.update({
       where: { id: announcementId },
       data: { state: "SENT", sentAt: now, recipientCount: recipients.length },

@@ -9,6 +9,7 @@ import { emptyActionState } from "@/lib/action-state";
 import { AuthSplitScreen } from "@/components/auth/auth-split-screen";
 import { Button } from "@/components/ui/button";
 import { Label, Input, FieldError } from "@/components/ui/field";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Checkbox } from "@/components/ui/checkbox";
 
 const ASSURANCES = [
@@ -139,10 +140,9 @@ function SignInForm() {
                     Forgot password?
                   </a>
                 </div>
-                <Input
+                <PasswordInput
                   id="password"
                   name="password"
-                  type="password"
                   placeholder="Your password"
                   value={values.password}
                   onChange={field("password")}

@@ -4,6 +4,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { Permission } from "@/generated/prisma/client";
 import { requireStaffPermission } from "@/lib/staff-auth";
+import { getCurrentCandidate } from "@/lib/candidate-session";
 import { recordAuditEvent } from "@/lib/audit";
 import { blobExists, blobSize, readBlob } from "@/lib/storage";
 import { probeDurationSeconds } from "@/lib/media-probe";
@@ -63,6 +64,59 @@ export async function finaliseUpload(input: unknown) {
     subjectId: asset.id,
     action: "media_asset.uploaded",
     description: `Uploaded ${data.kind} "${data.originalFilename}"`,
+  });
+
+  return asset;
+}
+
+const finaliseCandidatePhotoSchema = z.object({
+  storageKey: z.string().min(1),
+  mimeType: z.string().min(1),
+  originalFilename: z.string().min(1),
+});
+
+/**
+ * The candidate-facing counterpart to finaliseUpload — same verify-blob-
+ * then-create-MediaAsset shape, but candidate-gated instead of staff-
+ * permission-gated, and it also writes the resulting storage key onto
+ * CandidateProfile.photoUrl in the same call (the one write path for a
+ * candidate's own photo, mirroring updateProfile's single-write-path
+ * rule). photoUrl holds a storage key, never a signed URL — a signed GET
+ * URL expires in minutes and must be regenerated fresh at render time.
+ */
+export async function finaliseCandidatePhotoUpload(input: unknown) {
+  const data = finaliseCandidatePhotoSchema.parse(input);
+  const candidate = await getCurrentCandidate();
+  if (!candidate) throw new Error("You must be signed in.");
+  if (!data.mimeType.startsWith("image/")) throw new Error("Profile photos must be an image file.");
+
+  if (!(await blobExists(data.storageKey))) {
+    throw new Error("Upload not found — the presigned URL may have expired before the file finished uploading.");
+  }
+  const bytes = await blobSize(data.storageKey);
+
+  const asset = await prisma.mediaAsset.create({
+    data: {
+      kind: "image",
+      storageKey: data.storageKey,
+      mimeType: data.mimeType,
+      bytes,
+      originalFilename: data.originalFilename,
+      uploadedByCandidateId: candidate.id,
+    },
+  });
+
+  await prisma.candidateProfile.upsert({
+    where: { candidateId: candidate.id },
+    create: { candidateId: candidate.id, photoUrl: data.storageKey },
+    update: { photoUrl: data.storageKey },
+  });
+
+  await recordAuditEvent(prisma, {
+    subjectType: "candidate",
+    subjectId: candidate.id,
+    action: "candidate.photo_uploaded",
+    description: "Uploaded a new profile photo",
   });
 
   return asset;

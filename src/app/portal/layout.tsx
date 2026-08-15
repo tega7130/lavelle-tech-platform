@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getCurrentCandidate } from "@/lib/candidate-session";
 import { signOutCandidate } from "@/app/actions/candidate-auth";
+import { listCandidateNotifications } from "@/lib/candidate-notifications";
 import { CandidateShell } from "@/components/shell/candidate-shell";
 import { SessionExpiryBanner } from "@/components/shell/session-expiry-banner";
 
@@ -9,6 +10,7 @@ export default async function PortalLayout({ children }: { children: React.React
   if (!candidate) redirect("/sign-in");
 
   const initials = `${candidate.firstName[0] ?? ""}${candidate.lastName[0] ?? ""}`.toUpperCase();
+  const notifications = await listCandidateNotifications(candidate.id);
 
   return (
     <>
@@ -21,6 +23,7 @@ export default async function PortalLayout({ children }: { children: React.React
         }}
         enrolled={candidate.isEnrolled}
         onSignOut={signOutCandidate}
+        initialNotifications={notifications}
       >
         {children}
       </CandidateShell>

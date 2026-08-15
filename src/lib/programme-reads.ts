@@ -47,6 +47,7 @@ export async function getProgrammeForEdit(id: string) {
       category: true,
       assessmentWeightings: true,
       _count: { select: { enrolments: true } },
+      coverVideoAsset: { select: { id: true, originalFilename: true } },
     },
   });
 }

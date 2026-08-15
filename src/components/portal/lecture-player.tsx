@@ -112,7 +112,10 @@ export function LecturePlayer({ enrolmentId, data }: { enrolmentId: string; data
       {/* Dark lecture rail */}
       <aside className="text-white flex flex-col" style={{ background: "#0b1322" }}>
         <div className="p-[var(--space-4)] border-b border-white/10">
-          <Link href="/portal/programme" className="inline-flex items-center gap-1.5 text-white/70 hover:text-white text-[13px]">
+          <Link
+            href={`/portal/programme?programme=${data.programme.code}`}
+            className="inline-flex items-center gap-1.5 text-white/70 hover:text-white text-[13px]"
+          >
             <ChevronLeftIcon width={14} height={14} /> Back
           </Link>
           <div className="font-heading font-semibold text-[14px] mt-3">{data.programme.title}</div>

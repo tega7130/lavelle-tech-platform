@@ -39,8 +39,11 @@ export function EnrolledDashboard({ candidate, summary }: { candidate: CurrentCa
               <div className="text-[12px] text-neutral-500 mt-1">
                 {e.cohort ? `Cohort ${e.cohort.code}` : "Cohort placement pending"} &middot; {e.intake.month} {e.intake.year} intake
               </div>
-              <Link href="/portal/programme" className={buttonClassName("secondary", "mt-3 self-start text-xs px-3 py-1.5 h-auto")}>
-                Open programme
+              <Link
+                href={`/portal/programme?programme=${e.programme.code}`}
+                className={buttonClassName("secondary", "mt-3 self-start text-xs px-3 py-1.5 h-auto")}
+              >
+                {e.status === "COMPLETED" ? "Review programme" : "Continue programme"}
               </Link>
             </Card>
           ))}

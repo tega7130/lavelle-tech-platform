@@ -8,6 +8,7 @@ import { emptyActionState } from "@/lib/action-state";
 import { AuthSplitScreen } from "@/components/auth/auth-split-screen";
 import { Button } from "@/components/ui/button";
 import { Label, Input, FieldError } from "@/components/ui/field";
+import { PasswordInput } from "@/components/ui/password-input";
 
 function SignInForm() {
   const searchParams = useSearchParams();
@@ -121,10 +122,9 @@ function SignInForm() {
                     Forgot password?
                   </button>
                 </div>
-                <Input
+                <PasswordInput
                   id="password"
                   name="password"
-                  type="password"
                   placeholder="Your password"
                   value={values.password}
                   onChange={field("password")}

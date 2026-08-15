@@ -27,6 +27,11 @@ const programmeObjectSchema = z.object({
   currency: z.string().trim().min(1).default("NGN"),
   deliveryLabel: z.string().trim().min(1).default("Online + proctored exam"),
   prerequisiteTier: z.enum(["FOUNDATION", "SPECIALIST", "ADVANCED_PRACTITIONER"]).optional(),
+  // Candidate-facing explainer video — a pasted hosted URL (e.g. YouTube)
+  // or an uploaded asset, mutually exclusive at the UI level, same
+  // either/or shape as Lecture.videoUrl/videoAssetId.
+  coverVideoUrl: z.string().trim().url().optional(),
+  coverVideoAssetId: z.string().nullable().optional(),
 });
 
 function requiresCategory(data: { categoryId?: string; newCategoryName?: string }) {

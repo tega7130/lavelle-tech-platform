@@ -125,7 +125,10 @@ export function Credentials({ data }: { data: Credentials }) {
                 </div>
               </div>
 
-              <Link href="/portal/programme" className={buttonClassName("secondary", "w-full justify-center mt-4 h-10 text-[13px]")}>
+              <Link
+                href={`/portal/programme?programme=${p.programmeCode}`}
+                className={buttonClassName("secondary", "w-full justify-center mt-4 h-10 text-[13px]")}
+              >
                 Continue programme
               </Link>
             </div>

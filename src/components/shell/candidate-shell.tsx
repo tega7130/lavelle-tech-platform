@@ -2,10 +2,15 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/cn";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { CANDIDATE_NAV_ITEMS } from "@/lib/candidate-nav";
+import {
+  listCandidateNotificationsAction,
+  markCandidateNotificationReadAction,
+  markAllCandidateNotificationsReadAction,
+} from "@/app/actions/notifications";
 import {
   DashboardIcon,
   ProgrammeIcon,
@@ -48,6 +53,15 @@ export const CANDIDATE_NAV: CandidateShellNavItem[] = CANDIDATE_NAV_ITEMS.map((i
   icon: NAV_ICONS[item.key]!,
 }));
 
+export interface CandidateNotificationItem {
+  id: string;
+  title: string;
+  body: string;
+  unread: boolean;
+  createdAt: Date;
+  href: string;
+}
+
 export interface CandidateShellProps {
   candidate: {
     name: string;
@@ -60,7 +74,18 @@ export interface CandidateShellProps {
   /** Overrides the breadcrumb derived from the active nav item. */
   crumb?: { section: string; title: string };
   onSignOut?: () => void;
+  initialNotifications?: { unreadCount: number; items: CandidateNotificationItem[] };
   children: React.ReactNode;
+}
+
+function relativeTime(d: Date) {
+  const ms = Date.now() - new Date(d).getTime();
+  const mins = Math.floor(ms / 60_000);
+  if (mins < 1) return "Just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
 }
 
 function useOnlineStatus() {
@@ -83,12 +108,46 @@ function useOnlineStatus() {
   return online;
 }
 
-export function CandidateShell({ candidate, enrolled, crumb, onSignOut, children }: CandidateShellProps) {
+export function CandidateShell({
+  candidate,
+  enrolled,
+  crumb,
+  onSignOut,
+  initialNotifications,
+  children,
+}: CandidateShellProps) {
+  const router = useRouter();
   const pathname = usePathname();
   const online = useOnlineStatus();
   const items = CANDIDATE_NAV.filter((item) => enrolled || !item.gated);
   const active = items.find((item) => pathname?.startsWith(item.href));
   const resolvedCrumb = crumb ?? { section: "Candidate Portal", title: active?.label ?? "" };
+
+  const [inboxOpen, setInboxOpen] = React.useState(false);
+  const [inbox, setInbox] = React.useState(initialNotifications ?? { unreadCount: 0, items: [] });
+
+  async function toggleInbox() {
+    const next = !inboxOpen;
+    setInboxOpen(next);
+    if (next) setInbox(await listCandidateNotificationsAction());
+  }
+
+  async function openNotification(n: CandidateNotificationItem) {
+    setInboxOpen(false);
+    if (n.unread) {
+      await markCandidateNotificationReadAction(n.id);
+      setInbox((cur) => ({
+        unreadCount: Math.max(0, cur.unreadCount - 1),
+        items: cur.items.map((i) => (i.id === n.id ? { ...i, unread: false } : i)),
+      }));
+    }
+    router.push(n.href);
+  }
+
+  async function markAllRead() {
+    await markAllCandidateNotificationsReadAction();
+    setInbox((cur) => ({ unreadCount: 0, items: cur.items.map((i) => ({ ...i, unread: false })) }));
+  }
 
   return (
     <div className="flex h-screen bg-bg text-text font-body">
@@ -165,12 +224,53 @@ export function CandidateShell({ candidate, enrolled, crumb, onSignOut, children
                 {candidate.cohort}
               </span>
             )}
-            <button
-              aria-label="Notifications"
-              className="relative w-[38px] h-[38px] rounded-md border border-neutral-300 bg-bg text-text flex items-center justify-center hover:bg-neutral-100 cursor-pointer"
-            >
-              <BellIcon />
-            </button>
+            <div className="relative">
+              <button
+                onClick={toggleInbox}
+                aria-label="Notifications"
+                title="Notifications"
+                className="relative w-[38px] h-[38px] rounded-md border border-neutral-300 bg-bg text-text flex items-center justify-center hover:bg-neutral-100 cursor-pointer"
+              >
+                <BellIcon />
+                {inbox.unreadCount > 0 && (
+                  <span className="absolute top-[3px] right-[4px] min-w-[15px] h-[15px] px-1 box-border rounded-full bg-accent text-white text-[9.5px] font-bold flex items-center justify-center tabular-nums">
+                    {inbox.unreadCount}
+                  </span>
+                )}
+              </button>
+              {inboxOpen && (
+                <div className="absolute top-[calc(100%+8px)] right-0 z-[60] w-[390px] max-h-[440px] overflow-y-auto rounded-md bg-bg border border-divider shadow-lg">
+                  <div className="flex justify-between items-center gap-3 px-4 pt-4 pb-3 border-b border-dashed border-neutral-300 sticky top-0 bg-bg">
+                    <div className="font-heading font-semibold text-[13.5px]">Your notifications</div>
+                    <button onClick={markAllRead} className="text-[11.5px] font-medium text-accent hover:underline cursor-pointer">
+                      Mark all read
+                    </button>
+                  </div>
+                  <div className="flex flex-col">
+                    {inbox.items.map((n) => (
+                      <button
+                        key={n.id}
+                        onClick={() => openNotification(n)}
+                        className={`flex gap-[11px] px-4 py-3 text-left border-b border-dashed border-neutral-300 cursor-pointer hover:bg-neutral-100 ${n.unread ? "bg-accent-100" : ""}`}
+                      >
+                        <span className={`flex-none w-[7px] h-[7px] mt-1.5 rounded-full ${n.unread ? "bg-accent" : "bg-neutral-300"}`} />
+                        <div className="flex-1 min-w-0">
+                          <div className={`text-[12.5px] leading-snug ${n.unread ? "font-semibold" : "font-normal"}`}>{n.title}</div>
+                          <div className="text-neutral-500 text-[11.5px] leading-snug mt-0.5">{n.body}</div>
+                          <div className="text-neutral-500 text-[10.5px] mt-1">{relativeTime(n.createdAt)}</div>
+                        </div>
+                      </button>
+                    ))}
+                    {inbox.items.length === 0 && (
+                      <div className="px-4 py-6 text-center">
+                        <div className="font-heading font-semibold text-[13px]">Nothing waiting</div>
+                        <div className="text-neutral-500 text-[11.5px] mt-[3px]">Announcements and updates arrive here.</div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
             <ThemeToggle />
           </div>
         </header>

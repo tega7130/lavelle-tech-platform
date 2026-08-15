@@ -1,7 +1,8 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getProgrammeDetail } from "@/lib/catalogue-reads";
-import { formatNaira, tierLabel } from "@/lib/format";
+import { formatNaira, tierLabel, youtubeEmbedUrl } from "@/lib/format";
+import { getSignedAssetUrl } from "@/lib/storage";
 import { Card, CardKicker } from "@/components/ui/card";
 import { Tag } from "@/components/ui/tag";
 import { buttonClassName } from "@/components/ui/button";
@@ -11,6 +12,13 @@ export default async function ProgrammeDetailPage({ params }: { params: Promise<
   const { code } = await params;
   const programme = await getProgrammeDetail(code);
   if (!programme) notFound();
+
+  const embedUrl = programme.coverVideoUrl ? youtubeEmbedUrl(programme.coverVideoUrl) : null;
+  const directVideoUrl = programme.coverVideoAsset
+    ? getSignedAssetUrl(programme.coverVideoAsset.storageKey)
+    : !embedUrl
+      ? programme.coverVideoUrl
+      : null;
 
   return (
     <div className="max-w-[820px]">
@@ -23,6 +31,23 @@ export default async function ProgrammeDetailPage({ params }: { params: Promise<
       </div>
       <h1 className="font-heading text-[28px] m-0">{programme.title}</h1>
       <p className="text-[14px] text-neutral-600 max-w-[640px] mt-2">{programme.summary}</p>
+
+      {(embedUrl || directVideoUrl) && (
+        <div className="mt-[var(--space-4)] max-w-[640px] aspect-video overflow-hidden rounded-md border border-divider bg-[#0b1322]">
+          {embedUrl ? (
+            <iframe
+              src={embedUrl}
+              title={`${programme.title} — cover video`}
+              className="h-full w-full"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+            />
+          ) : (
+            // eslint-disable-next-line jsx-a11y/media-has-caption
+            <video src={directVideoUrl!} controls className="h-full w-full" />
+          )}
+        </div>
+      )}
 
       <div className="grid grid-cols-[2fr_1fr] gap-[var(--space-6)] mt-[var(--space-6)]">
         <div>
@@ -61,7 +86,7 @@ export default async function ProgrammeDetailPage({ params }: { params: Promise<
           <div className="font-heading text-[26px]">{formatNaira(programme.feeMinor)}</div>
           <div className="text-[12px] text-neutral-500 mb-2">Nigerian rails &amp; international cards accepted</div>
           {programme.viewerEnrolled ? (
-            <Link href="/portal/programme" className={buttonClassName("secondary", "w-full justify-center")}>
+            <Link href={`/portal/programme?programme=${code}`} className={buttonClassName("secondary", "w-full justify-center")}>
               Enrolled — go to programme
             </Link>
           ) : (

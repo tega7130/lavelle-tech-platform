@@ -68,7 +68,7 @@ export function DeadlinesList({ deadlines }: { deadlines: Deadlines }) {
               <Tag variant={style.tag}>{style.label}</Tag>
               {d.kind !== "EXAMINATION" && (
                 <Link
-                  href="/portal/programme"
+                  href={`/portal/programme?programme=${d.programmeCode}`}
                   className={buttonClassName("secondary", "shrink-0 h-[31px] px-[11px] text-xs")}
                 >
                   View

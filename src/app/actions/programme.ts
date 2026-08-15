@@ -80,6 +80,11 @@ export async function createProgramme(_prev: FormActionState, formData: FormData
           currency: data.currency,
           deliveryLabel: data.deliveryLabel,
           prerequisiteTier: data.prerequisiteTier,
+          // Mutually exclusive at the UI level — whichever the form sent
+          // wins; the other stays unset since a fresh programme has
+          // neither yet.
+          coverVideoUrl: data.coverVideoAssetId ? null : data.coverVideoUrl,
+          coverVideoAssetId: data.coverVideoUrl ? null : data.coverVideoAssetId,
           createdByStaffId: staff.id,
         },
       });
@@ -159,6 +164,13 @@ export async function updateProgramme(
           ...(data.currency !== undefined ? { currency: data.currency } : {}),
           ...(data.deliveryLabel !== undefined ? { deliveryLabel: data.deliveryLabel } : {}),
           ...(data.prerequisiteTier !== undefined ? { prerequisiteTier: data.prerequisiteTier } : {}),
+          // Whichever the form sent replaces BOTH fields — a link and an
+          // uploaded asset are mutually exclusive, so setting one always
+          // clears the other rather than leaving a stale reference behind.
+          ...(data.coverVideoUrl !== undefined ? { coverVideoUrl: data.coverVideoUrl, coverVideoAssetId: null } : {}),
+          ...(data.coverVideoAssetId !== undefined
+            ? { coverVideoAssetId: data.coverVideoAssetId, coverVideoUrl: null }
+            : {}),
         },
       });
 

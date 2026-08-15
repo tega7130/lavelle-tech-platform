@@ -66,8 +66,11 @@ export function CheckoutStatus({ reference, initial }: { reference: string; init
             ? `Your payment for ${payment.enrolment.programme.title} has been confirmed. Your candidate number and cohort are on your dashboard.`
             : "Your payment has been confirmed."}
         </p>
-        <Link href="/portal/dashboard" className={buttonClassName("primary", "mt-5")}>
-          Go to your dashboard
+        <Link
+          href={payment.enrolment?.programme.code ? `/portal/programme?programme=${payment.enrolment.programme.code}` : "/portal/dashboard"}
+          className={buttonClassName("primary", "mt-5")}
+        >
+          Go to your programme
         </Link>
       </div>
     );

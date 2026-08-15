@@ -72,6 +72,7 @@ export async function getProgrammeDetail(code: string) {
         },
       },
       assessmentWeightings: true,
+      coverVideoAsset: { select: { storageKey: true } },
     },
   });
   if (!programme || programme.status !== ProgrammeStatus.ACTIVE) return null;

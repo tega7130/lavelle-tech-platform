@@ -5,9 +5,23 @@ import { useActionState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createCategory } from "@/app/actions/programme";
+import { finaliseUpload } from "@/app/actions/uploads";
 import { emptyActionState, type FormActionState } from "@/lib/action-state";
-import { Button } from "@/components/ui/button";
+import { Button, buttonClassName } from "@/components/ui/button";
 import { Label, Input, Textarea, FieldError } from "@/components/ui/field";
+
+async function uploadVideo(file: File) {
+  const signRes = await fetch("/api/uploads/sign", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ kind: "video", mimeType: file.type, bytes: file.size }),
+  });
+  if (!signRes.ok) throw new Error("Could not get an upload URL.");
+  const { storageKey, uploadUrl } = await signRes.json();
+  const putRes = await fetch(uploadUrl, { method: "PUT", body: file });
+  if (!putRes.ok) throw new Error("Upload failed.");
+  return finaliseUpload({ storageKey, kind: "video", mimeType: file.type, originalFilename: file.name });
+}
 
 export interface CategoryOption {
   id: string;
@@ -30,6 +44,8 @@ export interface ProgrammeDetailsFormProps {
     feeNaira: number;
     deliveryLabel: string;
     prerequisiteTier: string | null;
+    coverVideoUrl?: string | null;
+    coverVideoAsset?: { id: string; originalFilename: string } | null;
   };
   action: (prevState: FormActionState, formData: FormData) => Promise<FormActionState>;
 }
@@ -50,6 +66,24 @@ export function ProgrammeDetailsForm({ mode, programmeId, categories: initialCat
   const [tier, setTier] = React.useState(initialValues?.tier ?? "SPECIALIST");
   const [errors, setErrors] = React.useState<Record<string, string>>({});
   const [prevStateErrors, setPrevStateErrors] = React.useState(state.errors);
+  const [videoMode, setVideoMode] = React.useState<"url" | "upload">(initialValues?.coverVideoAsset ? "upload" : "url");
+  const [coverVideoUrl, setCoverVideoUrl] = React.useState(initialValues?.coverVideoUrl ?? "");
+  const [coverVideoAsset, setCoverVideoAsset] = React.useState(initialValues?.coverVideoAsset ?? null);
+  const [videoUploading, setVideoUploading] = React.useState(false);
+  const [videoError, setVideoError] = React.useState<string | null>(null);
+
+  async function handleVideoUpload(file: File) {
+    setVideoError(null);
+    setVideoUploading(true);
+    try {
+      const asset = await uploadVideo(file);
+      setCoverVideoAsset({ id: asset.id, originalFilename: asset.originalFilename });
+    } catch (err) {
+      setVideoError(err instanceof Error ? err.message : "Upload failed.");
+    } finally {
+      setVideoUploading(false);
+    }
+  }
 
   if (state.errors !== prevStateErrors) {
     setPrevStateErrors(state.errors);
@@ -178,6 +212,70 @@ export function ProgrammeDetailsForm({ mode, programmeId, categories: initialCat
       <div>
         <Label htmlFor="deliveryLabel">Delivery</Label>
         <Input id="deliveryLabel" name="deliveryLabel" defaultValue={initialValues?.deliveryLabel ?? "Online + proctored exam"} />
+      </div>
+
+      <div>
+        <Label>Cover video</Label>
+        <div className="mb-2 text-[11.5px] text-neutral-600">
+          Shown on the catalogue page so candidates can get a feel for the programme before enrolling.
+        </div>
+        <div className="mb-2.5 flex gap-1.5 rounded-[9px] border border-neutral-300 bg-bg p-1 w-fit">
+          <button
+            type="button"
+            onClick={() => setVideoMode("url")}
+            className="h-8 rounded-[6px] px-3 text-[12.5px] font-medium"
+            style={{
+              background: videoMode === "url" ? "var(--color-accent-100)" : "transparent",
+              color: videoMode === "url" ? "var(--color-accent)" : "var(--color-neutral-700)",
+            }}
+          >
+            Link (e.g. YouTube)
+          </button>
+          <button
+            type="button"
+            onClick={() => setVideoMode("upload")}
+            className="h-8 rounded-[6px] px-3 text-[12.5px] font-medium"
+            style={{
+              background: videoMode === "upload" ? "var(--color-accent-100)" : "transparent",
+              color: videoMode === "upload" ? "var(--color-accent)" : "var(--color-neutral-700)",
+            }}
+          >
+            Upload
+          </button>
+        </div>
+
+        {videoMode === "url" ? (
+          <>
+            <Input
+              name="coverVideoUrl"
+              placeholder="https://www.youtube.com/watch?v=…"
+              value={coverVideoUrl}
+              onChange={(e) => setCoverVideoUrl(e.target.value)}
+              invalid={!!errors.coverVideoUrl}
+            />
+            <FieldError>{errors.coverVideoUrl}</FieldError>
+          </>
+        ) : (
+          <div className="flex items-center gap-3">
+            <input type="hidden" name="coverVideoAssetId" value={coverVideoAsset?.id ?? ""} />
+            <label className="cursor-pointer">
+              <span className={buttonClassName("secondary")}>{videoUploading ? "Uploading…" : "Choose video file"}</span>
+              <input
+                type="file"
+                accept="video/mp4,video/webm"
+                className="hidden"
+                disabled={videoUploading}
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  e.target.value = "";
+                  if (file) handleVideoUpload(file);
+                }}
+              />
+            </label>
+            {coverVideoAsset && <div className="text-[12.5px] text-neutral-600">{coverVideoAsset.originalFilename}</div>}
+          </div>
+        )}
+        {videoError && <div className="mt-1.5 text-[11.5px] text-[#c0392b]">{videoError}</div>}
       </div>
 
       <div>

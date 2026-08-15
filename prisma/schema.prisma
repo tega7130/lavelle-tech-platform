@@ -95,6 +95,7 @@ model Candidate {
   candidateNotes          CandidateNote[]
   announcementDeliveries  AnnouncementDelivery[]
   reviews                 Review[]
+  uploadedMediaAssets     MediaAsset[]
 
   @@index([accountStatus])
 }
@@ -142,6 +143,7 @@ enum NotificationCategory {
   ASSESSMENT
   FINANCE
   SUPPORT
+  ANNOUNCEMENT
 }
 
 // Slice 10: staffId added so a support-request assignment can notify the
@@ -437,6 +439,13 @@ model Programme {
   // name/number are never selected), not by hiding a field in the UI.
   blindMarking Boolean @default(false)
 
+  // A candidate-facing explainer video shown on the catalogue detail page
+  // — either a pasted hosted URL (e.g. YouTube, nothing to probe) or an
+  // uploaded asset, same either/or shape as Lecture.videoUrl/videoAssetId.
+  coverVideoUrl     String?
+  coverVideoAssetId String?
+  coverVideoAsset   MediaAsset? @relation("ProgrammeCoverVideo", fields: [coverVideoAssetId], references: [id])
+
   createdByStaffId String
   createdBy        Staff  @relation("ProgrammeCreatedBy", fields: [createdByStaffId], references: [id])
 
@@ -593,8 +602,14 @@ model MediaAsset {
 
   originalFilename String
 
-  uploadedByStaffId String
-  uploadedBy        Staff  @relation(fields: [uploadedByStaffId], references: [id])
+  // Exactly one of these is set (hand-added CHECK constraint below,
+  // mirroring Session/Notification) — this row was uploaded either by
+  // staff (programme/finance/certificate content) or by a candidate
+  // (their own profile photo), never both, never neither.
+  uploadedByStaffId String?
+  uploadedBy        Staff?     @relation(fields: [uploadedByStaffId], references: [id])
+  uploadedByCandidateId String? @db.Uuid
+  uploadedByCandidate   Candidate? @relation(fields: [uploadedByCandidateId], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now())
 
@@ -610,6 +625,7 @@ model MediaAsset {
   certificatePdf        Certificate?          @relation("CertificatePdf")
   certificateArtworks   CertificateTemplate[] @relation("CertificateArtwork")
   listingHeroes         ProgrammeListing[]
+  coverVideoForProgrammes Programme[] @relation("ProgrammeCoverVideo")
 }
 
 // Module-close quizzes — auto-marked and formative. NOT the examination

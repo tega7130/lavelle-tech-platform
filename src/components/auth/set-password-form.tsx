@@ -9,7 +9,8 @@ import { STAFF_PASSWORD_RULES } from "@/lib/validation/staff";
 import { ROLE_LABELS } from "@/lib/permissions";
 import { AuthSplitScreen } from "@/components/auth/auth-split-screen";
 import { Button } from "@/components/ui/button";
-import { Label, Input, FieldError } from "@/components/ui/field";
+import { Label, FieldError } from "@/components/ui/field";
+import { PasswordInput } from "@/components/ui/password-input";
 import type { InvitationTokenPreview } from "@/lib/staff-invitation";
 import type { StaffRole } from "@/generated/prisma/client";
 
@@ -128,10 +129,9 @@ export function SetPasswordForm({ token, preview }: { token: string; preview: In
 
             <div>
               <Label htmlFor="password">New password</Label>
-              <Input
+              <PasswordInput
                 id="password"
                 name="password"
-                type="password"
                 placeholder="At least 10 characters"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -177,10 +177,9 @@ export function SetPasswordForm({ token, preview }: { token: string; preview: In
 
             <div>
               <Label htmlFor="confirmPassword">Confirm password</Label>
-              <Input
+              <PasswordInput
                 id="confirmPassword"
                 name="confirmPassword"
-                type="password"
                 placeholder="Re-enter password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}

@@ -8,6 +8,7 @@ import { emptyActionState } from "@/lib/action-state";
 import { AuthSplitScreen } from "@/components/auth/auth-split-screen";
 import { Button } from "@/components/ui/button";
 import { Label, Input, FieldError } from "@/components/ui/field";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Checkbox } from "@/components/ui/checkbox";
 
 const PHONE_CODES = [
@@ -292,10 +293,9 @@ export default function RegisterPage() {
               <div className="grid grid-cols-2 gap-3.5 max-[900px]:grid-cols-1">
                 <div>
                   <Label htmlFor="password">Password</Label>
-                  <Input
+                  <PasswordInput
                     id="password"
                     name="password"
-                    type="password"
                     placeholder="At least 8 characters"
                     value={values.password}
                     onChange={field("password")}
@@ -305,10 +305,9 @@ export default function RegisterPage() {
                 </div>
                 <div>
                   <Label htmlFor="confirmPassword">Confirm password</Label>
-                  <Input
+                  <PasswordInput
                     id="confirmPassword"
                     name="confirmPassword"
-                    type="password"
                     placeholder="Re-enter password"
                     value={values.confirmPassword}
                     onChange={field("confirmPassword")}

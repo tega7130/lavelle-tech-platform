@@ -32,6 +32,8 @@ export default async function EditProgrammePage({ params }: { params: Promise<{ 
           feeNaira: programme.feeMinor / 100,
           deliveryLabel: programme.deliveryLabel,
           prerequisiteTier: programme.prerequisiteTier,
+          coverVideoUrl: programme.coverVideoUrl,
+          coverVideoAsset: programme.coverVideoAsset,
         }}
         action={boundUpdate}
       />
