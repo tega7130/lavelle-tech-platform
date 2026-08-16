@@ -246,3 +246,50 @@ export async function listDeadlines(candidateId: string) {
     programmeCode: enrolmentById.get(d.enrolmentId)?.programme.code ?? "",
   }));
 }
+
+export type ProgrammeListStatus = "not_started" | "in_progress" | "completed";
+
+/**
+ * The Your Programmes list — every enrolment, each with its own lecture
+ * count and up-next lecture (reusing getProgrammeOverview's locked-aware
+ * derivation rather than a raw "first incomplete" query, so a locked
+ * lecture is never surfaced as next). Status is computed from progress,
+ * not Enrolment.status, since nothing in this codebase transitions an
+ * enrolment to COMPLETED yet — 100% lectures done is the real signal.
+ */
+export async function listCandidateProgrammes(candidateId: string) {
+  const enrolments = await prisma.enrolment.findMany({
+    where: { candidateId, status: { in: [EnrolmentStatus.ACTIVE, EnrolmentStatus.COMPLETED] } },
+    include: { programme: true, intake: true },
+    orderBy: { enrolledAt: "desc" },
+  });
+
+  return Promise.all(
+    enrolments.map(async (e) => {
+      const overview = await getProgrammeOverview(candidateId, e.id);
+      let completed = 0;
+      let total = 0;
+      for (const mod of overview.modules) {
+        total += mod.lectures.length;
+        completed += mod.lectures.filter((l) => l.state === LectureState.COMPLETED).length;
+      }
+      const percent = overview.programmePercent;
+      const status: ProgrammeListStatus = percent === 100 ? "completed" : completed === 0 ? "not_started" : "in_progress";
+
+      return {
+        enrolmentId: e.id,
+        programmeTitle: e.programme.title,
+        programmeCode: e.programme.code,
+        tier: e.programme.tier,
+        intakeMonth: e.intake.month,
+        intakeYear: e.intake.year,
+        enrolledAt: e.enrolledAt,
+        completedLectures: completed,
+        totalLectures: total,
+        percent,
+        status,
+        upNext: overview.upNext ? { moduleTitle: overview.upNext.moduleTitle, lectureTitle: overview.upNext.lectureTitle } : null,
+      };
+    })
+  );
+}

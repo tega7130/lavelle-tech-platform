@@ -91,6 +91,19 @@ export const updateProfileSchema = z
 
 export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
 
+export const updateContactDetailsSchema = z.object({
+  firstName: z.string().trim().min(1, "Required").max(80, "Required"),
+  lastName: z.string().trim().min(1, "Required").max(80, "Required"),
+  email: z.string().trim().min(1, EMAIL_MESSAGE).regex(EMAIL_RE, EMAIL_MESSAGE),
+  phone: z
+    .string()
+    .trim()
+    .optional()
+    .refine((v) => !v || v.replace(/\D/g, "").length >= 7, "Enter a valid phone number"),
+});
+
+export type UpdateContactDetailsInput = z.infer<typeof updateContactDetailsSchema>;
+
 /** Flattens a Zod error into the { fieldName: message } shape the UI renders inline, per field. */
 export function fieldErrors(error: z.ZodError): Record<string, string> {
   const out: Record<string, string> = {};

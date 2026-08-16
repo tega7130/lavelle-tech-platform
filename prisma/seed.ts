@@ -918,17 +918,18 @@ async function main() {
       confirmedAt: new Date("2026-07-02T09:11:00Z"),
     },
   });
-  await prisma.idCard.upsert({
-    where: { cardNumber: "LVL/2026/00291" },
-    update: {},
-    create: {
-      candidateId: chiamaka.id,
-      cardNumber: "LVL/2026/00291",
-      tier: ProgrammeTier.SPECIALIST,
-      issuedAt: new Date("2026-07-02T09:11:00Z"),
-      validUntil: new Date("2027-12-31"),
-    },
-  });
+  const existingChiamakaCard = await prisma.idCard.findFirst({ where: { candidateId: chiamaka.id, retiredAt: null } });
+  if (!existingChiamakaCard) {
+    await prisma.idCard.create({
+      data: {
+        candidateId: chiamaka.id,
+        cardNumber: "LVL/2026/00291",
+        tier: ProgrammeTier.SPECIALIST,
+        issuedAt: new Date("2026-07-02T09:11:00Z"),
+        validUntil: new Date("2027-12-31"),
+      },
+    });
+  }
 
   // ── Deadlines + part-way progress for Chiamaka (Slice 04) ──
   // The Slice 03 enrolment transaction generates deadlines automatically,

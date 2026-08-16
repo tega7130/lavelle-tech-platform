@@ -12,6 +12,9 @@ import { tierLabel } from "@/lib/format";
 import {
   listCertificatesAction,
   listCertificateTemplatesAction,
+  listWithheldCandidatesAction,
+  listReleasedWindowsForBulkIssueAction,
+  bulkIssueCertificatesForWindowAction,
   issueCertificateManuallyAction,
   revokeCertificateAction,
   reissueCertificateAction,
@@ -21,10 +24,11 @@ import {
   type ManualIssueFormInput,
 } from "@/app/actions/certificates";
 import { finaliseUpload } from "@/app/actions/uploads";
-import type { listCertificates, listCertificateTemplates } from "@/lib/certificate-reads";
+import type { listCertificates, listCertificateTemplates, listWithheldCandidates } from "@/lib/certificate-reads";
 
 type Certificates = Awaited<ReturnType<typeof listCertificates>>;
 type Templates = Awaited<ReturnType<typeof listCertificateTemplates>>;
+type Withheld = Awaited<ReturnType<typeof listWithheldCandidates>>;
 type Certificate = Certificates[number];
 
 const BAND_LABEL: Record<string, string> = { DISTINCTION: "Distinction", MERIT: "Merit", PASS: "Pass", REFER: "Refer" };
@@ -53,13 +57,23 @@ async function uploadArtwork(file: File) {
   return finaliseUpload({ storageKey, kind: "image", mimeType: file.type, originalFilename: file.name, purpose: "certificate" });
 }
 
-export function AdminCertificates({ certificates: initialCertificates, templates: initialTemplates }: { certificates: Certificates; templates: Templates }) {
+export function AdminCertificates({
+  certificates: initialCertificates,
+  templates: initialTemplates,
+  withheld: initialWithheld,
+}: {
+  certificates: Certificates;
+  templates: Templates;
+  withheld: Withheld;
+}) {
   const router = useRouter();
   const [certificates, setCertificates] = React.useState(initialCertificates);
   const [templates, setTemplates] = React.useState(initialTemplates);
+  const [withheld, setWithheld] = React.useState(initialWithheld);
   const [search, setSearch] = React.useState("");
   const [statusFilter, setStatusFilter] = React.useState<string>("");
   const [busy, setBusy] = React.useState(false);
+  const [showBulkIssue, setShowBulkIssue] = React.useState(false);
 
   const [revokeTarget, setRevokeTarget] = React.useState<Certificate | null>(null);
   const [revokeReason, setRevokeReason] = React.useState("");
@@ -68,16 +82,25 @@ export function AdminCertificates({ certificates: initialCertificates, templates
   const [showIssueForm, setShowIssueForm] = React.useState(false);
 
   async function refresh() {
-    const [c, t] = await Promise.all([listCertificatesAction(), listCertificateTemplatesAction()]);
+    const [c, t, w] = await Promise.all([listCertificatesAction(), listCertificateTemplatesAction(), listWithheldCandidatesAction()]);
     setCertificates(c);
     setTemplates(t);
+    setWithheld(w);
   }
 
   const filtered = certificates.filter((c) => {
-    if (statusFilter && c.status !== statusFilter) return false;
+    if (statusFilter && statusFilter !== "WITHHELD" && c.status !== statusFilter) return false;
+    if (statusFilter === "WITHHELD") return false;
     if (!search.trim()) return true;
     const q = search.trim().toLowerCase();
     return c.certificateNumber.toLowerCase().includes(q) || c.holderName.toLowerCase().includes(q) || (c.candidateNumber ?? "").toLowerCase().includes(q);
+  });
+
+  const filteredWithheld = withheld.filter((w) => {
+    if (statusFilter && statusFilter !== "WITHHELD") return false;
+    if (!search.trim()) return true;
+    const q = search.trim().toLowerCase();
+    return w.holderName.toLowerCase().includes(q) || w.candidateNumber.toLowerCase().includes(q);
   });
 
   async function confirmRevoke() {
@@ -115,12 +138,32 @@ export function AdminCertificates({ certificates: initialCertificates, templates
 
   return (
     <div className="max-w-[1300px] flex flex-col gap-[var(--space-6)]">
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <h1 className="font-heading text-2xl m-0">Certificates</h1>
-        <Button onClick={() => setShowIssueForm((v) => !v)}>{showIssueForm ? "Close" : "Issue manually"}</Button>
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="font-heading text-2xl m-0">Certificates</h1>
+          <p className="text-neutral-600 text-[12.5px] mt-1">
+            Issued on tier completion &middot; each carries a Certificate ID checkable on the public verification portal
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <Button variant="secondary" onClick={() => setShowBulkIssue(true)}>
+            Build issue for cohort
+          </Button>
+          <Button onClick={() => setShowIssueForm((v) => !v)}>{showIssueForm ? "Close" : "Issue manually"}</Button>
+        </div>
       </div>
 
       {showIssueForm && <ManualIssueForm onIssued={async () => { setShowIssueForm(false); await refresh(); router.refresh(); }} />}
+      {showBulkIssue && (
+        <BulkIssueDialog
+          onClose={() => setShowBulkIssue(false)}
+          onIssued={async () => {
+            setShowBulkIssue(false);
+            await refresh();
+            router.refresh();
+          }}
+        />
+      )}
 
       <Card elev="sm">
         <div className="flex gap-3 flex-wrap items-center">
@@ -134,15 +177,16 @@ export function AdminCertificates({ certificates: initialCertificates, templates
             <option value="ACTIVE">Active</option>
             <option value="REVOKED">Revoked</option>
             <option value="SUPERSEDED">Superseded</option>
+            <option value="WITHHELD">Withheld</option>
           </select>
         </div>
 
-        {certificates.length === 0 ? (
+        {certificates.length === 0 && withheld.length === 0 ? (
           <div className="text-center py-12">
             <div className="font-heading font-semibold text-[14px]">No certificates issued</div>
             <p className="text-neutral-600 text-[12.5px] mt-1.5">Certificates are issued on a passed certifying examination.</p>
           </div>
-        ) : filtered.length === 0 ? (
+        ) : filtered.length === 0 && filteredWithheld.length === 0 ? (
           <div className="text-center py-12">
             <div className="font-heading font-semibold text-[14px]">No certificates match those filters</div>
             <p className="text-neutral-600 text-[12.5px] mt-1.5">Clear the search or status filter to see the full register.</p>
@@ -197,6 +241,24 @@ export function AdminCertificates({ certificates: initialCertificates, templates
                       )}
                     </div>
                   </Td>
+                </Tr>
+              ))}
+              {filteredWithheld.map((w) => (
+                <Tr key={w.id}>
+                  <Td className="text-neutral-400 text-[12.5px]">—</Td>
+                  <Td>
+                    <div className="text-[13px]">{w.holderName}</div>
+                    <div className="text-neutral-500 text-[11px]">{w.candidateNumber}</div>
+                  </Td>
+                  <Td className="text-[12.5px]">{w.programmeTitle}</Td>
+                  <Td className="text-[12.5px]">{tierLabel(w.tier)}</Td>
+                  <Td className="text-[12.5px]">{BAND_LABEL.REFER}</Td>
+                  <Td>
+                    <Tag variant="danger">Withheld</Tag>
+                  </Td>
+                  <Td className="text-neutral-400 text-[12px]">—</Td>
+                  <Td className="text-neutral-400 text-[12px]">—</Td>
+                  <Td />
                 </Tr>
               ))}
             </Tbody>
@@ -470,5 +532,95 @@ function TemplateDesigner({ templates, onChanged }: { templates: Templates; onCh
         </Tbody>
       </Table>
     </Card>
+  );
+}
+
+function BulkIssueDialog({ onClose, onIssued }: { onClose: () => void; onIssued: () => void }) {
+  const [windows, setWindows] = React.useState<Awaited<ReturnType<typeof listReleasedWindowsForBulkIssueAction>> | null>(null);
+  const [selectedId, setSelectedId] = React.useState<string | null>(null);
+  const [busy, setBusy] = React.useState(false);
+  const [result, setResult] = React.useState<{ issued: number; attempted: number; errors: string[] } | null>(null);
+  const [error, setError] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    listReleasedWindowsForBulkIssueAction().then((rows) => {
+      setWindows(rows);
+      const firstWithGap = rows.find((r) => r.missing > 0);
+      setSelectedId((firstWithGap ?? rows[0])?.windowId ?? null);
+    });
+  }, []);
+
+  const selected = windows?.find((w) => w.windowId === selectedId) ?? null;
+
+  async function submit() {
+    if (!selectedId) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const r = await bulkIssueCertificatesForWindowAction(selectedId);
+      setResult(r);
+      if (r.issued > 0) onIssued();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not issue certificates for this window.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Dialog open onClose={onClose} title="Build issue for cohort">
+      <p className="text-[12.5px] text-neutral-600 -mt-1">
+        Catches up any passed, released sitting that's still missing its certificate — the normal path issues these
+        automatically the moment a window is released, so this is for the gap, not the routine case.
+      </p>
+
+      {!windows ? (
+        <div className="text-[12.5px] text-neutral-500 py-4">Loading released windows…</div>
+      ) : windows.length === 0 ? (
+        <div className="text-[12.5px] text-neutral-500 py-4">No released examination windows yet.</div>
+      ) : (
+        <div className="mt-3">
+          <Label>Exam window</Label>
+          <select
+            className="w-full h-[42px] border border-neutral-300 rounded-md px-3 text-[13px] bg-bg"
+            value={selectedId ?? ""}
+            onChange={(e) => setSelectedId(e.target.value)}
+          >
+            {windows.map((w) => (
+              <option key={w.windowId} value={w.windowId}>
+                {w.programmeTitle} — {new Date(w.opensAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })} (
+                {w.missing} of {w.total} missing)
+              </option>
+            ))}
+          </select>
+          {selected && (
+            <div className="text-[12px] text-neutral-500 mt-2">
+              {selected.missing === 0
+                ? "Every passed sitting in this window already has a certificate."
+                : `${selected.missing} passed sitting${selected.missing === 1 ? "" : "s"} still need${selected.missing === 1 ? "s" : ""} a certificate.`}
+            </div>
+          )}
+        </div>
+      )}
+
+      {result && (
+        <div className="mt-3 p-3 rounded-md bg-accent-100 text-accent-800 text-[12.5px]">
+          Issued {result.issued} of {result.attempted} missing certificate{result.attempted === 1 ? "" : "s"}.
+          {result.errors.length > 0 && ` ${result.errors.length} could not be issued — check that an active template exists for this tier.`}
+        </div>
+      )}
+      {error && <div className="text-[#b42318] text-[12.5px] mt-2">{error}</div>}
+
+      <div className="flex justify-end gap-2 mt-4">
+        <Button variant="secondary" onClick={onClose}>
+          {result ? "Close" : "Cancel"}
+        </Button>
+        {!result && (
+          <Button disabled={busy || !selectedId || selected?.missing === 0} onClick={submit}>
+            {busy ? "Issuing…" : "Issue missing certificates"}
+          </Button>
+        )}
+      </div>
+    </Dialog>
   );
 }

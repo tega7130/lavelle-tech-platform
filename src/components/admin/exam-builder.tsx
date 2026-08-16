@@ -287,9 +287,14 @@ export function ExamBuilder({ exams, bank: initialBank }: { exams: ExamListItem[
           </select>
           <Tag variant={bank.exam.status === "PUBLISHED" ? "success" : "neutral"}>{bank.exam.status}</Tag>
         </div>
-        <Button onClick={publish} disabled={busy || bank.exam.status === "PUBLISHED"}>
-          {bank.exam.status === "PUBLISHED" ? "Published" : "Publish exam"}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="secondary" onClick={() => router.push(`/admin/exam-builder/${bank.exam.id}/candidates`)}>
+            Candidates
+          </Button>
+          <Button onClick={publish} disabled={busy || bank.exam.status === "PUBLISHED"}>
+            {bank.exam.status === "PUBLISHED" ? "Published" : "Publish exam"}
+          </Button>
+        </div>
       </div>
 
       {(bank.shortfalls.length > 0 || publishError) && (

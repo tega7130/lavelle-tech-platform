@@ -161,6 +161,46 @@ export async function issueCertificate(sittingId: string, mintedByStaffId: strin
   });
 }
 
+/**
+ * Catch-up, not the normal path — releaseResults already issues a
+ * certificate for every PASS sitting automatically the moment a window
+ * is released. This exists for the gap that leaves behind: a window
+ * released before a template existed for its tier, or any other transient
+ * failure that skipped issuance for an otherwise-passed sitting. Reuses
+ * issueCertificate itself (idempotent, same rules), never a second issuing
+ * path.
+ */
+export async function bulkIssueCertificatesForWindow(windowId: string, staffId: string, ipAddress: string | null) {
+  const sittings = await prisma.sitting.findMany({
+    where: { state: "RELEASED", outcome: "PASS", certificate: null, registration: { windowId } },
+    select: { id: true },
+  });
+
+  let issued = 0;
+  const errors: string[] = [];
+  for (const s of sittings) {
+    try {
+      await issueCertificate(s.id, staffId);
+      issued++;
+    } catch (e) {
+      errors.push(e instanceof Error ? e.message : "Unknown error");
+    }
+  }
+
+  if (issued > 0) {
+    await recordAuditEvent(prisma, {
+      actorStaffId: staffId,
+      subjectType: "exam_window",
+      subjectId: windowId,
+      action: "exam_window.certificates_bulk_issued",
+      description: `Bulk-issued ${issued} certificate${issued === 1 ? "" : "s"} for exam window ${windowId}`,
+      ipAddress,
+    });
+  }
+
+  return { issued, attempted: sittings.length, errors };
+}
+
 export interface ManualIssueInput {
   candidateId: string;
   programmeId: string;

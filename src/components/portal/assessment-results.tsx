@@ -135,9 +135,11 @@ export function AssessmentResults({ results, scale }: { results: Results; scale:
                   </Table>
 
                   <div className="px-[var(--space-5)] py-[var(--space-4)] border-t border-dashed border-neutral-300 text-[11.5px] text-neutral-500">
-                    {r.result?.isProvisional
-                      ? "This is a provisional, weighted average of what's been marked so far. The examination is not yet included."
-                      : `Final mark ${r.result?.finalPercent}% — ${r.result?.band ? BAND_LABEL[r.result.band] : ""}.`}
+                    {!r.result
+                      ? "No assessments have been marked yet."
+                      : r.result.isProvisional
+                        ? "This is a provisional, weighted average of what's been marked so far. The examination is not yet included."
+                        : `Final mark ${r.result.finalPercent}% — ${r.result.band ? BAND_LABEL[r.result.band] : ""}.`}
                   </div>
                 </div>
               )}

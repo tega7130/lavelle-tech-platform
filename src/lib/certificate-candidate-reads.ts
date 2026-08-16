@@ -78,6 +78,7 @@ export async function getOwnCertificate(certificateNumber: string) {
     include: {
       supersededBy: { select: { certificateNumber: true } },
       replaces: { select: { certificateNumber: true } },
+      template: { select: { signatoryBlock: true } },
     },
   });
   if (!certificate || certificate.candidateId !== candidate.id) return null;

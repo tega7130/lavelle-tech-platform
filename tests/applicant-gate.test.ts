@@ -10,6 +10,7 @@ function makeCandidate(isEnrolled: boolean): CurrentCandidate {
     firstName: "Test",
     lastName: "Candidate",
     email: "test@example.com",
+    phone: null,
     emailVerifiedAt: null,
     accountStatus: "ACTIVE",
     isEnrolled,

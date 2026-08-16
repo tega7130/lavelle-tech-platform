@@ -1,14 +1,17 @@
 "use client";
 
 import * as React from "react";
+import { useActionState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { cn } from "@/lib/cn";
 import { Card, CardKicker } from "@/components/ui/card";
 import { Button, buttonClassName } from "@/components/ui/button";
-import { updateProfile } from "@/app/actions/candidate-auth";
+import { Label, Input, FieldError } from "@/components/ui/field";
+import { updateProfile, updateCandidateContactDetails } from "@/app/actions/candidate-auth";
 import { finaliseCandidatePhotoUpload } from "@/app/actions/uploads";
 import { emptyActionState } from "@/lib/action-state";
-import { tierLabel, professionalStatusLabel, experienceBandLabel } from "@/lib/format";
+import { professionalStatusLabel, experienceBandLabel } from "@/lib/format";
 import type { CandidateProfile, IdCard } from "@/generated/prisma/client";
 
 const MAX_PHOTO_BYTES = 8 * 1024 * 1024;
@@ -49,37 +52,83 @@ const HANDBOOK_SECTIONS = [
   },
 ];
 
+interface ContactValues {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+}
+
 export function ProfilePage({
   candidate,
   profile,
   idCard,
+  cohortStatus,
   photoUrl,
 }: {
   candidate: {
     firstName: string;
     lastName: string;
     email: string;
+    phone: string | null;
     applicantNumber: string;
     candidateNumber: string | null;
     isEnrolled: boolean;
   };
   profile: CandidateProfile | null;
   idCard: IdCard | null;
+  cohortStatus: { intakeLabel: string; statusLine: string } | null;
   photoUrl: string | null;
 }) {
   const router = useRouter();
   const [uploading, setUploading] = React.useState(false);
   const [uploadError, setUploadError] = React.useState<string | null>(null);
   const [previewUrl, setPreviewUrl] = React.useState<string | null>(null);
+  const [dragOver, setDragOver] = React.useState(false);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const [handbookChecked, setHandbookChecked] = React.useState(false);
   const [acknowledging, setAcknowledging] = React.useState(false);
   const handbookDone = !!profile?.handbookAcknowledgedAt;
 
-  async function onFileChosen(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    e.target.value = "";
+  const [contactState, contactAction, contactPending] = useActionState(updateCandidateContactDetails, emptyActionState);
+  const initialValues: ContactValues = React.useMemo(
+    () => ({ firstName: candidate.firstName, lastName: candidate.lastName, email: candidate.email, phone: candidate.phone ?? "" }),
+    [candidate.firstName, candidate.lastName, candidate.email, candidate.phone]
+  );
+  const [values, setValues] = React.useState(initialValues);
+  const [errors, setErrors] = React.useState<Record<string, string>>({});
+  const [prevStateErrors, setPrevStateErrors] = React.useState(contactState.errors);
+  if (contactState.errors !== prevStateErrors) {
+    setPrevStateErrors(contactState.errors);
+    setErrors(contactState.errors ?? {});
+  }
+  // router.refresh() has side effects, unlike the plain setState calls
+  // above — it can't run during render (React flags exactly this), so a
+  // successful save is the one case that needs an effect instead.
+  React.useEffect(() => {
+    if (contactState.ok) router.refresh();
+    // contactState (not contactState.ok) is the dependency — useActionState
+    // returns a new object per dispatch, so this still fires on a second
+    // consecutive successful save where .ok stays true both times.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contactState]);
+
+  function field(key: keyof ContactValues) {
+    return (e: React.ChangeEvent<HTMLInputElement>) => {
+      setValues((v) => ({ ...v, [key]: e.target.value }));
+      setErrors((errs) => {
+        if (!(key in errs)) return errs;
+        const next = { ...errs };
+        delete next[key];
+        return next;
+      });
+    };
+  }
+
+  const dirty = JSON.stringify(values) !== JSON.stringify(initialValues);
+
+  async function handlePhotoFile(file: File | undefined) {
     if (!file) return;
     setUploadError(null);
     if (!file.type.startsWith("image/")) return setUploadError("Choose an image file (JPG, PNG or WebP).");
@@ -98,6 +147,18 @@ export function ProfilePage({
     }
   }
 
+  function onFileInputChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    void handlePhotoFile(file);
+  }
+
+  function onDrop(e: React.DragEvent<HTMLDivElement>) {
+    e.preventDefault();
+    setDragOver(false);
+    void handlePhotoFile(e.dataTransfer.files?.[0]);
+  }
+
   async function acknowledgeHandbook() {
     setAcknowledging(true);
     const fd = new FormData();
@@ -111,62 +172,176 @@ export function ProfilePage({
   const professionalDone = !!profile?.completedAt;
 
   return (
-    <div className="max-w-[880px] flex flex-col gap-[var(--space-6)]">
+    <div className="max-w-[1120px] flex flex-col gap-[var(--space-6)]">
       <div>
         <h1 className="mb-1">Profile &amp; ID</h1>
         <p className="text-neutral-600 text-[13.5px]">
-          Your photo, professional details and Candidate ID card in one place.
+          Your photo, contact details and Candidate ID card in one place.
         </p>
       </div>
 
-      <div className="grid grid-cols-[280px_1fr] gap-[var(--space-6)] max-[760px]:grid-cols-1">
-        <Card elev="md" className="p-0 overflow-hidden h-fit">
-          <div
-            className="p-[var(--space-5)] text-white relative overflow-hidden text-center"
-            style={{ background: "linear-gradient(158deg, #0c356f, #08234a)" }}
-          >
-            <div className="text-[8.5px] tracking-[0.14em] uppercase text-white/55">Lavelle Institute</div>
-            <div className="mx-auto mt-3 w-[92px] h-[92px] rounded-full border-2 border-white/25 bg-white/10 overflow-hidden flex items-center justify-center">
+      <div className="grid grid-cols-[1fr_360px] gap-[var(--space-6)] items-start max-[900px]:grid-cols-1">
+        <div>
+          <h3 className="mb-3">Candidate profile</h3>
+          <Card elev="sm">
+            <div
+              onDragOver={(e) => {
+                e.preventDefault();
+                setDragOver(true);
+              }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={onDrop}
+              onClick={() => fileInputRef.current?.click()}
+              className={cn(
+                "flex flex-col items-center justify-center gap-1.5 text-center rounded-lg border-2 border-dashed py-8 px-4 cursor-pointer transition-colors",
+                dragOver ? "border-accent bg-accent-100" : "border-neutral-300 hover:border-neutral-400"
+              )}
+            >
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                className="hidden"
+                onChange={onFileInputChange}
+              />
               {displayPhoto ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={displayPhoto} alt="" className="w-full h-full object-cover" />
+                <img src={displayPhoto} alt="" className="w-16 h-16 rounded-full object-cover" />
               ) : (
-                <span className="font-heading font-bold text-2xl text-white/70">
-                  {candidate.firstName[0]}
-                  {candidate.lastName[0]}
-                </span>
+                <div className="w-16 h-16 rounded-full bg-neutral-100 text-neutral-400 flex items-center justify-center">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                    <rect x="3" y="5" width="18" height="14" rx="2" />
+                    <circle cx="9" cy="11" r="2" />
+                    <path d="M21 16l-5-4-4 3-3-2-3 2" />
+                  </svg>
+                </div>
+              )}
+              <div className="font-heading font-semibold text-[14px] mt-1">
+                {uploading ? "Uploading…" : "Drop photo"}
+              </div>
+              {!uploading && (
+                <div className="text-[12.5px] text-neutral-500">
+                  or <span className="text-accent font-medium underline">browse files</span>
+                </div>
               )}
             </div>
-            <div className="font-heading font-semibold text-[15px] mt-3">
-              {candidate.firstName} {candidate.lastName}
+            {uploadError && <div className="text-[11.5px] text-[#c0392b] mt-2 text-center">{uploadError}</div>}
+            <div className="text-[11.5px] text-neutral-500 text-center mt-2 leading-[1.5]">
+              Passport-style photo, plain background. Your ID card was issued once your enrolment fee was confirmed
+              — adding a photo completes it.
             </div>
-            <div className="text-[8.5px] tracking-[0.1em] uppercase text-white/50 mt-2.5">
-              {candidate.candidateNumber ? "Candidate no." : "Applicant no."}
+
+            <form action={contactAction} className="mt-5 flex flex-col gap-4">
+              <div className="grid grid-cols-2 gap-4 max-[480px]:grid-cols-1">
+                <div>
+                  <Label htmlFor="firstName">First name</Label>
+                  <Input
+                    id="firstName"
+                    name="firstName"
+                    value={values.firstName}
+                    onChange={field("firstName")}
+                    invalid={!!errors.firstName}
+                  />
+                  <FieldError>{errors.firstName}</FieldError>
+                </div>
+                <div>
+                  <Label htmlFor="lastName">Last name</Label>
+                  <Input
+                    id="lastName"
+                    name="lastName"
+                    value={values.lastName}
+                    onChange={field("lastName")}
+                    invalid={!!errors.lastName}
+                  />
+                  <FieldError>{errors.lastName}</FieldError>
+                </div>
+              </div>
+              <div>
+                <Label htmlFor="candidateId">Candidate ID</Label>
+                <Input
+                  id="candidateId"
+                  value={candidate.candidateNumber ?? candidate.applicantNumber}
+                  readOnly
+                  disabled
+                  className="bg-neutral-100 text-neutral-500 cursor-not-allowed"
+                />
+              </div>
+              <div>
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  name="email"
+                  type="email"
+                  value={values.email}
+                  onChange={field("email")}
+                  invalid={!!errors.email}
+                />
+                <FieldError>{errors.email}</FieldError>
+              </div>
+              <div>
+                <Label htmlFor="phone">Phone</Label>
+                <Input id="phone" name="phone" value={values.phone} onChange={field("phone")} invalid={!!errors.phone} />
+                <FieldError>{errors.phone}</FieldError>
+              </div>
+              {contactState.message && <FieldError>{contactState.message}</FieldError>}
+              <Button type="submit" disabled={!dirty || contactPending} className="self-start">
+                {contactPending ? "Saving…" : "Save changes"}
+              </Button>
+            </form>
+          </Card>
+        </div>
+
+        <div>
+          <h3 className="mb-3">Candidate ID card</h3>
+          <div className="rounded-xl p-[var(--space-5)] text-white" style={{ background: "#1668e3" }}>
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-md bg-accent-2 text-accent-800 flex items-center justify-center font-heading font-bold text-[13px]">
+                L
+              </div>
+              <div className="font-heading font-semibold text-[14px]">Lavelle Institute</div>
             </div>
-            <div className="text-xs mt-0.5 tabular-nums">{candidate.candidateNumber ?? candidate.applicantNumber}</div>
-            {idCard && (
-              <div className="flex justify-between mt-[var(--space-4)] pt-[var(--space-3)] border-t border-dashed border-white/22 text-[10.5px] text-white/50">
-                <span>{tierLabel(idCard.tier)}</span>
-                <span>Valid to {new Date(idCard.validUntil).toLocaleDateString("en-GB")}</span>
+
+            <div className="flex items-center gap-3 mt-5">
+              <div className="w-[58px] h-[58px] rounded-md border border-dashed border-white/35 bg-white/10 flex-none overflow-hidden flex items-center justify-center">
+                {displayPhoto ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={displayPhoto} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <span className="text-[9.5px] text-white/60 text-center leading-tight">Photo</span>
+                )}
+              </div>
+              <div className="min-w-0">
+                <div className="font-heading font-bold text-[17px] text-accent-2 truncate">
+                  {candidate.firstName} {candidate.lastName}
+                </div>
+                <div className="text-[12.5px] text-white/75 tabular-nums mt-0.5">
+                  {candidate.candidateNumber ?? candidate.applicantNumber}
+                </div>
+              </div>
+            </div>
+
+            {idCard && cohortStatus && (
+              <div className="mt-3 inline-flex items-center rounded-full bg-white/15 px-2.5 py-1 text-[11px] font-semibold">
+                {cohortStatus.statusLine}
               </div>
             )}
-          </div>
-          <div className="p-[var(--space-4)] flex flex-col gap-2">
-            <input ref={fileInputRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={onFileChosen} />
-            <Button
-              variant="secondary"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={uploading}
-              className="w-full justify-center"
-            >
-              {uploading ? "Uploading…" : displayPhoto ? "Change photo" : "Upload photo"}
-            </Button>
-            {uploadError && <div className="text-[11.5px] text-[#c0392b]">{uploadError}</div>}
-            <div className="text-[11px] text-neutral-500">JPG, PNG or WebP, up to 8MB.</div>
-          </div>
-        </Card>
 
-        <div className="flex flex-col gap-[var(--space-5)]">
+            <div className="flex items-center justify-between gap-3 mt-5 pt-3 border-t border-dashed border-white/25 text-[11px] text-white/70">
+              <span>Cohort · {cohortStatus?.intakeLabel ?? "—"}</span>
+              <span>
+                Valid thru ·{" "}
+                {idCard ? new Date(idCard.validUntil).toLocaleDateString("en-GB", { month: "short", year: "numeric" }) : "—"}
+              </span>
+            </div>
+          </div>
+          <p className="text-[11.5px] text-neutral-500 mt-3 leading-[1.5]">
+            Issued automatically once your enrolment fee is confirmed, and valid for the duration of your enrolment.
+            The card regenerates whenever your photo is updated.
+          </p>
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-[var(--space-5)]">
           <Card elev="sm">
             <div className="flex items-baseline justify-between gap-3">
               <CardKicker>Professional details</CardKicker>
@@ -280,7 +455,6 @@ export function ProfilePage({
               </div>
             )}
           </Card>
-        </div>
       </div>
 
       <div>

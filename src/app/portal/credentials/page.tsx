@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { getCurrentCandidate } from "@/lib/candidate-session";
-import { getCandidateCredentials } from "@/lib/certificate-candidate-reads";
+import { getCredentialsPageData } from "@/lib/credentials-page-reads";
 import { Credentials } from "@/components/portal/credentials";
 
 // Deliberately no requireEnrolledPage() gate — an exam-only candidate who
@@ -9,6 +9,6 @@ import { Credentials } from "@/components/portal/credentials";
 export default async function Page() {
   const candidate = await getCurrentCandidate();
   if (!candidate) redirect("/sign-in");
-  const data = await getCandidateCredentials(candidate.id);
+  const data = await getCredentialsPageData(candidate.id);
   return <Credentials data={data} />;
 }

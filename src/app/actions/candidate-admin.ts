@@ -5,6 +5,8 @@ import { Permission } from "@/generated/prisma/client";
 import { requireStaffPermission } from "@/lib/staff-auth";
 import { getClientIp } from "@/lib/request-info";
 import { suspendCandidate, reactivateCandidate, updateCandidateDetails } from "@/lib/candidate-status";
+import { listUpcomingIntakes, transferCandidateIntake } from "@/lib/intake-transfer";
+import { getCandidateQuickView } from "@/lib/candidate-quickview-reads";
 
 export async function updateCandidateDetailsAction(
   candidateId: string,
@@ -33,4 +35,22 @@ export async function reactivateCandidateAction(candidateId: string) {
   const ip = await getClientIp();
   await reactivateCandidate(candidateId, staff.id, ip);
   revalidatePath(`/admin/candidates/${candidateId}`);
+}
+
+export async function getCandidateQuickViewAction(candidateId: string) {
+  await requireStaffPermission(Permission.VIEW_CANDIDATES);
+  return getCandidateQuickView(candidateId);
+}
+
+export async function listUpcomingIntakesAction() {
+  await requireStaffPermission(Permission.MANAGE_INTAKES_COHORTS);
+  return listUpcomingIntakes();
+}
+
+export async function transferCandidateIntakeAction(enrolmentId: string, newIntakeId: string) {
+  const staff = await requireStaffPermission(Permission.MANAGE_INTAKES_COHORTS);
+  const ip = await getClientIp();
+  const result = await transferCandidateIntake(enrolmentId, newIntakeId, staff.id, ip);
+  revalidatePath("/admin/candidates");
+  return result;
 }

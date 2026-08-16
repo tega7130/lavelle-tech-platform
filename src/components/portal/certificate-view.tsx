@@ -26,6 +26,7 @@ export function CertificateView({ certificate: c }: { certificate: Certificate }
   const [busy, setBusy] = React.useState(false);
   const revoked = c.status === "REVOKED";
   const superseded = c.status === "SUPERSEDED";
+  const isPathway = c.pathway === "PATHWAY";
 
   async function download() {
     setBusy(true);
@@ -43,41 +44,63 @@ export function CertificateView({ certificate: c }: { certificate: Certificate }
         <Link href="/portal/credentials" className="text-accent text-[12.5px] font-medium">
           ← All credentials
         </Link>
-        <div className="flex items-center gap-2 mt-2">
-          <Tag variant="accent">{tierLabel(c.tier)}</Tag>
+        <div className="flex items-center gap-2 flex-wrap mt-2">
+          <span className="text-[12.5px] text-neutral-600">
+            Certificate {c.certificateNumber} &middot; issued {fmtDate(c.issuedAt)}
+          </span>
           <Tag variant={STATUS_TAG[c.status]}>{c.status === "ACTIVE" ? "Active" : c.status === "REVOKED" ? "Revoked" : "Superseded"}</Tag>
+          {isPathway && <Tag variant="accent-2">★ Lavelle pathway</Tag>}
         </div>
         <h1 className="font-heading text-2xl mt-2 mb-0">{c.programmeTitle}</h1>
       </div>
 
-      <Card elev="md" className={revoked ? "border-[#f3c4bf]" : superseded ? "border-neutral-300" : "border-accent-2-300"}>
-        <div className="text-center py-6">
-          <div className="text-neutral-500 text-[10px] tracking-[0.1em] uppercase">Lavelle Institute</div>
+      {isPathway && (
+        <div className="rounded-md bg-accent-2-100 border border-accent-2-300 px-4 py-3.5 text-[12.5px] leading-[1.6] text-accent-2-800">
+          Credentialed via the Lavelle {c.programmeTitle} pathway — the programme was completed in full before the
+          certifying examination was sat. The pathway mark records how the credential was earned; it does not change
+          its standing.
+        </div>
+      )}
+
+      <Card elev="md" className={`p-0 overflow-hidden ${revoked ? "border-[#f3c4bf]" : superseded ? "border-neutral-300" : "border-accent-2-300"}`}>
+        <div className="border-[3px] border-double m-4 rounded-sm px-8 py-10 text-center" style={{ borderColor: "var(--color-accent-300)" }}>
+          <div className="w-9 h-9 rounded-md bg-accent text-accent-2 flex items-center justify-center font-heading font-bold text-[16px] mx-auto">
+            L
+          </div>
+          <div className="font-heading font-bold text-[15px] mt-2.5 tracking-[0.01em]">LAVELLE INSTITUTE</div>
+          <div className="text-neutral-500 text-[9.5px] tracking-[0.16em] uppercase mt-0.5">Professional Specialization</div>
+
+          <div className="text-neutral-500 text-[11px] tracking-[0.08em] uppercase mt-8">This certifies that</div>
           <div
-            className="font-heading font-bold text-[22px] mt-2"
+            className="font-heading font-bold text-[26px] mt-2"
             style={revoked ? { textDecoration: "line-through", color: "var(--color-neutral-500)" } : undefined}
           >
-            {c.certificateNumber}
+            {c.holderName}
           </div>
-          <div className="font-heading font-semibold text-[17px] mt-3">{c.holderName}</div>
-          <div className="text-neutral-600 text-[13px] mt-1">
-            {tierLabel(c.tier)} tier — {BAND_LABEL[c.band]}
+
+          <p className="text-neutral-700 text-[13.5px] leading-[1.6] max-w-[46ch] mx-auto mt-3">
+            has satisfied the requirements of the {tierLabel(c.tier)} tier and is hereby awarded the certificate in
+          </p>
+          <div className="font-heading font-semibold text-[18px] text-accent mt-1.5">{c.programmeTitle}</div>
+
+          <div className="mt-4">
+            <Tag variant={c.band === "REFER" ? "danger" : "accent-2"} className="text-[12px] px-3 py-1">
+              Awarded with {BAND_LABEL[c.band]}
+            </Tag>
+          </div>
+
+          <div className="mt-8 pt-5 border-t border-dashed border-neutral-300 text-neutral-500 text-[11.5px]">
+            {c.template.signatoryBlock}
           </div>
         </div>
 
-        <div className="pt-4 border-t border-dashed border-neutral-300 text-[12.5px] text-neutral-700 text-center">
-          {c.pathway === "PATHWAY"
-            ? "Awarded for completing the programme and passing its certifying examination."
-            : "Awarded by certifying examination."}
-        </div>
-
-        <div className="grid grid-cols-3 gap-3 mt-4 pt-4 border-t border-dashed border-neutral-300">
+        <div className="grid grid-cols-3 gap-3 px-6 pb-5 -mt-1">
           <div>
-            <div className="text-neutral-500 text-[9.5px] tracking-[0.1em] uppercase">Final mark</div>
-            <div className="text-[13px] font-medium mt-0.5">{c.finalPercent}%</div>
+            <div className="text-neutral-500 text-[9.5px] tracking-[0.1em] uppercase">Certificate ID</div>
+            <div className="text-[13px] font-medium mt-0.5">{c.certificateNumber}</div>
           </div>
           <div>
-            <div className="text-neutral-500 text-[9.5px] tracking-[0.1em] uppercase">Issued</div>
+            <div className="text-neutral-500 text-[9.5px] tracking-[0.1em] uppercase">Date of award</div>
             <div className="text-[13px] font-medium mt-0.5">{fmtDate(c.issuedAt)}</div>
           </div>
           <div>
@@ -146,7 +169,7 @@ export function CertificateView({ certificate: c }: { certificate: Certificate }
           target="_blank"
           className={buttonClassName("secondary")}
         >
-          View public verification
+          Verify on public portal
         </Link>
       </div>
     </div>

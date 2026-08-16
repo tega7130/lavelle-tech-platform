@@ -1,22 +1,23 @@
 import Link from "next/link";
-import { listCandidates } from "@/lib/candidate-admin-reads";
-import { Table, Thead, Tbody, Tr, Th, Td } from "@/components/ui/table";
-import { Tag } from "@/components/ui/tag";
+import { listCandidates, type DirectoryStatus } from "@/lib/candidate-admin-reads";
 import { Input } from "@/components/ui/field";
 import { buttonClassName } from "@/components/ui/button";
 import { cn } from "@/lib/cn";
+import { CandidatesTable } from "@/components/admin/candidates-table";
 
-const STATUS_FILTERS = [
+const STATUS_FILTERS: { value: DirectoryStatus | undefined; label: string }[] = [
   { value: undefined, label: "All" },
-  { value: "APPLICANT", label: "Applicants" },
-  { value: "ENROLLED", label: "Enrolled" },
+  { value: "APPLICANT", label: "Applicant" },
+  { value: "ACTIVE", label: "Active" },
+  { value: "AT_RISK", label: "At risk" },
+  { value: "COMPLETED", label: "Completed" },
   { value: "SUSPENDED", label: "Suspended" },
-] as const;
+];
 
 export default async function CandidatesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; status?: "APPLICANT" | "ENROLLED" | "SUSPENDED"; cursor?: string }>;
+  searchParams: Promise<{ q?: string; status?: DirectoryStatus; cursor?: string }>;
 }) {
   const { q, status, cursor } = await searchParams;
   const { items: candidates, nextCursor } = await listCandidates({ q, status, cursor });
@@ -30,16 +31,17 @@ export default async function CandidatesPage({
   };
 
   return (
-    <div className="max-w-[1000px]">
-      <h1 className="font-heading text-2xl mb-[var(--space-4)]">Candidates</h1>
+    <div className="max-w-[1100px]">
+      <div className="text-[11px] tracking-[0.08em] uppercase text-neutral-500">People</div>
+      <h1 className="font-heading text-2xl mt-0.5 mb-[var(--space-4)]">Candidates</h1>
 
-      <div className="flex items-center justify-between gap-[var(--space-4)] mb-[var(--space-4)]">
+      <div className="flex items-center justify-between gap-[var(--space-4)] mb-[var(--space-4)] flex-wrap">
         <form action="/admin/candidates">
           {status && <input type="hidden" name="status" value={status} />}
-          <Input name="q" defaultValue={q ?? ""} dense placeholder="Search name, email or number…" className="max-w-[320px]" />
+          <Input name="q" defaultValue={q ?? ""} dense placeholder="Search by name or Candidate ID" className="w-[280px]" />
         </form>
 
-        <div className="flex gap-1">
+        <div className="flex gap-1 flex-wrap">
           {STATUS_FILTERS.map((f) => {
             const p = paramsWithout("cursor");
             if (f.value) p.set("status", f.value);
@@ -68,43 +70,7 @@ export default async function CandidatesPage({
         </div>
       ) : (
         <>
-          <div className="border border-divider rounded-md overflow-hidden">
-            <Table>
-              <Thead>
-                <Tr>
-                  <Th className="pl-[var(--space-4)]">Name</Th>
-                  <Th>Number</Th>
-                  <Th>Programme</Th>
-                  <Th>Status</Th>
-                  <Th />
-                </Tr>
-              </Thead>
-              <Tbody>
-                {candidates.map((c) => (
-                  <Tr key={c.id}>
-                    <Td className="pl-[var(--space-4)]">
-                      {c.firstName} {c.lastName}
-                      <div className="text-[11px] text-neutral-500">{c.email}</div>
-                    </Td>
-                    <Td className="tabular-nums text-[13px]">{c.candidateNumber ?? c.applicantNumber}</Td>
-                    <Td className="text-[13px]">{c.enrolments[0]?.programme.title ?? "—"}</Td>
-                    <Td>
-                      {c.accountStatus === "SUSPENDED" ? (
-                        <Tag variant="danger">Suspended</Tag>
-                      ) : (
-                        <Tag variant={c.candidateNumber ? "success" : "neutral"}>{c.candidateNumber ? "Enrolled" : "Applicant"}</Tag>
-                      )}
-                    </Td>
-                    <Td className="text-right pr-[var(--space-4)]">
-                      <Link href={`/admin/candidates/${c.id}`} className={buttonClassName("secondary", "h-[30px] px-[11px] text-[12px]")}>
-                        View
-                      </Link>
-                    </Td>
-                  </Tr>
-                ))}
-              </Tbody>
-            </Table>
-          </div>
+          <CandidatesTable candidates={candidates} />
 
           {nextCursor && (
             <div className="mt-[var(--space-4)] text-center">

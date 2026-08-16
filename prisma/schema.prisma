@@ -324,6 +324,8 @@ model Staff {
   resolvedRequests   SupportRequest[]       @relation("SupportRequestResolvedBy")
   reviewedSittings   Sitting[]              @relation("SittingReviewedBy")
   moderatedReviews   Review[]               @relation("ReviewModeratedBy")
+  examAssignments      ExamStaffAssignment[] @relation("ExamStaffAssignmentHolder")
+  examAssignmentsGiven ExamStaffAssignment[] @relation("ExamStaffAssignmentGrantedBy")
 
   @@index([role])
   @@index([status])
@@ -1247,7 +1249,13 @@ model IdCard {
   candidateId String    @db.Uuid
   candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
 
-  cardNumber String        @unique // matches the candidate number
+  // Matches the candidate number — and stays the SAME across a reissue
+  // (a reprinted physical card keeps its number), so this can only be
+  // unique among LIVE cards, never globally. Prisma can't express a WHERE
+  // clause on @@unique (same discipline as ExamRegistration's
+  // one-live-per-window index) — the real constraint is the raw partial
+  // index in this model's migration.
+  cardNumber String
   tier       ProgrammeTier // the highest tier the candidate holds
 
   issuedAt   DateTime
@@ -1264,6 +1272,7 @@ model IdCard {
   createdAt DateTime @default(now())
 
   @@index([candidateId])
+  @@index([cardNumber])
 }
 
 // ─── Slice 06: examinations — builder, registration, sitting & results ──
@@ -1346,6 +1355,29 @@ model Exam {
   questions     ExamQuestion[]
   windows       ExamWindow[]
   registrations ExamRegistration[]
+  staffAssignments ExamStaffAssignment[]
+}
+
+// A staff member given access to THIS exam specifically — its candidate
+// roster, their sitting answers, and grading — without needing the
+// blanket MANAGE_EXAMS permission (which already grants access to every
+// exam, so an assignment is redundant for someone who already holds it;
+// requireExamAccess checks both). Granting/revoking is itself gated on
+// MANAGE_EXAMS.
+model ExamStaffAssignment {
+  id     String @id @default(uuid())
+  examId String
+  exam   Exam   @relation(fields: [examId], references: [id], onDelete: Cascade)
+
+  staffId String
+  staff   Staff  @relation("ExamStaffAssignmentHolder", fields: [staffId], references: [id], onDelete: Cascade)
+
+  assignedByStaffId String
+  assignedByStaff   Staff    @relation("ExamStaffAssignmentGrantedBy", fields: [assignedByStaffId], references: [id])
+  assignedAt        DateTime @default(now())
+
+  @@unique([examId, staffId])
+  @@index([staffId])
 }
 
 // The certifying-exam bank — distinct from Slice 02's QuizQuestion (a

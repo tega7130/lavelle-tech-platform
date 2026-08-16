@@ -10,7 +10,13 @@ import { prisma } from "@/lib/prisma";
 import { getSignedCertificatePdfUrl } from "@/lib/certificate-pdf";
 import * as certActions from "@/lib/certificate-actions";
 import * as templateActions from "@/lib/certificate-template-actions";
-import { listCertificates, listCertificateTemplates, type CertificateFilters } from "@/lib/certificate-reads";
+import {
+  listCertificates,
+  listCertificateTemplates,
+  listWithheldCandidates,
+  listReleasedWindowsForBulkIssue,
+  type CertificateFilters,
+} from "@/lib/certificate-reads";
 
 /**
  * Either the certificate's own candidate, or any signed-in staff member
@@ -37,6 +43,23 @@ export async function listCertificatesAction(filters: CertificateFilters = {}) {
 
 export async function listCertificateTemplatesAction() {
   return listCertificateTemplates();
+}
+
+export async function listWithheldCandidatesAction() {
+  return listWithheldCandidates();
+}
+
+export async function listReleasedWindowsForBulkIssueAction() {
+  return listReleasedWindowsForBulkIssue();
+}
+
+export async function bulkIssueCertificatesForWindowAction(windowId: string) {
+  const staff = await requireStaffPermission(Permission.ISSUE_CERTIFICATES);
+  const ip = await getClientIp();
+  const result = await certActions.bulkIssueCertificatesForWindow(windowId, staff.id, ip);
+  revalidatePath("/admin/certificates");
+  revalidatePath("/portal/credentials");
+  return result;
 }
 
 export interface ManualIssueFormInput {

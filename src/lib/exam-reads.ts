@@ -1,6 +1,7 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
 import { requireStaffPermission } from "@/lib/staff-auth";
+import { requireExamAccess } from "@/lib/exam-staff";
 import { Permission } from "@/generated/prisma/client";
 import { computeShortfalls, computeActualDrawTotal, type DrawableQuestion } from "@/lib/exam-draw";
 
@@ -114,4 +115,157 @@ export async function listExamWindows(examId: string) {
       inProgress: sittings.filter((s) => s.state === "IN_PROGRESS").length,
     };
   });
+}
+
+/** Minimal exam header for the candidates page — gated via requireExamAccess (not MANAGE_EXAMS), so an exam-assigned staff member without it can still open the page at all. */
+export async function getExamSummaryForAccess(examId: string) {
+  const staff = await requireExamAccess(examId);
+  const exam = await prisma.exam.findUniqueOrThrow({ where: { id: examId }, include: { programme: { select: { title: true, code: true } } } });
+  return {
+    id: exam.id,
+    status: exam.status,
+    programmeTitle: exam.programme.title,
+    programmeCode: exam.programme.code,
+    canManageStaff: staff.permissions.includes(Permission.MANAGE_EXAMS),
+  };
+}
+
+/**
+ * Every candidate who has registered for this exam (any window, live
+ * registrations only — cancelledAt null), with what they applied under
+ * (window, attempt, pathway, payment) and their sitting's current state
+ * and result if one exists. Gated via requireExamAccess so an exam-
+ * assigned staff member, not just a blanket MANAGE_EXAMS holder, can
+ * reach it.
+ */
+export async function listExamCandidates(examId: string) {
+  await requireExamAccess(examId);
+
+  const registrations = await prisma.examRegistration.findMany({
+    where: { examId, cancelledAt: null },
+    include: {
+      candidate: { select: { id: true, firstName: true, lastName: true, candidateNumber: true, applicantNumber: true } },
+      window: { select: { id: true, opensAt: true, closesAt: true } },
+      payment: { select: { status: true, amountMinor: true } },
+      sitting: {
+        select: {
+          id: true,
+          state: true,
+          objectivePercent: true,
+          writtenPercent: true,
+          totalPercent: true,
+          outcome: true,
+          band: true,
+          conductReview: true,
+          submittedAt: true,
+          releasedAt: true,
+        },
+      },
+    },
+    orderBy: { registeredAt: "desc" },
+  });
+
+  return registrations.map((r) => ({
+    registrationId: r.id,
+    candidateId: r.candidate.id,
+    candidateName: `${r.candidate.firstName} ${r.candidate.lastName}`,
+    candidateNumber: r.candidate.candidateNumber ?? r.candidate.applicantNumber,
+    windowId: r.window.id,
+    windowOpensAt: r.window.opensAt,
+    windowClosesAt: r.window.closesAt,
+    pathway: r.enrolmentId ? ("enrolled" as const) : ("exam_only" as const),
+    attemptNumber: r.attemptNumber,
+    paymentStatus: r.payment?.status ?? null,
+    registeredAt: r.registeredAt,
+    sitting: r.sitting,
+  }));
+}
+
+/**
+ * One candidate's full sitting — every answer with the question it was
+ * for (and, for objective ones, whether it was correct), plus that
+ * answer's Mark if one exists. examId is required and checked against
+ * the sitting's own registration so a staff member scoped to exam A
+ * can't read a sitting that belongs to exam B by guessing its id.
+ */
+export async function getExamSittingDetail(sittingId: string, examId: string) {
+  await requireExamAccess(examId);
+
+  const sitting = await prisma.sitting.findUniqueOrThrow({
+    where: { id: sittingId },
+    include: {
+      registration: {
+        include: {
+          candidate: { select: { firstName: true, lastName: true, candidateNumber: true, applicantNumber: true } },
+        },
+      },
+      answers: {
+        include: {
+          question: {
+            select: {
+              id: true,
+              prompt: true,
+              type: true,
+              marks: true,
+              guidance: true,
+              wordLimit: true,
+              module: { select: { title: true, weekNumber: true } },
+              options: { select: { id: true, text: true, isCorrect: true } },
+            },
+          },
+          selectedOption: { select: { id: true, text: true, isCorrect: true } },
+          mark: {
+            select: {
+              id: true,
+              state: true,
+              scorePercent: true,
+              band: true,
+              feedback: true,
+              markedAt: true,
+              markedByStaff: { select: { name: true } },
+            },
+          },
+        },
+      },
+    },
+  });
+
+  if (sitting.registration.examId !== examId) {
+    throw new Error("This sitting does not belong to this examination.");
+  }
+
+  const candidate = sitting.registration.candidate;
+  return {
+    id: sitting.id,
+    state: sitting.state,
+    startedAt: sitting.startedAt,
+    submittedAt: sitting.submittedAt,
+    objectivePercent: sitting.objectivePercent,
+    writtenPercent: sitting.writtenPercent,
+    totalPercent: sitting.totalPercent,
+    outcome: sitting.outcome,
+    band: sitting.band,
+    conductReview: sitting.conductReview,
+    candidateName: `${candidate.firstName} ${candidate.lastName}`,
+    candidateNumber: candidate.candidateNumber ?? candidate.applicantNumber,
+    answers: sitting.answers
+      .sort((a, b) => a.question.module.weekNumber - b.question.module.weekNumber)
+      .map((a) => ({
+        id: a.id,
+        moduleTitle: a.question.module.title,
+        weekNumber: a.question.module.weekNumber,
+        type: a.question.type,
+        prompt: a.question.prompt,
+        marks: a.question.marks,
+        guidance: a.question.guidance,
+        wordLimit: a.question.wordLimit,
+        selectedOptionId: a.selectedOptionId,
+        selectedOptionText: a.selectedOption?.text ?? null,
+        selectedOptionCorrect: a.selectedOption?.isCorrect ?? null,
+        correctOptionText: a.question.options.find((o) => o.isCorrect)?.text ?? null,
+        writtenAnswer: a.writtenAnswer,
+        flagged: a.flagged,
+        mark: a.mark,
+      })),
+  };
 }

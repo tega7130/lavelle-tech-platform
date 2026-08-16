@@ -8,6 +8,12 @@ export function tierLabel(tier: string): string {
   return { FOUNDATION: "Foundation", SPECIALIST: "Specialist", ADVANCED_PRACTITIONER: "Advanced Practitioner" }[tier] ?? tier;
 }
 
+const INTAKE_MONTH_LABEL: Record<string, string> = { JANUARY: "January", APRIL: "April", SEPTEMBER: "September" };
+
+export function intakeLabel(month: string, year: number): string {
+  return `${INTAKE_MONTH_LABEL[month] ?? month} ${year}`;
+}
+
 export function statusLabel(status: string): string {
   return { DRAFT: "Draft", ACTIVE: "Active", ARCHIVED: "Archived" }[status] ?? status;
 }

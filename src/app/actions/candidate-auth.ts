@@ -9,6 +9,7 @@ import {
   registerSchema,
   signInSchema,
   updateProfileSchema,
+  updateContactDetailsSchema,
   fieldErrors,
 } from "@/lib/validation/candidate";
 import { enforceRateLimit, RateLimitError } from "@/lib/rate-limit";
@@ -241,6 +242,41 @@ export async function updateProfile(
     update: fields as Prisma.CandidateProfileUpdateInput,
   });
 
+  revalidatePath("/portal/dashboard");
+  return { ok: true };
+}
+
+/**
+ * The Profile & ID page's editable identity fields — name, email, phone.
+ * Candidate ID (applicant/candidate number) is never editable here, it's
+ * generated and permanent (Handoff 01 rule). A changed email still has to
+ * be unique — same P2002 -> field-error mapping as registration.
+ */
+export async function updateCandidateContactDetails(
+  _prev: FormActionState,
+  formData: FormData
+): Promise<FormActionState> {
+  const candidate = await getCurrentCandidate();
+  if (!candidate) return { message: "You must be signed in." };
+
+  const raw = formToObject(formData);
+  const parsed = updateContactDetailsSchema.safeParse(raw);
+  if (!parsed.success) return { errors: fieldErrors(parsed.error), values: raw };
+  const data = parsed.data;
+
+  try {
+    await prisma.candidate.update({
+      where: { id: candidate.id },
+      data: { firstName: data.firstName, lastName: data.lastName, email: data.email, phone: data.phone ?? null },
+    });
+  } catch (e) {
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002" && p2002Target(e).includes("email")) {
+      return { errors: { email: "Another account already uses this email" }, values: raw };
+    }
+    throw e;
+  }
+
+  revalidatePath("/portal/profile");
   revalidatePath("/portal/dashboard");
   return { ok: true };
 }
