@@ -3,7 +3,20 @@ import crypto from "node:crypto";
 import { testPrisma } from "./db";
 import { drawPaper, type DrawableQuestion } from "@/lib/exam-draw";
 import { checkExamEligibility } from "@/lib/exam-eligibility";
-import { publishExam, updateExamQuestion, PublishBlockedError } from "@/lib/exam-builder-actions";
+import {
+  publishExam,
+  updateExamQuestion,
+  createExamQuestion,
+  createExam,
+  createExamWindow,
+  closeExam,
+  archiveExam,
+  setExamContent,
+  setExamRequirements,
+  createStandaloneExam,
+  PublishBlockedError,
+} from "@/lib/exam-builder-actions";
+import { listProgrammes } from "@/lib/programme-reads";
 import {
   registerForExam,
   startSitting,
@@ -180,10 +193,19 @@ describe("publishExam — blocked while any module is short of approved objectiv
       await publishExam(exam.id, staff.id, null);
     } catch (e) {
       expect(e).toBeInstanceOf(PublishBlockedError);
-      expect((e as PublishBlockedError).shortModules[0]?.moduleTitle).toBe(mod.title);
+      const issues = (e as PublishBlockedError).issues;
+      expect(issues.some((i) => i.message.includes(mod.title))).toBe(true);
+      // Missing content and a missing window are reported too — the checklist is complete, not fail-fast.
+      expect(issues.some((i) => i.action === "add_window")).toBe(true);
+      expect(issues.some((i) => i.action === "edit_content")).toBe(true);
     }
 
     await seedObjectiveQuestion(exam.id, mod.id, { status: "APPROVED" });
+    await seedWindow(exam.id);
+    await testPrisma.exam.update({
+      where: { id: exam.id },
+      data: { description: "About this exam.", examFormat: "Objective + written", examinationAreas: ["Area one"], onPassing: ["Benefit one"] },
+    });
     const published = await publishExam(exam.id, staff.id, null);
     expect(published.status).toBe("PUBLISHED");
 
@@ -446,6 +468,203 @@ describe("releaseResults — a whole window at once, never a sitting whose writt
     expect(auditCountAfter - auditCountBefore).toBe(1); // one event for the whole window, not per sitting
 
     await cleanupCandidates([candidateReady.id, candidatePending.id]);
+    await cleanupProgramme(programme.id);
+    await cleanupRoot({ categoryId: category.id, staffId: staff.id });
+  });
+});
+
+describe("exam-builder-actions — lifecycle and validation additions", () => {
+  it("createExam requires one exam per programme; createExamWindow enforces date ordering", async () => {
+    const { staff, category } = await seedStaffAndCategory();
+    const programme = await seedProgramme(category.id, staff.id);
+
+    const exam = await createExam(programme.id, staff.id, null);
+    expect(exam.status).toBe("DRAFT");
+    expect(exam.durationMinutes).toBe(180);
+
+    await expect(createExam(programme.id, staff.id, null)).rejects.toThrow("already has an examination");
+
+    const now = Date.now();
+    await expect(
+      createExamWindow(
+        exam.id,
+        { opensAt: new Date(now + 100_000), closesAt: new Date(now + 200_000), registrationDeadline: new Date(now + 150_000) },
+        staff.id,
+        null
+      )
+    ).rejects.toThrow("Registration must close before");
+
+    await expect(
+      createExamWindow(
+        exam.id,
+        { opensAt: new Date(now + 200_000), closesAt: new Date(now + 100_000), registrationDeadline: new Date(now) },
+        staff.id,
+        null
+      )
+    ).rejects.toThrow("cannot close before it opens");
+
+    const window = await createExamWindow(
+      exam.id,
+      { opensAt: new Date(now + 200_000), closesAt: new Date(now + 300_000), registrationDeadline: new Date(now + 100_000), capacity: 40 },
+      staff.id,
+      null
+    );
+    expect(window.capacity).toBe(40);
+
+    await cleanupProgramme(programme.id);
+    await cleanupRoot({ categoryId: category.id, staffId: staff.id });
+  });
+
+  it("createExamQuestion/updateExamQuestion reject non-positive marks and fewer than two options", async () => {
+    const { staff, category } = await seedStaffAndCategory();
+    const programme = await seedProgramme(category.id, staff.id);
+    const mod = await seedModule(programme.id, 1);
+    const exam = await seedExam(programme.id, { status: "DRAFT" });
+
+    await expect(
+      createExamQuestion(exam.id, {
+        moduleId: mod.id,
+        type: "OBJECTIVE",
+        prompt: "Q",
+        marks: 0,
+        options: [
+          { text: "A", isCorrect: true },
+          { text: "B", isCorrect: false },
+        ],
+      })
+    ).rejects.toThrow("Marks must be a positive whole number");
+
+    const q = await createExamQuestion(exam.id, {
+      moduleId: mod.id,
+      type: "OBJECTIVE",
+      marks: 2,
+      prompt: "Q",
+      options: [
+        { text: "A", isCorrect: true },
+        { text: "B", isCorrect: false },
+      ],
+    });
+
+    await expect(updateExamQuestion(q.id, { options: [{ text: "Only one", isCorrect: true }] })).rejects.toThrow("at least two answer options");
+    await expect(updateExamQuestion(q.id, { marks: -1 })).rejects.toThrow("Marks must be a positive whole number");
+
+    await cleanupProgramme(programme.id);
+    await cleanupRoot({ categoryId: category.id, staffId: staff.id });
+  });
+
+  it("closeExam/archiveExam only permit the documented transitions", async () => {
+    const { staff, category } = await seedStaffAndCategory();
+    const programme = await seedProgramme(category.id, staff.id);
+    const exam = await seedExam(programme.id, { status: "DRAFT" });
+
+    await expect(closeExam(exam.id, staff.id, null)).rejects.toThrow("Only a published examination can be closed");
+    await expect(archiveExam(exam.id, staff.id, null)).rejects.toThrow("Only a closed or published examination can be archived");
+
+    await testPrisma.exam.update({ where: { id: exam.id }, data: { status: "PUBLISHED" } });
+    const closed = await closeExam(exam.id, staff.id, null);
+    expect(closed.status).toBe("CLOSED");
+    expect(closed.closedAt).not.toBeNull();
+
+    const archived = await archiveExam(exam.id, staff.id, null);
+    expect(archived.status).toBe("ARCHIVED");
+    expect(archived.archivedAt).not.toBeNull();
+
+    await cleanupProgramme(programme.id);
+    await cleanupRoot({ categoryId: category.id, staffId: staff.id });
+  });
+
+  it("setExamContent stores trimmed candidate-facing content and drops blank list entries", async () => {
+    const { staff, category } = await seedStaffAndCategory();
+    const programme = await seedProgramme(category.id, staff.id);
+    const exam = await seedExam(programme.id, { status: "DRAFT" });
+
+    const updated = await setExamContent(
+      exam.id,
+      { description: "  About this exam.  ", instructions: "", examFormat: "Objective + written", examinationAreas: ["Area one", "  ", ""], onPassing: ["Benefit one"] },
+      staff.id,
+      null
+    );
+
+    expect(updated.description).toBe("About this exam.");
+    expect(updated.instructions).toBeNull();
+    expect(updated.examinationAreas).toEqual(["Area one"]);
+    expect(updated.onPassing).toEqual(["Benefit one"]);
+
+    await cleanupProgramme(programme.id);
+    await cleanupRoot({ categoryId: category.id, staffId: staff.id });
+  });
+});
+
+describe("standalone exams and optional eligibility requirements", () => {
+  it("createStandaloneExam creates an invisible shell programme, restricted to Foundation/Specialist tier", async () => {
+    const { staff, category } = await seedStaffAndCategory();
+
+    await expect(
+      createStandaloneExam({ title: "Advanced Marketing Examination", code: `MKT-${crypto.randomUUID().slice(0, 6)}`, tier: "ADVANCED_PRACTITIONER" as never }, staff.id, null)
+    ).rejects.toThrow("Foundation or Specialist");
+
+    const code = `MKT-${crypto.randomUUID().slice(0, 6)}`;
+    const exam = await createStandaloneExam({ title: "Advanced Marketing Examination", code, tier: "SPECIALIST", newCategoryName: `Marketing ${crypto.randomUUID()}` }, staff.id, null);
+
+    const shell = await testPrisma.programme.findUniqueOrThrow({ where: { id: exam.programmeId } });
+    expect(shell.isExamOnlyShell).toBe(true);
+    expect(shell.status).toBe("DRAFT");
+    expect(shell.title).toBe("Advanced Marketing Examination");
+
+    const visible = await listProgrammes();
+    expect(visible.some((p) => p.id === shell.id)).toBe(false);
+
+    const catalogueVisible = await testPrisma.programme.findMany({ where: { id: shell.id, status: "ACTIVE" } });
+    expect(catalogueVisible.length).toBe(0); // DRAFT status keeps it out of listCatalogue's status=ACTIVE filter too
+
+    await testPrisma.exam.delete({ where: { id: exam.id } });
+    await testPrisma.programme.delete({ where: { id: shell.id } });
+    await testPrisma.programmeCategory.delete({ where: { id: shell.categoryId } });
+    await cleanupRoot({ categoryId: category.id, staffId: staff.id });
+  });
+
+  it("createStandaloneExam rejects a duplicate examination code", async () => {
+    const { staff, category } = await seedStaffAndCategory();
+    const code = `MKT-${crypto.randomUUID().slice(0, 6)}`;
+    const first = await createStandaloneExam({ title: "First", code, tier: "FOUNDATION", newCategoryName: `Topic ${crypto.randomUUID()}` }, staff.id, null);
+
+    await expect(
+      createStandaloneExam({ title: "Second", code, tier: "FOUNDATION", newCategoryName: `Topic ${crypto.randomUUID()}` }, staff.id, null)
+    ).rejects.toThrow("already in use");
+
+    const shell = await testPrisma.programme.findUniqueOrThrow({ where: { id: first.programmeId } });
+    await testPrisma.exam.delete({ where: { id: first.id } });
+    await testPrisma.programme.delete({ where: { id: shell.id } });
+    await testPrisma.programmeCategory.delete({ where: { id: shell.categoryId } });
+    await cleanupRoot({ categoryId: category.id, staffId: staff.id });
+  });
+
+  it("setExamRequirements: empty list means open to all; rows are replaced wholesale on each save", async () => {
+    const { staff, category } = await seedStaffAndCategory();
+    const programme = await seedProgramme(category.id, staff.id);
+    const exam = await seedExam(programme.id, { status: "DRAFT" });
+
+    const openToAll = await setExamRequirements(exam.id, [], staff.id, null);
+    expect(openToAll).toEqual([]);
+
+    const withReqs = await setExamRequirements(
+      exam.id,
+      [
+        { text: "A valid law degree", isMandatory: true },
+        { text: "2 years of practice", isMandatory: false },
+        { text: "  ", isMandatory: true }, // blank rows are dropped
+      ],
+      staff.id,
+      null
+    );
+    expect(withReqs).toHaveLength(2);
+    expect(withReqs[0]).toMatchObject({ text: "A valid law degree", isMandatory: true });
+    expect(withReqs[1]).toMatchObject({ text: "2 years of practice", isMandatory: false });
+
+    const replaced = await setExamRequirements(exam.id, [{ text: "Only this one now", isMandatory: true }], staff.id, null);
+    expect(replaced).toHaveLength(1);
+    expect(replaced[0]?.text).toBe("Only this one now");
+
     await cleanupProgramme(programme.id);
     await cleanupRoot({ categoryId: category.id, staffId: staff.id });
   });

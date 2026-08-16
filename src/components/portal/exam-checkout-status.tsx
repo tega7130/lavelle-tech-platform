@@ -48,20 +48,37 @@ export function ExamCheckoutStatus({ reference, initial }: { reference: string; 
   const programmeCode = payment.examRegistration?.exam.programme.code;
 
   if (payment.status === "SUCCESS") {
+    const opensAt = payment.examRegistration?.window.opensAt;
     return (
       <div className="text-center py-8">
         <div className="w-[52px] h-[52px] mx-auto rounded-full bg-[#e7f6ed] border border-[#bfe3cd] text-[#15803d] flex items-center justify-center text-xl font-bold">
           ✓
         </div>
-        <div className="font-heading font-semibold text-[17px] mt-4">You&apos;re registered</div>
-        <p className="text-neutral-600 text-[13px] mt-2 max-w-[42ch] mx-auto">
-          {payment.examRegistration?.exam.programme.title
-            ? `Your payment for the ${payment.examRegistration.exam.programme.title} examination has been confirmed.`
-            : "Your payment has been confirmed."}{" "}
-          The paper becomes available exactly at your window's opening time.
-        </p>
+        <div className="font-heading font-semibold text-[17px] mt-4">Payment successful</div>
+        <p className="text-neutral-600 text-[13px] mt-2 max-w-[42ch] mx-auto">Your registration is confirmed.</p>
+        <div className="mt-5 mx-auto max-w-[36ch] text-left px-4 py-3.5 rounded-md bg-neutral-100 border border-neutral-200 text-[12.5px] flex flex-col gap-1.5">
+          {payment.examRegistration?.exam.programme.title && (
+            <div>
+              <span className="text-neutral-500">Examination</span>
+              <div className="font-medium">{payment.examRegistration.exam.programme.title}</div>
+            </div>
+          )}
+          {opensAt && (
+            <div>
+              <span className="text-neutral-500">Sitting</span>
+              <div className="font-medium">
+                {new Date(opensAt).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })} at{" "}
+                {new Date(opensAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })} WAT
+              </div>
+            </div>
+          )}
+          <div>
+            <span className="text-neutral-500">Reference</span>
+            <div className="font-medium">{reference}</div>
+          </div>
+        </div>
         <Link href={programmeCode ? `/portal/exams/${programmeCode}` : "/portal/exams"} className={buttonClassName("primary", "mt-5")}>
-          View your registration
+          Go to examination
         </Link>
       </div>
     );

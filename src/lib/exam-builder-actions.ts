@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { recordAuditEvent } from "@/lib/audit";
+import { slugify } from "@/lib/slug";
 import { computeShortfalls, type DrawableQuestion } from "@/lib/exam-draw";
 import type { ExamQuestionType, ExamQuestionStatus, AttemptPolicy } from "@/generated/prisma/client";
 
@@ -7,11 +8,136 @@ import type { ExamQuestionType, ExamQuestionStatus, AttemptPolicy } from "@/gene
 // discipline as marking-actions.ts. staffId is always passed in by the
 // caller (a "use server" Action that already checked the permission).
 
+/** One actionable line per unmet publish requirement — never a generic "validation failed" (rule: spec §30/§56). */
+export interface PublishIssue {
+  message: string;
+  action?: "review_bank" | "edit_draw" | "add_window" | "edit_content";
+}
+
 export class PublishBlockedError extends Error {
-  constructor(public shortModules: { moduleTitle: string; shortBy: number }[]) {
-    super(`Cannot publish — short by objective questions in: ${shortModules.map((m) => `${m.moduleTitle} (${m.shortBy})`).join(", ")}`);
+  constructor(public issues: PublishIssue[]) {
+    super(`Cannot publish — ${issues.map((i) => i.message).join(" ")}`);
     this.name = "PublishBlockedError";
   }
+}
+
+/**
+ * One Exam per Programme (Exam.programmeId is @unique) — this is the
+ * missing "start a new examination" entry point; every other creation
+ * path so far has only ever been prisma/seed.ts. Defaults mirror the
+ * schema's own defaults so a freshly created exam is immediately usable
+ * in the builder without a null-field crash.
+ */
+export async function createExam(programmeId: string, staffId: string, ipAddress: string | null) {
+  const existing = await prisma.exam.findUnique({ where: { programmeId } });
+  if (existing) throw new Error("This programme already has an examination.");
+
+  const exam = await prisma.exam.create({
+    data: {
+      programmeId,
+      status: "DRAFT",
+      durationMinutes: 180,
+      passMarkPercent: 60,
+      attemptPolicy: "ONE_RESIT_ON_REFERRAL",
+      feeMinor: 0,
+    },
+  });
+
+  await recordAuditEvent(prisma, {
+    actorStaffId: staffId,
+    subjectType: "exam",
+    subjectId: exam.id,
+    action: "exam.created",
+    description: "Examination created",
+    ipAddress,
+  });
+
+  return exam;
+}
+
+export interface CreateStandaloneExamInput {
+  title: string;
+  code: string;
+  tier: "FOUNDATION" | "SPECIALIST"; // ADVANCED_PRACTITIONER deliberately excluded — its prerequisite (exam-eligibility.ts) requires a completed Specialist enrolment in the same category, a ladder concept a standalone exam never participates in.
+  categoryId?: string | null;
+  newCategoryName?: string | null;
+}
+
+/**
+ * An exam that isn't "for" any real Lavelle programme — candidates can
+ * register, pay, sit and earn a certificate for it without a course
+ * existing on the platform. The schema still requires Exam.programmeId
+ * (a real FK, not nullable — rule: no breaking change to the working
+ * exam pipeline), so this creates a minimal, invisible Programme "shell"
+ * underneath it: DRAFT status + isExamOnlyShell true keep it out of the
+ * admin Programmes list (programme-reads.ts) and the candidate
+ * enrolment catalogue (catalogue-reads.ts filters status=ACTIVE only).
+ * No ProgrammeListing row is ever created, so it's invisible to the
+ * public marketing site too. The certificate PDF's EXAMINATION_ONLY
+ * branch (certificate-pdf.ts) already reads programmeTitle without the
+ * word "programme" — since that title IS the exam's own name here, the
+ * certificate correctly reads as an exam credential, not a programme one.
+ */
+export async function createStandaloneExam(input: CreateStandaloneExamInput, staffId: string, ipAddress: string | null) {
+  const title = input.title.trim();
+  if (!title) throw new Error("Examination title is required.");
+  const code = input.code.trim().toUpperCase();
+  if (!code) throw new Error("Examination code is required.");
+  if (input.tier !== "FOUNDATION" && input.tier !== "SPECIALIST") {
+    throw new Error("A standalone examination must be Foundation or Specialist level.");
+  }
+
+  const exam = await prisma.$transaction(async (tx) => {
+    let categoryId = input.categoryId ?? null;
+    if (!categoryId) {
+      const name = (input.newCategoryName ?? "").trim();
+      if (!name) throw new Error("Choose a topic, or create a new one.");
+      const existing = await tx.programmeCategory.findFirst({ where: { name: { equals: name, mode: "insensitive" } } });
+      categoryId = existing ? existing.id : (await tx.programmeCategory.create({ data: { name, slug: slugify(name) } })).id;
+    }
+
+    const codeTaken = await tx.programme.findUnique({ where: { code } });
+    if (codeTaken) throw new Error("That examination code is already in use.");
+
+    const shell = await tx.programme.create({
+      data: {
+        code,
+        title,
+        categoryId,
+        tier: input.tier,
+        status: "DRAFT",
+        isExamOnlyShell: true,
+        summary: title,
+        weeks: 0,
+        weeklyHoursLabel: "—",
+        credits: 0,
+        feeMinor: 0,
+        createdByStaffId: staffId,
+      },
+    });
+
+    return tx.exam.create({
+      data: {
+        programmeId: shell.id,
+        status: "DRAFT",
+        durationMinutes: 180,
+        passMarkPercent: 60,
+        attemptPolicy: "ONE_RESIT_ON_REFERRAL",
+        feeMinor: 0,
+      },
+    });
+  });
+
+  await recordAuditEvent(prisma, {
+    actorStaffId: staffId,
+    subjectType: "exam",
+    subjectId: exam.id,
+    action: "exam.created",
+    description: `Standalone examination created: ${title}`,
+    ipAddress,
+  });
+
+  return exam;
 }
 
 export interface CreateExamQuestionInput {
@@ -27,10 +153,12 @@ export interface CreateExamQuestionInput {
 }
 
 export async function createExamQuestion(examId: string, data: CreateExamQuestionInput) {
+  if (!Number.isInteger(data.marks) || data.marks <= 0) throw new Error("Marks must be a positive whole number.");
   if (data.type === "OBJECTIVE") {
     const options = data.options ?? [];
-    if (options.length < 2) throw new Error("An objective question needs at least two options.");
-    if (options.filter((o) => o.isCorrect).length !== 1) throw new Error("Exactly one option must be marked correct.");
+    if (options.length < 2) throw new Error("Add at least two answer options.");
+    if (options.some((o) => !o.text.trim())) throw new Error("Answer options cannot be empty.");
+    if (options.filter((o) => o.isCorrect).length !== 1) throw new Error("Select exactly one correct answer.");
   }
   return prisma.examQuestion.create({
     data: {
@@ -70,8 +198,13 @@ export interface UpdateExamQuestionInput {
  */
 export async function updateExamQuestion(id: string, data: UpdateExamQuestionInput) {
   const question = await prisma.examQuestion.findUniqueOrThrow({ where: { id } });
-  if (data.options && data.options.filter((o) => o.isCorrect).length !== 1) {
-    throw new Error("Exactly one option must be marked correct.");
+  if (data.marks !== undefined && (!Number.isInteger(data.marks) || data.marks <= 0)) {
+    throw new Error("Marks must be a positive whole number.");
+  }
+  if (data.options) {
+    if (data.options.length < 2) throw new Error("Add at least two answer options.");
+    if (data.options.some((o) => !o.text.trim())) throw new Error("Answer options cannot be empty.");
+    if (data.options.filter((o) => o.isCorrect).length !== 1) throw new Error("Select exactly one correct answer.");
   }
 
   return prisma.$transaction(async (tx) => {
@@ -140,6 +273,65 @@ export async function restoreExamQuestion(id: string, staffId: string, ipAddress
   return updated;
 }
 
+export interface ExamWindowInput {
+  opensAt: Date;
+  closesAt: Date;
+  registrationDeadline: Date;
+  capacity?: number | null; // null = uncapped
+}
+
+function validateWindowInput(input: ExamWindowInput) {
+  if (input.closesAt.getTime() < input.opensAt.getTime()) {
+    throw new Error("The examination window cannot close before it opens.");
+  }
+  if (input.registrationDeadline.getTime() >= input.opensAt.getTime()) {
+    throw new Error("Registration must close before the examination window opens.");
+  }
+  if (input.capacity != null && input.capacity < 1) {
+    throw new Error("Capacity must be at least 1, or left uncapped.");
+  }
+}
+
+export async function createExamWindow(examId: string, input: ExamWindowInput, staffId: string, ipAddress: string | null) {
+  validateWindowInput(input);
+  const window = await prisma.examWindow.create({
+    data: { examId, opensAt: input.opensAt, closesAt: input.closesAt, registrationDeadline: input.registrationDeadline, capacity: input.capacity ?? null },
+  });
+
+  await recordAuditEvent(prisma, {
+    actorStaffId: staffId,
+    subjectType: "exam_window",
+    subjectId: window.id,
+    action: "exam_window.created",
+    description: `Sitting added: opens ${input.opensAt.toISOString().slice(0, 10)}`,
+    ipAddress,
+  });
+
+  return window;
+}
+
+export async function updateExamWindow(examId: string, windowId: string, input: ExamWindowInput, staffId: string, ipAddress: string | null) {
+  validateWindowInput(input);
+  const window = await prisma.examWindow.findUniqueOrThrow({ where: { id: windowId } });
+  if (window.examId !== examId) throw new Error("That sitting does not belong to this examination.");
+
+  const updated = await prisma.examWindow.update({
+    where: { id: windowId },
+    data: { opensAt: input.opensAt, closesAt: input.closesAt, registrationDeadline: input.registrationDeadline, capacity: input.capacity ?? null },
+  });
+
+  await recordAuditEvent(prisma, {
+    actorStaffId: staffId,
+    subjectType: "exam_window",
+    subjectId: windowId,
+    action: "exam_window.edited",
+    description: `Sitting edited: opens ${input.opensAt.toISOString().slice(0, 10)}`,
+    ipAddress,
+  });
+
+  return updated;
+}
+
 export interface ExamRulesInput {
   durationMinutes: number;
   passMarkPercent: number;
@@ -181,18 +373,155 @@ export async function setExamRules(examId: string, rules: ExamRulesInput) {
   return updated;
 }
 
-/** Blocked while any module has fewer approved objective questions than its draw (rule 1) — names the offending modules. */
+export interface ExamRequirementInput {
+  text: string;
+  isMandatory: boolean;
+}
+
+/** Replace-all, same pattern as ExamQuestionOption on updateExamQuestion — an empty array means "open to all," no separate flag needed. */
+export async function setExamRequirements(examId: string, requirements: ExamRequirementInput[], staffId: string, ipAddress: string | null) {
+  const cleaned = requirements.filter((r) => r.text.trim());
+
+  await prisma.$transaction([
+    prisma.examRequirement.deleteMany({ where: { examId } }),
+    prisma.examRequirement.createMany({
+      data: cleaned.map((r, i) => ({ examId, text: r.text.trim(), isMandatory: r.isMandatory, orderIndex: i })),
+    }),
+  ]);
+
+  await recordAuditEvent(prisma, {
+    actorStaffId: staffId,
+    subjectType: "exam",
+    subjectId: examId,
+    action: "exam.requirements_updated",
+    description: cleaned.length === 0 ? "Eligibility set to open to all candidates" : `Eligibility requirements updated (${cleaned.length})`,
+    ipAddress,
+  });
+
+  return prisma.examRequirement.findMany({ where: { examId }, orderBy: { orderIndex: "asc" } });
+}
+
+export interface ExamContentInput {
+  description: string;
+  instructions: string;
+  examFormat: string;
+  examinationAreas: string[];
+  onPassing: string[];
+}
+
+export async function setExamContent(examId: string, input: ExamContentInput, staffId: string, ipAddress: string | null) {
+  const updated = await prisma.exam.update({
+    where: { id: examId },
+    data: {
+      description: input.description.trim() || null,
+      instructions: input.instructions.trim() || null,
+      examFormat: input.examFormat.trim() || null,
+      examinationAreas: input.examinationAreas.filter((a) => a.trim()),
+      onPassing: input.onPassing.filter((a) => a.trim()),
+    },
+  });
+
+  await recordAuditEvent(prisma, {
+    actorStaffId: staffId,
+    subjectType: "exam",
+    subjectId: examId,
+    action: "exam.content_updated",
+    description: "Candidate-facing examination content updated",
+    ipAddress,
+  });
+
+  return updated;
+}
+
+/** No new registrations or attempts; historical data untouched. Only from PUBLISHED — a DRAFT exam is closed by simply never publishing it. */
+export async function closeExam(examId: string, staffId: string, ipAddress: string | null) {
+  const exam = await prisma.exam.findUniqueOrThrow({ where: { id: examId } });
+  if (exam.status !== "PUBLISHED") throw new Error("Only a published examination can be closed.");
+
+  const updated = await prisma.exam.update({
+    where: { id: examId },
+    data: { status: "CLOSED", closedAt: new Date(), closedByStaffId: staffId },
+  });
+
+  await recordAuditEvent(prisma, {
+    actorStaffId: staffId,
+    subjectType: "exam",
+    subjectId: examId,
+    action: "exam.closed",
+    description: "Examination closed to new registrations and attempts",
+    ipAddress,
+  });
+
+  return updated;
+}
+
+/** Read-only historical record. From CLOSED (the normal path) or PUBLISHED (an exam retired without ever being formally closed). */
+export async function archiveExam(examId: string, staffId: string, ipAddress: string | null) {
+  const exam = await prisma.exam.findUniqueOrThrow({ where: { id: examId } });
+  if (exam.status !== "CLOSED" && exam.status !== "PUBLISHED") {
+    throw new Error("Only a closed or published examination can be archived.");
+  }
+
+  const updated = await prisma.exam.update({
+    where: { id: examId },
+    data: { status: "ARCHIVED", archivedAt: new Date(), archivedByStaffId: staffId },
+  });
+
+  await recordAuditEvent(prisma, {
+    actorStaffId: staffId,
+    subjectType: "exam",
+    subjectId: examId,
+    action: "exam.archived",
+    description: "Examination archived",
+    ipAddress,
+  });
+
+  return updated;
+}
+
+/**
+ * Full checklist (rule: spec §29/§30/§56), not fail-fast on the first
+ * problem — collects every unmet requirement so the admin fixes them
+ * once, not one dialog at a time.
+ */
 export async function publishExam(examId: string, staffId: string, ipAddress: string | null) {
   const exam = await prisma.exam.findUniqueOrThrow({ where: { id: examId } });
   const modules = await prisma.module.findMany({ where: { programmeId: exam.programmeId } });
   const questions = await prisma.examQuestion.findMany({ where: { examId } });
+  const windowCount = await prisma.examWindow.count({ where: { examId } });
+
+  const issues: PublishIssue[] = [];
 
   const shortfalls = computeShortfalls(
     modules.map((m) => ({ moduleId: m.id, moduleTitle: m.title, draw: m.examQuestionDraw, questions: questions as unknown as DrawableQuestion[] }))
   );
-  if (shortfalls.length > 0) {
-    throw new PublishBlockedError(shortfalls.map((s) => ({ moduleTitle: s.moduleTitle, shortBy: s.shortBy })));
+  for (const s of shortfalls) {
+    issues.push({
+      message: `${s.moduleTitle} requires ${s.draw} approved objective question${s.draw === 1 ? "" : "s"}, but only ${s.approvedObjectiveCount} ${s.approvedObjectiveCount === 1 ? "is" : "are"} approved. Approve another question or lower the draw.`,
+      action: "review_bank",
+    });
   }
+
+  if (windowCount === 0) {
+    issues.push({ message: "No examination sitting has been configured. Add at least one sitting before publishing.", action: "add_window" });
+  }
+
+  if (!exam.description?.trim()) {
+    issues.push({ message: "Candidate-facing description is missing — this is what candidates read before registering.", action: "edit_content" });
+  }
+  if (!exam.examFormat?.trim()) {
+    issues.push({ message: "Examination format is not set (e.g. \"Objective + written\").", action: "edit_content" });
+  }
+  const areas = Array.isArray(exam.examinationAreas) ? (exam.examinationAreas as unknown[]) : [];
+  if (areas.length === 0) {
+    issues.push({ message: "\"What is examined\" has no entries — candidates need at least one.", action: "edit_content" });
+  }
+  const onPassing = Array.isArray(exam.onPassing) ? (exam.onPassing as unknown[]) : [];
+  if (onPassing.length === 0) {
+    issues.push({ message: "\"On passing\" has no entries — candidates need at least one.", action: "edit_content" });
+  }
+
+  if (issues.length > 0) throw new PublishBlockedError(issues);
 
   const now = new Date();
   const updated = await prisma.exam.update({

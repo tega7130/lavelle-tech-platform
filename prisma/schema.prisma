@@ -306,6 +306,8 @@ model Staff {
   markedMarks             Mark[]                @relation("MarkMarkedBy")
   moderatedMarks          Mark[]                @relation("MarkModeratedBy")
   publishedExams          Exam[]                @relation("ExamPublishedBy")
+  closedExams             Exam[]                @relation("ExamClosedBy")
+  archivedExams           Exam[]                @relation("ExamArchivedBy")
   retiredExamQuestions    ExamQuestion[]        @relation("ExamQuestionRetiredBy")
   issuedCertificates      Certificate[]         @relation("CertificateIssuedBy")
   certificateTemplates    CertificateTemplate[] @relation("CertificateTemplateCreatedBy")
@@ -450,6 +452,15 @@ model Programme {
 
   createdByStaffId String
   createdBy        Staff  @relation("ProgrammeCreatedBy", fields: [createdByStaffId], references: [id])
+
+  // True only for the shell row auto-created behind a "standalone exam"
+  // (an exam with no real Lavelle programme behind it — createStandaloneExam
+  // in exam-builder-actions.ts). Kept status DRAFT and excluded from
+  // listProgrammes' default query so it never surfaces in the admin
+  // Programmes list, the candidate enrolment catalogue, or the public
+  // site — admins manage it entirely through the exam builder and should
+  // never need to know a Programme row exists underneath it.
+  isExamOnlyShell Boolean @default(false)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1303,6 +1314,7 @@ enum ExamStatus {
   DRAFT
   PUBLISHED
   CLOSED
+  ARCHIVED
 }
 
 enum SittingState {
@@ -1345,9 +1357,27 @@ model Exam {
   shuffleOptions          Boolean @default(false)
   allowReviewBeforeSubmit Boolean @default(true)
 
+  // Candidate-facing content, authored here and read verbatim by the
+  // candidate exam-detail page — never hard-coded on that side. All
+  // optional so a DRAFT exam can exist before anyone writes copy for it;
+  // publishExam requires them filled in before PUBLISHED.
+  description       String? // "About this examination"
+  instructions      String? // candidate exam-day instructions
+  examFormat        String? // e.g. "Objective + written"
+  examinationAreas  Json? // "What is examined" — string[]
+  onPassing         Json? // "On passing" — string[]
+
   publishedAt        DateTime?
   publishedByStaffId String?
   publishedByStaff   Staff?    @relation("ExamPublishedBy", fields: [publishedByStaffId], references: [id])
+
+  closedAt        DateTime?
+  closedByStaffId String?
+  closedByStaff   Staff?    @relation("ExamClosedBy", fields: [closedByStaffId], references: [id])
+
+  archivedAt        DateTime?
+  archivedByStaffId String?
+  archivedByStaff   Staff?    @relation("ExamArchivedBy", fields: [archivedByStaffId], references: [id])
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1356,6 +1386,27 @@ model Exam {
   windows       ExamWindow[]
   registrations ExamRegistration[]
   staffAssignments ExamStaffAssignment[]
+  requirements  ExamRequirement[]
+}
+
+// Freeform, admin-authored eligibility notes — display-only (rule: no
+// way to server-verify "2 years of experience"). Distinct from
+// checkExamEligibility's hard tier-completion gate (exam-eligibility.ts),
+// which stays a separate, unconditional check. An exam with zero rows
+// here is "open to all" — no separate flag, one source of truth.
+model ExamRequirement {
+  id     String @id @default(uuid())
+  examId String
+  exam   Exam   @relation(fields: [examId], references: [id], onDelete: Cascade)
+
+  text        String
+  isMandatory Boolean @default(true)
+  orderIndex  Int     @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([examId, orderIndex])
 }
 
 // A staff member given access to THIS exam specifically — its candidate

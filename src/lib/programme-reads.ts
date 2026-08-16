@@ -16,6 +16,10 @@ export interface ListProgrammesParams {
 export async function listProgrammes(params: ListProgrammesParams = {}) {
   return prisma.programme.findMany({
     where: {
+      // Auto-created shells behind a standalone exam (createStandaloneExam,
+      // exam-builder-actions.ts) are managed entirely through the exam
+      // builder — they must never appear here.
+      isExamOnlyShell: false,
       ...(params.q
         ? {
             OR: [

@@ -27,7 +27,19 @@ function formatClock(msRemaining: number): string {
 export function ExamSitting({ data }: { data: SittingData }) {
   const router = useRouter();
   const [answers, setAnswers] = React.useState<Record<string, AnswerState>>(data.answers);
-  const [index, setIndex] = React.useState(0);
+  const [index, setIndexRaw] = React.useState(0);
+  const canReview = data.exam.allowReviewBeforeSubmit;
+  const maxIndexReached = React.useRef(0);
+  function setIndex(next: number | ((prev: number) => number)) {
+    setIndexRaw((prev) => {
+      const resolved = typeof next === "function" ? next(prev) : next;
+      // Review disabled: once you move past a question, it's behind you —
+      // no jumping back to change an earlier answer.
+      if (!canReview && resolved < prev) return prev;
+      maxIndexReached.current = Math.max(maxIndexReached.current, resolved);
+      return resolved;
+    });
+  }
   const [now, setNow] = React.useState(() => Date.now());
   const [fullscreenOk, setFullscreenOk] = React.useState(!data.exam.enforceFullScreen);
   const [tabWarning, setTabWarning] = React.useState<string | null>(null);
@@ -201,6 +213,7 @@ export function ExamSitting({ data }: { data: SittingData }) {
                   <Tag variant="neutral">{question.type === "OBJECTIVE" ? "Multiple choice" : "Written answer"}</Tag>
                   <div className="flex items-center gap-3">
                     <span className="text-neutral-500 text-[11.5px]">{question.marks} marks</span>
+                    {canReview && (
                     <label className="flex items-center gap-1.5 text-[11.5px] text-neutral-600 cursor-pointer">
                       <input
                         type="checkbox"
@@ -210,6 +223,7 @@ export function ExamSitting({ data }: { data: SittingData }) {
                       />
                       Flag for review
                     </label>
+                    )}
                   </div>
                 </div>
 
@@ -258,7 +272,7 @@ export function ExamSitting({ data }: { data: SittingData }) {
             )}
 
             <div className="flex justify-between mt-8">
-              <Button variant="secondary" onClick={() => setIndex((i) => Math.max(0, i - 1))} disabled={index === 0}>
+              <Button variant="secondary" onClick={() => setIndex((i) => Math.max(0, i - 1))} disabled={index === 0 || !canReview}>
                 Previous
               </Button>
               <Button onClick={() => setIndex((i) => Math.min(paper.length - 1, i + 1))} disabled={index === paper.length - 1}>
@@ -274,14 +288,18 @@ export function ExamSitting({ data }: { data: SittingData }) {
             {paper.map((q, i) => {
               const a = answers[q.questionId];
               const done = a?.selectedOptionId || (a?.writtenAnswer && a.writtenAnswer.trim());
+              const locked = !canReview && i < index;
               return (
                 <button
                   key={q.questionId}
                   onClick={() => setIndex(i)}
-                  className="h-8 rounded-md text-[11px] font-medium relative"
+                  disabled={locked}
+                  title={locked ? "Review before submission is switched off for this examination" : undefined}
+                  className="h-8 rounded-md text-[11px] font-medium relative disabled:cursor-not-allowed"
                   style={{
                     border: i === index ? "2px solid var(--color-accent)" : "1px solid var(--color-neutral-300)",
                     background: done ? "var(--color-accent-2-100)" : "transparent",
+                    opacity: locked ? 0.45 : 1,
                   }}
                 >
                   {i + 1}

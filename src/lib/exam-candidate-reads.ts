@@ -6,11 +6,12 @@ import { EnrolmentStatus } from "@/generated/prisma/client";
 import type { PaperQuestion } from "@/lib/exam-draw";
 import { NotYourSittingError } from "@/lib/exam-sitting-actions";
 
-async function findEnrolmentId(candidateId: string, programmeId: string) {
+async function findEnrolmentInfo(candidateId: string, programmeId: string) {
   const enrolment = await prisma.enrolment.findFirst({
     where: { candidateId, programmeId, status: { in: [EnrolmentStatus.ACTIVE, EnrolmentStatus.COMPLETED] } },
+    select: { id: true, completedAt: true },
   });
-  return enrolment?.id ?? null;
+  return enrolment;
 }
 
 /** Programme exams with tier, code, intake, fee, next window, and the candidate's eligibility — never hiding an ineligible exam from the list. */
@@ -28,14 +29,14 @@ export async function listExamsForCandidate() {
   return Promise.all(
     exams.map(async (e) => {
       const eligibility = await checkExamEligibility(candidate?.id ?? null, e.programme);
-      const enrolmentId = candidate ? await findEnrolmentId(candidate.id, e.programmeId) : null;
+      const enrolment = candidate ? await findEnrolmentInfo(candidate.id, e.programmeId) : null;
       return {
         examId: e.id,
         programme: { title: e.programme.title, code: e.programme.code, tier: e.programme.tier },
         feeMinor: e.feeMinor,
         nextWindow: e.windows[0] ? { id: e.windows[0].id, opensAt: e.windows[0].opensAt } : null,
         eligibility,
-        courseMet: !!enrolmentId,
+        courseMet: !!enrolment,
       };
     })
   );
@@ -46,11 +47,15 @@ export async function getExamDetail(examId: string) {
   const candidate = await getCurrentCandidate();
   const exam = await prisma.exam.findUniqueOrThrow({
     where: { id: examId },
-    include: { programme: { include: { category: true } }, windows: { orderBy: { opensAt: "asc" } } },
+    include: {
+      programme: { include: { category: true } },
+      windows: { orderBy: { opensAt: "asc" } },
+      requirements: { orderBy: { orderIndex: "asc" } },
+    },
   });
 
   const eligibility = await checkExamEligibility(candidate?.id ?? null, exam.programme);
-  const enrolmentId = candidate ? await findEnrolmentId(candidate.id, exam.programmeId) : null;
+  const enrolment = candidate ? await findEnrolmentInfo(candidate.id, exam.programmeId) : null;
 
   let existingRegistration = null;
   if (candidate) {
@@ -61,12 +66,16 @@ export async function getExamDetail(examId: string) {
     existingRegistration = reg
       ? {
           id: reg.id,
+          registeredAt: reg.registeredAt,
           windowId: reg.windowId,
           windowOpensAt: reg.window.opensAt,
           windowClosesAt: reg.window.closesAt,
           sittingId: reg.sitting?.id ?? null,
           sittingState: reg.sitting?.state ?? null,
           paymentStatus: reg.payment?.status ?? null,
+          paymentReference: reg.payment?.internalReference ?? null,
+          paymentConfirmedAt: reg.payment?.confirmedAt ?? null,
+          hasEnrolment: !!reg.enrolmentId,
         }
       : null;
   }
@@ -78,6 +87,14 @@ export async function getExamDetail(examId: string) {
       passMarkPercent: exam.passMarkPercent,
       attemptPolicy: exam.attemptPolicy,
       feeMinor: exam.feeMinor,
+      description: exam.description,
+      instructions: exam.instructions,
+      examFormat: exam.examFormat,
+      examinationAreas: (exam.examinationAreas as string[] | null) ?? [],
+      onPassing: (exam.onPassing as string[] | null) ?? [],
+      requirements: exam.requirements.map((r) => ({ id: r.id, text: r.text, isMandatory: r.isMandatory })),
+      enforceFullScreen: exam.enforceFullScreen,
+      warnOnTabSwitch: exam.warnOnTabSwitch,
     },
     programme: {
       id: exam.programme.id,
@@ -95,7 +112,9 @@ export async function getExamDetail(examId: string) {
       capacity: w.capacity,
     })),
     eligibility,
-    enrolmentId,
+    enrolmentId: enrolment?.id ?? null,
+    courseMet: !!enrolment,
+    courseCompletedAt: enrolment?.completedAt ?? null,
     existingRegistration,
   };
 }
@@ -120,7 +139,12 @@ export async function getExamPaymentStatus(internalReference: string) {
       confirmedAt: true,
       failedAt: true,
       failureReason: true,
-      examRegistration: { select: { exam: { select: { programme: { select: { code: true, title: true } } } } } },
+      examRegistration: {
+        select: {
+          exam: { select: { programme: { select: { code: true, title: true } } } },
+          window: { select: { opensAt: true } },
+        },
+      },
     },
   });
   if (!payment || payment.candidateId !== candidate.id) return null;

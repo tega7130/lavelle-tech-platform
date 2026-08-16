@@ -14,7 +14,10 @@ import { computeShortfalls, computeActualDrawTotal, type DrawableQuestion } from
 export async function listExamBank(examId: string) {
   await requireStaffPermission(Permission.MANAGE_EXAMS);
 
-  const exam = await prisma.exam.findUniqueOrThrow({ where: { id: examId }, include: { programme: true } });
+  const exam = await prisma.exam.findUniqueOrThrow({
+    where: { id: examId },
+    include: { programme: true, requirements: { orderBy: { orderIndex: "asc" } } },
+  });
   const modules = await prisma.module.findMany({ where: { programmeId: exam.programmeId }, orderBy: { weekNumber: "asc" } });
   const questions = await prisma.examQuestion.findMany({
     where: { examId },
@@ -74,6 +77,14 @@ export async function listExamBank(examId: string) {
       shuffleQuestions: exam.shuffleQuestions,
       shuffleOptions: exam.shuffleOptions,
       allowReviewBeforeSubmit: exam.allowReviewBeforeSubmit,
+      description: exam.description ?? "",
+      instructions: exam.instructions ?? "",
+      examFormat: exam.examFormat ?? "",
+      examinationAreas: (exam.examinationAreas as string[] | null) ?? [],
+      onPassing: (exam.onPassing as string[] | null) ?? [],
+      closedAt: exam.closedAt,
+      archivedAt: exam.archivedAt,
+      requirements: exam.requirements.map((r) => ({ id: r.id, text: r.text, isMandatory: r.isMandatory })),
     },
     modules: bank,
     shortfalls,
@@ -93,6 +104,89 @@ export async function listExamsForBuilder() {
   return exams.map((e) => ({ id: e.id, status: e.status, programmeTitle: e.programme.title, programmeCode: e.programme.code }));
 }
 
+/** Topic/specialization picker for standalone exam creation — shared ProgrammeCategory list, independent of any specific programme. */
+export async function listExamTopics() {
+  await requireStaffPermission(Permission.MANAGE_EXAMS);
+  return prisma.programmeCategory.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } });
+}
+
+/** Programmes with no examination yet — the "new examination" picker's candidate list (createExam requires exactly this precondition). */
+export async function listProgrammesWithoutExam() {
+  await requireStaffPermission(Permission.MANAGE_EXAMS);
+  const programmes = await prisma.programme.findMany({
+    where: { exam: null },
+    select: { id: true, title: true, code: true, tier: true },
+    orderBy: { title: "asc" },
+  });
+  return programmes;
+}
+
+/**
+ * "Used in N sittings" — the edit-warning check (rule: spec §23). A
+ * question is "used" once any candidate has answered it, i.e. a
+ * SittingAnswer row referencing it exists; historical integrity itself
+ * is already guaranteed by Sitting.paperSnapshot (edits never reach a
+ * served paper), this just tells the admin before they edit.
+ */
+export async function getQuestionUsage(questionId: string) {
+  await requireStaffPermission(Permission.MANAGE_EXAMS);
+  const sittingCount = await prisma.sittingAnswer.findMany({
+    where: { questionId },
+    distinct: ["sittingId"],
+    select: { sittingId: true },
+  });
+  return { usedInSittings: sittingCount.length };
+}
+
+/**
+ * The staff-side "Preview as candidate" read — same shape a candidate's
+ * own exam-detail page would show (content, format, windows, fee),
+ * minus any candidate-specific eligibility/registration state, and
+ * reachable regardless of Exam.status so a DRAFT exam can be previewed
+ * before it's ever published.
+ */
+export async function getExamPreview(examId: string) {
+  await requireStaffPermission(Permission.MANAGE_EXAMS);
+  const exam = await prisma.exam.findUniqueOrThrow({
+    where: { id: examId },
+    include: {
+      programme: { include: { category: true } },
+      windows: { orderBy: { opensAt: "asc" } },
+      requirements: { orderBy: { orderIndex: "asc" } },
+    },
+  });
+
+  return {
+    exam: {
+      id: exam.id,
+      status: exam.status,
+      durationMinutes: exam.durationMinutes,
+      passMarkPercent: exam.passMarkPercent,
+      attemptPolicy: exam.attemptPolicy,
+      feeMinor: exam.feeMinor,
+      description: exam.description,
+      instructions: exam.instructions,
+      examFormat: exam.examFormat,
+      examinationAreas: (exam.examinationAreas as string[] | null) ?? [],
+      onPassing: (exam.onPassing as string[] | null) ?? [],
+      requirements: exam.requirements.map((r) => ({ id: r.id, text: r.text, isMandatory: r.isMandatory })),
+    },
+    programme: {
+      title: exam.programme.title,
+      code: exam.programme.code,
+      tier: exam.programme.tier,
+      categoryName: exam.programme.category.name,
+    },
+    windows: exam.windows.map((w) => ({
+      id: w.id,
+      opensAt: w.opensAt,
+      closesAt: w.closesAt,
+      registrationDeadline: w.registrationDeadline,
+      capacity: w.capacity,
+    })),
+  };
+}
+
 /** Windows with their sitting counts by state — the release-results trigger point (rule 12: per window, not per candidate). */
 export async function listExamWindows(examId: string) {
   await requireStaffPermission(Permission.MANAGE_EXAMS);
@@ -108,6 +202,7 @@ export async function listExamWindows(examId: string) {
       id: w.id,
       opensAt: w.opensAt,
       closesAt: w.closesAt,
+      registrationDeadline: w.registrationDeadline,
       capacity: w.capacity,
       registered: w.registrations.length,
       submitted: sittings.filter((s) => s.state === "SUBMITTED").length,

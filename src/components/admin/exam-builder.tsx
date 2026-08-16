@@ -18,14 +18,43 @@ import {
   restoreExamQuestionAction,
   setExamRulesAction,
   publishExamAction,
+  listProgrammesWithoutExamAction,
+  listExamTopicsAction,
+  createStandaloneExamAction,
+  getQuestionUsageAction,
+  getExamPreviewAction,
+  createExamAction,
+  createExamWindowAction,
+  updateExamWindowAction,
+  setExamContentAction,
+  setExamRequirementsAction,
+  closeExamAction,
+  archiveExamAction,
 } from "@/app/actions/exam-builder";
 import { releaseResultsAction } from "@/app/actions/exam-sitting";
-import type { listExamBank, listExamsForBuilder, listExamWindows } from "@/lib/exam-reads";
+import type { listExamBank, listExamsForBuilder, listExamWindows, listProgrammesWithoutExam, getExamPreview } from "@/lib/exam-reads";
+import type { PublishIssue } from "@/lib/exam-builder-actions";
 
 type Bank = Awaited<ReturnType<typeof listExamBank>>;
 type ExamListItem = Awaited<ReturnType<typeof listExamsForBuilder>>[number];
 type Question = Bank["modules"][number]["questions"][number];
 type ExamWindow = Awaited<ReturnType<typeof listExamWindows>>[number];
+type ProgrammeWithoutExam = Awaited<ReturnType<typeof listProgrammesWithoutExam>>[number];
+type ExamPreview = Awaited<ReturnType<typeof getExamPreview>>;
+
+const STATUS_TAG_VARIANT: Record<string, TagVariant | "success" | "warning" | "danger"> = {
+  DRAFT: "neutral",
+  PUBLISHED: "success",
+  CLOSED: "warning",
+  ARCHIVED: "neutral",
+};
+
+const STATUS_CAPTION: Record<string, string> = {
+  DRAFT: "Draft — not visible to candidates",
+  PUBLISHED: "Published — visible to eligible candidates",
+  CLOSED: "Closed — no new registrations or attempts",
+  ARCHIVED: "Archived — read-only historical record",
+};
 
 const STATUS_TAG: Record<string, TagVariant | "success" | "warning" | "danger"> = {
   DRAFT: "neutral",
@@ -52,6 +81,24 @@ interface QuestionFormState {
   guidance: string;
   wordLimit: string;
   options: { text: string; isCorrect: boolean }[];
+}
+
+interface WindowFormState {
+  mode: "create" | "edit";
+  id?: string;
+  opensAt: string;
+  closesAt: string;
+  registrationDeadline: string;
+  capacity: string;
+  uncapped: boolean;
+}
+
+function toDateInput(d: Date | string): string {
+  return new Date(d).toISOString().slice(0, 16);
+}
+
+function blankWindowForm(): WindowFormState {
+  return { mode: "create", opensAt: "", closesAt: "", registrationDeadline: "", capacity: "", uncapped: true };
 }
 
 function blankForm(moduleId: string): QuestionFormState {
@@ -98,7 +145,24 @@ export function ExamBuilder({ exams, bank: initialBank }: { exams: ExamListItem[
   const [retireTarget, setRetireTarget] = React.useState<{ moduleId: string; question: Question } | null>(null);
   const [retireReason, setRetireReason] = React.useState("");
   const [busy, setBusy] = React.useState(false);
-  const [publishError, setPublishError] = React.useState<string | null>(null);
+  const [publishIssues, setPublishIssues] = React.useState<PublishIssue[] | null>(null);
+  const [showPublishConfirm, setShowPublishConfirm] = React.useState(false);
+  const [showNewExamDialog, setShowNewExamDialog] = React.useState(false);
+  const [showPreview, setShowPreview] = React.useState(false);
+  const [preview, setPreview] = React.useState<ExamPreview | null>(null);
+  const [questionUsage, setQuestionUsage] = React.useState<number | null>(null);
+  const [lifecycleTarget, setLifecycleTarget] = React.useState<"close" | "archive" | null>(null);
+  const [content, setContent] = React.useState({
+    description: bank.exam.description ?? "",
+    instructions: bank.exam.instructions ?? "",
+    examFormat: bank.exam.examFormat ?? "",
+    examinationAreas: bank.exam.examinationAreas.length ? bank.exam.examinationAreas : [""],
+    onPassing: bank.exam.onPassing.length ? bank.exam.onPassing : [""],
+  });
+  const [openToAll, setOpenToAll] = React.useState(bank.exam.requirements.length === 0);
+  const [requirements, setRequirements] = React.useState<{ text: string; isMandatory: boolean }[]>(
+    bank.exam.requirements.length ? bank.exam.requirements.map((r) => ({ text: r.text, isMandatory: r.isMandatory })) : [{ text: "", isMandatory: true }]
+  );
   const [rules, setRules] = React.useState({
     durationMinutes: bank.exam.durationMinutes,
     passMarkPercent: bank.exam.passMarkPercent,
@@ -112,6 +176,7 @@ export function ExamBuilder({ exams, bank: initialBank }: { exams: ExamListItem[
   });
 
   const [windows, setWindows] = React.useState<ExamWindow[]>([]);
+  const [windowForm, setWindowForm] = React.useState<WindowFormState | null>(null);
   const [releasingId, setReleasingId] = React.useState<string | null>(null);
   const [capacityValue, setCapacityValue] = React.useState("");
   const [uncapped, setUncapped] = React.useState(true);
@@ -196,6 +261,7 @@ export function ExamBuilder({ exams, bank: initialBank }: { exams: ExamListItem[
         );
       }
       setForm(null);
+      setQuestionUsage(null);
       await refreshBank();
       router.refresh();
     } finally {
@@ -241,15 +307,96 @@ export function ExamBuilder({ exams, bank: initialBank }: { exams: ExamListItem[
     }
   }
 
-  async function publish() {
+  async function confirmPublish() {
     setBusy(true);
-    setPublishError(null);
     try {
-      await publishExamAction(bank.exam.id);
+      const result = await publishExamAction(bank.exam.id);
+      setShowPublishConfirm(false);
+      if (result.ok) {
+        setPublishIssues(null);
+        await refreshBank();
+        router.refresh();
+      } else {
+        setPublishIssues(result.issues);
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveContent() {
+    setBusy(true);
+    try {
+      await setExamContentAction(bank.exam.id, {
+        description: content.description,
+        instructions: content.instructions,
+        examFormat: content.examFormat,
+        examinationAreas: content.examinationAreas,
+        onPassing: content.onPassing,
+      });
       await refreshBank();
       router.refresh();
-    } catch (e) {
-      setPublishError(e instanceof Error ? e.message : "Could not publish.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveRequirements() {
+    setBusy(true);
+    try {
+      await setExamRequirementsAction(bank.exam.id, openToAll ? [] : requirements);
+      await refreshBank();
+      router.refresh();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function openPreview() {
+    setShowPreview(true);
+    setPreview(await getExamPreviewAction(bank.exam.id));
+  }
+
+  async function openEditForm(moduleId: string, q: Question) {
+    setForm(editForm(moduleId, q));
+    setQuestionUsage(null);
+    const usage = await getQuestionUsageAction(q.id);
+    setQuestionUsage(usage.usedInSittings);
+  }
+
+  async function submitWindowForm() {
+    if (!windowForm) return;
+    setBusy(true);
+    try {
+      const input = {
+        opensAt: new Date(windowForm.opensAt),
+        closesAt: new Date(windowForm.closesAt),
+        registrationDeadline: new Date(windowForm.registrationDeadline),
+        capacity: windowForm.uncapped ? null : windowForm.capacity.trim() ? Number(windowForm.capacity) : null,
+      };
+      if (windowForm.mode === "create") {
+        await createExamWindowAction(bank.exam.id, input);
+      } else if (windowForm.id) {
+        await updateExamWindowAction(bank.exam.id, windowForm.id, input);
+      }
+      setWindowForm(null);
+      setWindows(await listExamWindowsAction(bank.exam.id));
+      await refreshBank();
+      router.refresh();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function runLifecycleAction() {
+    if (!lifecycleTarget) return;
+    setBusy(true);
+    try {
+      if (lifecycleTarget === "close") await closeExamAction(bank.exam.id);
+      else await archiveExamAction(bank.exam.id);
+      setLifecycleTarget(null);
+      await refreshBank();
+      router.refresh();
     } finally {
       setBusy(false);
     }
@@ -285,25 +432,59 @@ export function ExamBuilder({ exams, bank: initialBank }: { exams: ExamListItem[
               </option>
             ))}
           </select>
-          <Tag variant={bank.exam.status === "PUBLISHED" ? "success" : "neutral"}>{bank.exam.status}</Tag>
+          <div>
+            <Tag variant={STATUS_TAG_VARIANT[bank.exam.status]}>{bank.exam.status}</Tag>
+            <div className="text-neutral-500 text-[11px] mt-1">{STATUS_CAPTION[bank.exam.status]}</div>
+          </div>
         </div>
         <div className="flex items-center gap-2">
+          <Button variant="secondary" onClick={() => setShowNewExamDialog(true)}>
+            + New examination
+          </Button>
           <Button variant="secondary" onClick={() => router.push(`/admin/exam-builder/${bank.exam.id}/candidates`)}>
             Candidates
           </Button>
-          <Button onClick={publish} disabled={busy || bank.exam.status === "PUBLISHED"}>
-            {bank.exam.status === "PUBLISHED" ? "Published" : "Publish exam"}
+          <Button variant="secondary" onClick={openPreview}>
+            Preview as candidate
           </Button>
+          {bank.exam.status === "DRAFT" && (
+            <Button onClick={() => setShowPublishConfirm(true)} disabled={busy}>
+              Publish examination
+            </Button>
+          )}
+          {bank.exam.status === "PUBLISHED" && (
+            <Button variant="secondary" className="border-[#e8b4ae] text-[#b42318]" onClick={() => setLifecycleTarget("close")} disabled={busy}>
+              Close examination
+            </Button>
+          )}
+          {bank.exam.status === "CLOSED" && (
+            <Button variant="secondary" onClick={() => setLifecycleTarget("archive")} disabled={busy}>
+              Archive examination
+            </Button>
+          )}
         </div>
       </div>
 
-      {(bank.shortfalls.length > 0 || publishError) && (
+      {publishIssues && publishIssues.length > 0 && (
+        <div className="flex flex-col gap-2.5 px-5 py-4 rounded-md bg-[#fff7e6] border border-[#f0d9a8]">
+          <div className="flex items-center gap-2.5">
+            <span className="w-[26px] h-[26px] flex-none rounded-full bg-[#fdf0d2] text-[#a16207] flex items-center justify-center text-sm font-bold">!</span>
+            <div className="font-heading font-semibold text-[13.5px] text-[#7a4d06]">This examination cannot be published yet</div>
+          </div>
+          <ul className="flex flex-col gap-1.5 pl-9 list-disc text-[12.5px] text-[#8a6013]">
+            {publishIssues.map((issue, i) => (
+              <li key={i}>{issue.message}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {bank.shortfalls.length > 0 && !publishIssues && (
         <div className="flex items-start gap-3 px-5 py-4 rounded-md bg-[#fff7e6] border border-[#f0d9a8]">
           <span className="w-[26px] h-[26px] flex-none rounded-full bg-[#fdf0d2] text-[#a16207] flex items-center justify-center text-sm font-bold">!</span>
           <div>
             <div className="font-heading font-semibold text-[13.5px] text-[#7a4d06]">Question bank is short for the configured draw</div>
             <div className="text-[12.5px] text-[#8a6013] mt-0.5">
-              {publishError ?? bank.shortfalls.map((s) => `${s.moduleTitle} — short by ${s.shortBy}`).join("; ")}
+              {bank.shortfalls.map((s) => `${s.moduleTitle} — short by ${s.shortBy}`).join("; ")}
             </div>
           </div>
         </div>
@@ -316,14 +497,115 @@ export function ExamBuilder({ exams, bank: initialBank }: { exams: ExamListItem[
             <CardTitleRow bank={bank} />
           </Card>
 
+          <Card elev="sm">
+            <CardKicker>Examination content</CardKicker>
+            <p className="text-neutral-500 text-[11.5px] -mt-1">What candidates read before they register — none of this is hard-coded.</p>
+            <div className="flex flex-col gap-3 mt-3">
+              <div>
+                <Label>About this examination</Label>
+                <Textarea rows={3} value={content.description} onChange={(e) => setContent((c) => ({ ...c, description: e.target.value }))} />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>Format</Label>
+                  <Input value={content.examFormat} onChange={(e) => setContent((c) => ({ ...c, examFormat: e.target.value }))} placeholder="Objective + written" />
+                </div>
+                <div>
+                  <Label>Candidate instructions</Label>
+                  <Input value={content.instructions} onChange={(e) => setContent((c) => ({ ...c, instructions: e.target.value }))} placeholder="Optional" />
+                </div>
+              </div>
+              <ListEditor
+                label="What is examined"
+                items={content.examinationAreas}
+                onChange={(items) => setContent((c) => ({ ...c, examinationAreas: items }))}
+                placeholder="Upstream petroleum contracts, licensing and the award process"
+              />
+              <ListEditor
+                label="On passing"
+                items={content.onPassing}
+                onChange={(items) => setContent((c) => ({ ...c, onPassing: items }))}
+                placeholder="Specialist Certificate in Energy Law & Regulation"
+              />
+              <Button variant="secondary" onClick={saveContent} disabled={busy} className="self-start">
+                Save content
+              </Button>
+            </div>
+          </Card>
+
+          <Card elev="sm">
+            <CardKicker>Eligibility</CardKicker>
+            <p className="text-neutral-500 text-[11.5px] -mt-1">What candidates see about who this examination is for.</p>
+            <div className="flex flex-col gap-3 mt-3">
+              <label className="flex items-start gap-2.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={openToAll}
+                  onChange={(e) => setOpenToAll(e.target.checked)}
+                  className="w-4 h-4 flex-none mt-0.5 accent-accent"
+                />
+                <div>
+                  <div className="text-[12.5px] font-medium">Open to all candidates</div>
+                  <div className="text-neutral-500 text-[11px] leading-snug">No prerequisites required. Uncheck to list eligibility notes.</div>
+                </div>
+              </label>
+
+              {!openToAll && (
+                <div className="flex flex-col gap-2">
+                  {requirements.map((r, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <Input
+                        className="flex-1"
+                        value={r.text}
+                        placeholder="A valid law degree or equivalent professional qualification"
+                        onChange={(e) => setRequirements(requirements.map((x, j) => (j === i ? { ...x, text: e.target.value } : x)))}
+                      />
+                      <label className="flex-none flex items-center gap-1.5 text-[11.5px] text-neutral-700 cursor-pointer whitespace-nowrap">
+                        <input
+                          type="checkbox"
+                          checked={r.isMandatory}
+                          onChange={(e) => setRequirements(requirements.map((x, j) => (j === i ? { ...x, isMandatory: e.target.checked } : x)))}
+                          className="w-[15px] h-[15px] flex-none accent-accent"
+                        />
+                        <span>Required</span>
+                      </label>
+                      <button
+                        type="button"
+                        className="text-neutral-500 text-[12px] flex-none cursor-pointer px-1.5"
+                        onClick={() => setRequirements(requirements.length > 1 ? requirements.filter((_, j) => j !== i) : [{ text: "", isMandatory: true }])}
+                        aria-label="Remove"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    className="text-accent text-[12px] font-medium cursor-pointer self-start"
+                    onClick={() => setRequirements([...requirements, { text: "", isMandatory: true }])}
+                  >
+                    + Add requirement
+                  </button>
+                </div>
+              )}
+              <Button variant="secondary" onClick={saveRequirements} disabled={busy} className="self-start">
+                Save eligibility
+              </Button>
+            </div>
+          </Card>
+
           {form && (
             <QuestionFormCard
               form={form}
               setForm={setForm}
-              onCancel={() => setForm(null)}
+              onCancel={() => {
+                setForm(null);
+                setQuestionUsage(null);
+              }}
               onSubmit={submitForm}
               busy={busy}
               moduleOptions={bank.modules.map((m) => ({ id: m.id, title: m.title }))}
+              usedInSittings={form.mode === "edit" ? questionUsage : null}
             />
           )}
 
@@ -337,7 +619,7 @@ export function ExamBuilder({ exams, bank: initialBank }: { exams: ExamListItem[
                   style={{ background: mod.shortfall ? "#fffaf0" : "transparent" }}
                 >
                   <span className="flex-1 min-w-0">
-                    <div className="text-neutral-500 text-[10px] tracking-[0.1em] uppercase">Week {mod.weekNumber}</div>
+                    <div className="text-neutral-500 text-[10px] tracking-[0.1em] uppercase">Module {mod.weekNumber}</div>
                     <div className="font-heading font-semibold text-[14px] mt-0.5">{mod.title}</div>
                   </span>
                   {mod.shortfall && (
@@ -380,7 +662,7 @@ export function ExamBuilder({ exams, bank: initialBank }: { exams: ExamListItem[
                         <div className="flex gap-1.5 flex-none">
                           {q.status !== "RETIRED" && (
                             <>
-                              <Button variant="secondary" className="h-[30px] px-[10px] text-xs" onClick={() => setForm(editForm(mod.id, q))}>
+                              <Button variant="secondary" className="h-[30px] px-[10px] text-xs" onClick={() => openEditForm(mod.id, q)}>
                                 Edit
                               </Button>
                               <Button
@@ -402,7 +684,7 @@ export function ExamBuilder({ exams, bank: initialBank }: { exams: ExamListItem[
                     ))}
                     <div className="px-5 py-3">
                       <button className="text-accent text-[12.5px] font-medium cursor-pointer" onClick={() => setForm(blankForm(mod.id))}>
-                        + Add question to Week {mod.weekNumber}
+                        + Add question to Module {mod.weekNumber}
                       </button>
                     </div>
                   </div>
@@ -532,14 +814,53 @@ export function ExamBuilder({ exams, bank: initialBank }: { exams: ExamListItem[
             <div className="text-accent-800 text-[12px] mt-1.5 leading-relaxed">{summary}</div>
           </Card>
 
-          {windows.length > 0 && (
-            <Card elev="sm">
-              <CardKicker>Windows &amp; results</CardKicker>
+          <Card elev="sm">
+            <div className="flex items-center justify-between">
+              <CardKicker>Sittings</CardKicker>
+              <button className="text-accent text-[12px] font-medium cursor-pointer" onClick={() => setWindowForm(blankWindowForm())}>
+                + Add sitting
+              </button>
+            </div>
+            {windows.length === 0 ? (
+              <div className="text-center py-6">
+                <div className="font-heading font-semibold text-[13px]">No examination sittings have been configured</div>
+                <p className="text-neutral-600 text-[12px] mt-1.5 max-w-[36ch] mx-auto">
+                  Sittings define when candidates can register and sit the examination.
+                </p>
+                <button className="text-accent text-[12.5px] font-medium cursor-pointer mt-2" onClick={() => setWindowForm(blankWindowForm())}>
+                  + Add examination sitting
+                </button>
+              </div>
+            ) : (
               <div className="flex flex-col gap-2.5 mt-3">
                 {windows.map((w) => (
                   <div key={w.id} className="px-3.5 py-3 rounded-md border border-neutral-200">
-                    <div className="text-[12.5px] font-medium">{new Date(w.opensAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</div>
-                    <div className="text-neutral-500 text-[11px] mt-1">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <div className="text-[12.5px] font-medium">{new Date(w.opensAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</div>
+                        <div className="text-neutral-500 text-[11px] mt-1">
+                          Registration closes {new Date(w.registrationDeadline).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })} ·{" "}
+                          {w.capacity == null ? "Uncapped" : `${w.capacity} places`}
+                        </div>
+                      </div>
+                      <button
+                        className="text-accent text-[11.5px] font-medium cursor-pointer flex-none"
+                        onClick={() =>
+                          setWindowForm({
+                            mode: "edit",
+                            id: w.id,
+                            opensAt: toDateInput(w.opensAt),
+                            closesAt: toDateInput(w.closesAt),
+                            registrationDeadline: toDateInput(w.registrationDeadline),
+                            capacity: w.capacity != null ? String(w.capacity) : "",
+                            uncapped: w.capacity == null,
+                          })
+                        }
+                      >
+                        Edit
+                      </button>
+                    </div>
+                    <div className="text-neutral-500 text-[11px] mt-2">
                       {w.registered} registered · {w.inProgress} sitting · {w.submitted} awaiting release · {w.released} released
                     </div>
                     {w.submitted > 0 && (
@@ -550,8 +871,8 @@ export function ExamBuilder({ exams, bank: initialBank }: { exams: ExamListItem[
                   </div>
                 ))}
               </div>
-            </Card>
-          )}
+            )}
+          </Card>
         </div>
       </div>
 
@@ -583,6 +904,438 @@ export function ExamBuilder({ exams, bank: initialBank }: { exams: ExamListItem[
           </div>
         </Dialog>
       )}
+
+      {windowForm && (
+        <Dialog open onClose={() => setWindowForm(null)} title={windowForm.mode === "create" ? "Add examination sitting" : "Edit examination sitting"}>
+          <div className="flex flex-col gap-3">
+            <div>
+              <Label>Examination window opens</Label>
+              <input
+                type="datetime-local"
+                className="w-full h-[42px] border border-neutral-300 rounded-md px-3 text-[13px] bg-bg"
+                value={windowForm.opensAt}
+                onChange={(e) => setWindowForm({ ...windowForm, opensAt: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label>Examination window closes</Label>
+              <input
+                type="datetime-local"
+                className="w-full h-[42px] border border-neutral-300 rounded-md px-3 text-[13px] bg-bg"
+                value={windowForm.closesAt}
+                onChange={(e) => setWindowForm({ ...windowForm, closesAt: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label>Registration closes</Label>
+              <input
+                type="datetime-local"
+                className="w-full h-[42px] border border-neutral-300 rounded-md px-3 text-[13px] bg-bg"
+                value={windowForm.registrationDeadline}
+                onChange={(e) => setWindowForm({ ...windowForm, registrationDeadline: e.target.value })}
+              />
+              <div className="text-neutral-500 text-[11.5px] mt-1.5">Must be before the window opens.</div>
+            </div>
+            <div>
+              <Label>Capacity</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="number"
+                  className="flex-1"
+                  value={windowForm.capacity}
+                  disabled={windowForm.uncapped}
+                  placeholder="Uncapped"
+                  onChange={(e) => setWindowForm({ ...windowForm, capacity: e.target.value })}
+                />
+                <label className="flex-none flex items-center gap-1.5 text-[12px] text-neutral-700 cursor-pointer whitespace-nowrap">
+                  <input
+                    type="checkbox"
+                    checked={windowForm.uncapped}
+                    onChange={(e) => setWindowForm({ ...windowForm, uncapped: e.target.checked })}
+                    className="w-[15px] h-[15px] flex-none accent-accent"
+                  />
+                  <span>Uncapped</span>
+                </label>
+              </div>
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 mt-4">
+            <Button variant="secondary" onClick={() => setWindowForm(null)}>
+              Cancel
+            </Button>
+            <Button
+              disabled={busy || !windowForm.opensAt || !windowForm.closesAt || !windowForm.registrationDeadline}
+              onClick={submitWindowForm}
+            >
+              {windowForm.mode === "create" ? "Add sitting" : "Save changes"}
+            </Button>
+          </div>
+        </Dialog>
+      )}
+
+      {showPublishConfirm && (
+        <Dialog open onClose={() => setShowPublishConfirm(false)} title="Publish examination?">
+          <p>
+            Once published, this examination will become available to eligible candidates according to its configured registration and
+            examination schedule.
+          </p>
+          <p className="mt-2">
+            Questions already used by candidates cannot be modified. Future edits to used questions create a new version, and
+            candidates who already sat the examination keep the version they answered — their marks are unaffected.
+          </p>
+          <div className="flex justify-end gap-2 mt-4">
+            <Button variant="secondary" onClick={() => setShowPublishConfirm(false)}>
+              Cancel
+            </Button>
+            <Button disabled={busy} onClick={confirmPublish}>
+              {busy ? "Publishing…" : "Publish examination"}
+            </Button>
+          </div>
+        </Dialog>
+      )}
+
+      {lifecycleTarget && (
+        <Dialog
+          open
+          onClose={() => setLifecycleTarget(null)}
+          title={lifecycleTarget === "close" ? "Close this examination?" : "Archive this examination?"}
+        >
+          <p>
+            {lifecycleTarget === "close"
+              ? "No new candidate can register or sit this examination once closed. Historical registrations, sittings and results are unaffected."
+              : "The examination becomes a read-only historical record. It can no longer be edited except by an authorised administrative action."}
+          </p>
+          <div className="flex justify-end gap-2 mt-4">
+            <Button variant="secondary" onClick={() => setLifecycleTarget(null)}>
+              Cancel
+            </Button>
+            <Button variant="danger" disabled={busy} onClick={runLifecycleAction}>
+              {lifecycleTarget === "close" ? "Close examination" : "Archive examination"}
+            </Button>
+          </div>
+        </Dialog>
+      )}
+
+      {showPreview && (
+        <Dialog open onClose={() => setShowPreview(false)} title="Preview">
+          {!preview ? (
+            <div className="text-neutral-500 text-[12.5px] py-4">Loading preview…</div>
+          ) : (
+            <div className="flex flex-col gap-4">
+              <div className="flex items-center gap-2">
+                <Tag variant="warning">Preview</Tag>
+                <span className="text-neutral-500 text-[11.5px]">This is exactly what an eligible candidate sees before registering — no correct answers, examiner notes or bank statistics.</span>
+              </div>
+              <div>
+                <div className="font-heading font-bold text-[18px]">{preview.programme.title}</div>
+                <div className="text-neutral-500 text-[12.5px] mt-0.5">
+                  {preview.programme.code} · {preview.programme.categoryName} · {preview.programme.tier}
+                </div>
+              </div>
+              {preview.exam.description && <p className="text-[13px] leading-relaxed">{preview.exam.description}</p>}
+              <div className="grid grid-cols-3 gap-3">
+                <PreviewStat label="Format" value={preview.exam.examFormat || "—"} />
+                <PreviewStat label="Duration" value={`${preview.exam.durationMinutes / 60}h`} />
+                <PreviewStat label="Pass standard" value={`${preview.exam.passMarkPercent}%`} />
+              </div>
+              {preview.exam.examinationAreas.length > 0 && (
+                <div>
+                  <div className="font-heading font-semibold text-[12.5px] uppercase tracking-[0.05em] text-neutral-500">What is examined</div>
+                  <ul className="list-disc pl-5 mt-1.5 flex flex-col gap-1 text-[13px]">
+                    {preview.exam.examinationAreas.map((a, i) => (
+                      <li key={i}>{a}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {preview.exam.onPassing.length > 0 && (
+                <div>
+                  <div className="font-heading font-semibold text-[12.5px] uppercase tracking-[0.05em] text-neutral-500">On passing</div>
+                  <ul className="list-disc pl-5 mt-1.5 flex flex-col gap-1 text-[13px]">
+                    {preview.exam.onPassing.map((a, i) => (
+                      <li key={i}>{a}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              <div>
+                <div className="font-heading font-semibold text-[12.5px] uppercase tracking-[0.05em] text-neutral-500">Eligibility</div>
+                {preview.exam.requirements.length === 0 ? (
+                  <p className="text-[13px] mt-1.5">Open to all candidates.</p>
+                ) : (
+                  <ul className="mt-1.5 flex flex-col gap-1.5">
+                    {preview.exam.requirements.map((r) => (
+                      <li key={r.id} className="flex items-start gap-2 text-[13px]">
+                        <Tag variant={r.isMandatory ? "danger" : "neutral"} className="mt-0.5 flex-none">
+                          {r.isMandatory ? "Required" : "Recommended"}
+                        </Tag>
+                        <span>{r.text}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+              <div>
+                <div className="font-heading font-semibold text-[12.5px] uppercase tracking-[0.05em] text-neutral-500">Sittings</div>
+                {preview.windows.length === 0 ? (
+                  <p className="text-neutral-500 text-[12.5px] mt-1.5">No sittings scheduled yet.</p>
+                ) : (
+                  <div className="flex flex-col gap-2 mt-1.5">
+                    {preview.windows.map((w) => (
+                      <div key={w.id} className="px-3 py-2.5 rounded-md border border-neutral-200 text-[12.5px]">
+                        {new Date(w.opensAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })} · Registration
+                        closes {new Date(w.registrationDeadline).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })} ·{" "}
+                        {w.capacity == null ? "Places available" : `${w.capacity} places`}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div className="text-neutral-500 text-[12.5px]">{formatNaira(preview.exam.feeMinor)} examination fee</div>
+              <Button disabled className="self-start opacity-50 cursor-not-allowed">
+                Enrol in this examination
+              </Button>
+            </div>
+          )}
+        </Dialog>
+      )}
+
+      {showNewExamDialog && <NewExaminationDialog onClose={() => setShowNewExamDialog(false)} onCreated={(id) => router.push(`/admin/exam-builder?examId=${id}`)} />}
+    </div>
+  );
+}
+
+function PreviewStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <div className="font-heading font-bold text-[15px]">{value}</div>
+      <div className="text-neutral-500 text-[10.5px] tracking-[0.06em] uppercase mt-0.5">{label}</div>
+    </div>
+  );
+}
+
+function ListEditor({
+  label,
+  items,
+  onChange,
+  placeholder,
+}: {
+  label: string;
+  items: string[];
+  onChange: (items: string[]) => void;
+  placeholder?: string;
+}) {
+  return (
+    <div>
+      <Label>{label}</Label>
+      <div className="flex flex-col gap-2">
+        {items.map((item, i) => (
+          <div key={i} className="flex items-center gap-2">
+            <Input
+              className="flex-1"
+              value={item}
+              placeholder={placeholder}
+              onChange={(e) => onChange(items.map((it, j) => (j === i ? e.target.value : it)))}
+            />
+            <button
+              type="button"
+              className="text-neutral-500 text-[12px] flex-none cursor-pointer px-1.5"
+              onClick={() => onChange(items.length > 1 ? items.filter((_, j) => j !== i) : [""])}
+              aria-label="Remove"
+            >
+              ✕
+            </button>
+          </div>
+        ))}
+        <button type="button" className="text-accent text-[12px] font-medium cursor-pointer self-start" onClick={() => onChange([...items, ""])}>
+          + Add line
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** The page-level empty state when no programme has an examination yet — no bank exists to render the full builder against. */
+export function NewExamEmptyState() {
+  const router = useRouter();
+  const [open, setOpen] = React.useState(false);
+  return (
+    <div className="max-w-[900px] text-center py-16">
+      <div className="font-heading font-semibold text-[16px]">No programmes have an examination yet</div>
+      <p className="text-neutral-600 text-[13px] mt-1.5">Create one for a programme to start building its question bank.</p>
+      <Button className="mt-4" onClick={() => setOpen(true)}>
+        + New examination
+      </Button>
+      {open && <NewExaminationDialog onClose={() => setOpen(false)} onCreated={(id) => router.push(`/admin/exam-builder?examId=${id}`)} />}
+    </div>
+  );
+}
+
+function NewExaminationDialog({ onClose, onCreated }: { onClose: () => void; onCreated: (examId: string) => void }) {
+  const [mode, setMode] = React.useState<"standalone" | "linked">("standalone");
+
+  return (
+    <Dialog open onClose={onClose} title="New examination">
+      <Segmented
+        name="new-exam-mode"
+        value={mode}
+        onChange={(v) => setMode(v as typeof mode)}
+        options={[
+          { value: "standalone", label: "Standalone exam" },
+          { value: "linked", label: "Link to a programme" },
+        ]}
+      />
+      {mode === "standalone" ? <StandaloneExamForm onClose={onClose} onCreated={onCreated} /> : <LinkedExamForm onClose={onClose} onCreated={onCreated} />}
+    </Dialog>
+  );
+}
+
+function StandaloneExamForm({ onClose, onCreated }: { onClose: () => void; onCreated: (examId: string) => void }) {
+  const [topics, setTopics] = React.useState<{ id: string; name: string }[] | null>(null);
+  const [title, setTitle] = React.useState("");
+  const [code, setCode] = React.useState("");
+  const [tier, setTier] = React.useState<"FOUNDATION" | "SPECIALIST">("SPECIALIST");
+  const [topicId, setTopicId] = React.useState<string>("__new__");
+  const [newTopicName, setNewTopicName] = React.useState("");
+  const [busy, setBusy] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    listExamTopicsAction().then((rows) => {
+      setTopics(rows);
+      if (rows.length > 0) setTopicId(rows[0].id);
+    });
+  }, []);
+
+  async function submit() {
+    setBusy(true);
+    setError(null);
+    try {
+      const exam = await createStandaloneExamAction({
+        title,
+        code,
+        tier,
+        categoryId: topicId === "__new__" ? undefined : topicId,
+        newCategoryName: topicId === "__new__" ? newTopicName : undefined,
+      });
+      onCreated(exam.id);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not create the examination.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const canSubmit = title.trim() && code.trim() && (topicId !== "__new__" || newTopicName.trim());
+
+  return (
+    <div className="mt-3 flex flex-col gap-3">
+      <p className="text-neutral-500 text-[11.5px] -mt-1">Independent of any Lavelle programme — for any topic, whether or not a course exists for it.</p>
+      <div>
+        <Label>Examination title</Label>
+        <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Advanced Marketing Examination" />
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <Label>Examination code</Label>
+          <Input value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="MKT-401" />
+        </div>
+        <div>
+          <Label>Level</Label>
+          <Segmented name="new-exam-tier" value={tier} onChange={(v) => setTier(v as typeof tier)} options={[{ value: "FOUNDATION", label: "Foundation" }, { value: "SPECIALIST", label: "Specialist" }]} />
+        </div>
+      </div>
+      <div>
+        <Label>Topic / specialization</Label>
+        {!topics ? (
+          <div className="text-neutral-500 text-[12px]">Loading topics…</div>
+        ) : (
+          <select
+            className="w-full h-[42px] border border-neutral-300 rounded-md px-3 text-[13px] bg-bg"
+            value={topicId}
+            onChange={(e) => setTopicId(e.target.value)}
+          >
+            {topics.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+              </option>
+            ))}
+            <option value="__new__">+ Create new topic</option>
+          </select>
+        )}
+        {topicId === "__new__" && (
+          <Input className="mt-2" value={newTopicName} onChange={(e) => setNewTopicName(e.target.value)} placeholder="New topic name" />
+        )}
+      </div>
+      {error && <div className="text-[#b42318] text-[12.5px]">{error}</div>}
+      <div className="flex justify-end gap-2 mt-1">
+        <Button variant="secondary" onClick={onClose}>
+          Cancel
+        </Button>
+        <Button disabled={busy || !canSubmit} onClick={submit}>
+          {busy ? "Creating…" : "Create examination"}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function LinkedExamForm({ onClose, onCreated }: { onClose: () => void; onCreated: (examId: string) => void }) {
+  const [programmes, setProgrammes] = React.useState<ProgrammeWithoutExam[] | null>(null);
+  const [selectedId, setSelectedId] = React.useState<string | null>(null);
+  const [busy, setBusy] = React.useState(false);
+
+  React.useEffect(() => {
+    listProgrammesWithoutExamAction().then((rows) => {
+      setProgrammes(rows);
+      setSelectedId(rows[0]?.id ?? null);
+    });
+  }, []);
+
+  async function submit() {
+    if (!selectedId) return;
+    setBusy(true);
+    try {
+      const exam = await createExamAction(selectedId);
+      onCreated(exam.id);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="mt-3">
+      {!programmes ? (
+        <div className="text-neutral-500 text-[12.5px] py-4">Loading programmes…</div>
+      ) : programmes.length === 0 ? (
+        <p className="text-neutral-600 text-[12.5px]">Every programme already has an examination.</p>
+      ) : (
+        <div>
+          <Label>Programme</Label>
+          <select
+            className="w-full h-[42px] border border-neutral-300 rounded-md px-3 text-[13px] bg-bg"
+            value={selectedId ?? ""}
+            onChange={(e) => setSelectedId(e.target.value)}
+          >
+            {programmes.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.title} ({p.code})
+              </option>
+            ))}
+          </select>
+          <p className="text-neutral-500 text-[11.5px] mt-2">
+            Creates a draft examination certifying this programme, with default rules — configure everything else in the builder.
+          </p>
+        </div>
+      )}
+      <div className="flex justify-end gap-2 mt-4">
+        <Button variant="secondary" onClick={onClose}>
+          Cancel
+        </Button>
+        <Button disabled={busy || !selectedId} onClick={submit}>
+          {busy ? "Creating…" : "Create examination"}
+        </Button>
+      </div>
     </div>
   );
 }
@@ -614,6 +1367,7 @@ function QuestionFormCard({
   onSubmit,
   busy,
   moduleOptions,
+  usedInSittings,
 }: {
   form: QuestionFormState;
   setForm: (f: QuestionFormState) => void;
@@ -621,11 +1375,21 @@ function QuestionFormCard({
   onSubmit: () => void;
   busy: boolean;
   moduleOptions: { id: string; title: string }[];
+  usedInSittings?: number | null;
 }) {
   return (
     <Card elev="sm" className="border-accent-300">
       <CardKicker>{form.mode === "create" ? "New question" : "Edit question"}</CardKicker>
       {form.mode === "edit" && <div className="text-neutral-500 text-[11.5px] -mt-1">Applies to future sittings only — a paper already in progress keeps its snapshot.</div>}
+      {form.mode === "edit" && usedInSittings != null && usedInSittings > 0 && (
+        <div className="flex items-start gap-2.5 px-4 py-3 rounded-md bg-[#fff7e6] border border-[#f0d9a8] mt-2 text-[12px] text-[#8a6013]">
+          <span className="font-bold">!</span>
+          <span>
+            This question has already been answered in {usedInSittings} sitting{usedInSittings === 1 ? "" : "s"}. Your changes apply to future
+            sittings only — existing answers and marks are unaffected.
+          </span>
+        </div>
+      )}
 
       <div className="mt-3">
         <Label>Question type</Label>

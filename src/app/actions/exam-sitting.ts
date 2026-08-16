@@ -7,6 +7,8 @@ import { getCurrentCandidate } from "@/lib/candidate-session";
 import { getClientIp } from "@/lib/request-info";
 import * as sittingActions from "@/lib/exam-sitting-actions";
 import { getExamPaymentStatus } from "@/lib/exam-candidate-reads";
+import { getSignedAdmissionSlipPdfUrl, isAdmissionSlipReleased } from "@/lib/admission-slip-pdf";
+import { prisma } from "@/lib/prisma";
 
 /** Thin wrapper so the exam checkout return page's client-side poll can call the server function (rule 6 — this, not the redirect URL, is the authority). */
 export async function pollExamPaymentStatus(internalReference: string) {
@@ -55,6 +57,19 @@ export async function expireSittingIfOverdueAction(sittingId: string) {
 // (rule 14), who have no enrolment to require. Auth alone
 // (requireCandidate) is the correct gate; per-exam eligibility is
 // enforced inside registerForExam itself.
+
+/** Mints a short-lived signed link only once ownership and the release gate both check out — the route handler re-checks both anyway, but a candidate should never see a live download button before either is true. */
+export async function getAdmissionSlipDownloadUrlAction(registrationId: string) {
+  const candidate = await requireCandidate();
+  const registration = await prisma.examRegistration.findUniqueOrThrow({
+    where: { id: registrationId },
+    include: { window: true, payment: true },
+  });
+  if (registration.candidateId !== candidate.id) throw new Error("This registration does not belong to you.");
+  if (registration.payment?.status !== "SUCCESS") throw new Error("Payment has not been confirmed for this registration.");
+  if (!isAdmissionSlipReleased(registration.window.opensAt)) throw new Error("The admission slip has not been released yet.");
+  return getSignedAdmissionSlipPdfUrl(registrationId);
+}
 
 export async function releaseResultsAction(windowId: string) {
   const staff = await requireStaffPermission(Permission.MARK_SUBMISSIONS);
