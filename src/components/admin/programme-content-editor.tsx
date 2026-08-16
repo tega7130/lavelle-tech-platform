@@ -860,8 +860,48 @@ function ModuleQuizEditor({ mod, onSaved }: { mod: ModuleData; onSaved: () => vo
                   }
                   className="h-7 flex-1 rounded border border-neutral-300 px-2 text-xs"
                 />
+                <button
+                  type="button"
+                  onClick={() =>
+                    setQuestions((qs) =>
+                      qs.map((qq, i) => {
+                        if (i !== qi || qq.options.length <= 2) return qq;
+                        const remaining = qq.options.filter((_, j) => j !== oi);
+                        // Removing the correct option would leave none marked — fall back to the first remaining one.
+                        if (!remaining.some((oo) => oo.isCorrect)) remaining[0] = { ...remaining[0], isCorrect: true };
+                        return { ...qq, options: remaining };
+                      })
+                    )
+                  }
+                  disabled={q.options.length <= 2}
+                  title={q.options.length <= 2 ? "A question needs at least two options" : "Remove option"}
+                  className="h-6 w-6 flex-none rounded text-neutral-500 hover:bg-neutral-100 hover:text-[#912019] disabled:opacity-30 disabled:hover:bg-transparent"
+                >
+                  ✕
+                </button>
               </div>
             ))}
+            <button
+              type="button"
+              onClick={() =>
+                setQuestions((qs) =>
+                  qs.map((qq, i) =>
+                    i === qi
+                      ? {
+                          ...qq,
+                          options: [
+                            ...qq.options,
+                            { id: `new-${Date.now()}-${qq.options.length}`, orderIndex: qq.options.length, text: "", isCorrect: false },
+                          ],
+                        }
+                      : qq
+                  )
+                )
+              }
+              className="mt-1 cursor-pointer text-[11.5px] font-medium text-accent"
+            >
+              + Add option
+            </button>
           </div>
         ))}
       </div>

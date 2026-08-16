@@ -1,11 +1,14 @@
 import { z } from "zod";
 
+// Free-form — the admin can enter whatever code they want. The only hard
+// rule is "/" (it becomes a URL path segment in candidate-facing routes
+// like /portal/exams/[code], and a slash would split it into two).
 export const programmeCodeSchema = z
   .string()
   .trim()
-  .min(3)
-  .max(24)
-  .regex(/^[A-Z0-9-]+$/, "Use uppercase letters, numbers and hyphens only, e.g. ELR-201");
+  .min(1, "Required")
+  .max(40)
+  .refine((v) => !v.includes("/"), { message: "Cannot contain a slash" });
 
 // Base object kept separate from its .refine()s so updateProgrammeSchema
 // can derive a .partial() version below — .partial() only exists on a
@@ -17,6 +20,7 @@ const programmeObjectSchema = z.object({
   newCategoryName: z.string().trim().min(1).max(120).optional(),
   tier: z.enum(["FOUNDATION", "SPECIALIST", "ADVANCED_PRACTITIONER"]),
   summary: z.string().trim().min(1, "Required"),
+  authorName: z.string().trim().max(120).optional(),
   weeks: z.coerce.number().int().positive(),
   weeklyHoursLabel: z.string().trim().min(1, "Required"),
   credits: z.coerce.number().int().positive(),

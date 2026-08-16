@@ -73,6 +73,7 @@ export async function createProgramme(_prev: FormActionState, formData: FormData
           categoryId,
           tier: data.tier,
           summary: data.summary,
+          authorName: data.authorName ?? null,
           weeks: data.weeks,
           weeklyHoursLabel: data.weeklyHoursLabel,
           credits: data.credits,
@@ -130,6 +131,14 @@ export async function updateProgramme(
   if (!parsed.success) return { errors: fieldErrors(parsed.error), values: raw };
   const data = parsed.data;
 
+  // Read directly rather than through `raw` (formToObject drops
+  // empty-string fields, e.g. "" for feeNaira) — the form's hidden
+  // authorName input is always present, so an empty value here means
+  // "explicitly cleared", not "field omitted". Going through `data`
+  // would silently keep whatever author was already saved.
+  const authorNameField = formData.get("authorName");
+  const authorName = typeof authorNameField === "string" ? authorNameField.trim() : null;
+
   const existing = await prisma.programme.findUniqueOrThrow({ where: { id } });
 
   if (data.code && data.code !== existing.code) {
@@ -157,6 +166,7 @@ export async function updateProgramme(
           ...(categoryId ? { categoryId } : {}),
           ...(data.tier !== undefined ? { tier: data.tier } : {}),
           ...(data.summary !== undefined ? { summary: data.summary } : {}),
+          ...(authorNameField !== null ? { authorName: authorName || null } : {}),
           ...(data.weeks !== undefined ? { weeks: data.weeks } : {}),
           ...(data.weeklyHoursLabel !== undefined ? { weeklyHoursLabel: data.weeklyHoursLabel } : {}),
           ...(data.credits !== undefined ? { credits: data.credits } : {}),

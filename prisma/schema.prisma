@@ -429,6 +429,8 @@ model Programme {
 
   summary String // the paragraph shown in the catalogue and public listing
 
+  authorName String? // optional — free text, not a Staff/user reference
+
   weeks            Int // 8 Foundation · 12 Specialist · 16 Advanced — stored, never derived from tier
   weeklyHoursLabel String // free text range, e.g. "6–8 hrs / week" — a label, not a number
   credits          Int // Lavelle credits — never "CPD points"

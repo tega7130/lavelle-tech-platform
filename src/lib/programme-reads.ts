@@ -44,6 +44,17 @@ export async function listCategories() {
   return prisma.programmeCategory.findMany({ orderBy: { name: "asc" } });
 }
 
+/** Distinct author names already used across programmes — the "pick existing or type a new one" picker's candidate list. */
+export async function listProgrammeAuthors(): Promise<string[]> {
+  const rows = await prisma.programme.findMany({
+    where: { authorName: { not: null } },
+    select: { authorName: true },
+    distinct: ["authorName"],
+    orderBy: { authorName: "asc" },
+  });
+  return rows.map((r) => r.authorName).filter((name): name is string => !!name);
+}
+
 export async function getProgrammeForEdit(id: string) {
   return prisma.programme.findUnique({
     where: { id },

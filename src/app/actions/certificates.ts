@@ -78,7 +78,8 @@ export async function issueCertificateManuallyAction(input: ManualIssueFormInput
 
   const candidate = await prisma.candidate.findUnique({ where: { email: input.candidateEmail.trim() } });
   if (!candidate) throw new Error("No candidate found with that email.");
-  const programme = await prisma.programme.findUnique({ where: { code: input.programmeCode.trim().toUpperCase() } });
+  // Case-insensitive — programme codes are free-form now (any case), not forced uppercase.
+  const programme = await prisma.programme.findFirst({ where: { code: { equals: input.programmeCode.trim(), mode: "insensitive" } } });
   if (!programme) throw new Error("No programme found with that code.");
 
   const result = await certActions.issueCertificateManually(

@@ -9,6 +9,7 @@ import { finaliseUpload } from "@/app/actions/uploads";
 import { emptyActionState, type FormActionState } from "@/lib/action-state";
 import { Button, buttonClassName } from "@/components/ui/button";
 import { Label, Input, Textarea, FieldError } from "@/components/ui/field";
+import { Dialog } from "@/components/ui/dialog";
 
 async function uploadVideo(file: File) {
   const signRes = await fetch("/api/uploads/sign", {
@@ -32,6 +33,7 @@ export interface ProgrammeDetailsFormProps {
   mode: "create" | "edit";
   programmeId?: string;
   categories: CategoryOption[];
+  authors?: string[];
   initialValues?: {
     title: string;
     code: string;
@@ -44,6 +46,7 @@ export interface ProgrammeDetailsFormProps {
     feeNaira: number;
     deliveryLabel: string;
     prerequisiteTier: string | null;
+    authorName?: string | null;
     coverVideoUrl?: string | null;
     coverVideoAsset?: { id: string; originalFilename: string } | null;
   };
@@ -56,7 +59,14 @@ const TIERS = [
   { value: "ADVANCED_PRACTITIONER", label: "Advanced Practitioner" },
 ];
 
-export function ProgrammeDetailsForm({ mode, programmeId, categories: initialCategories, initialValues, action }: ProgrammeDetailsFormProps) {
+export function ProgrammeDetailsForm({
+  mode,
+  programmeId,
+  categories: initialCategories,
+  authors: initialAuthors,
+  initialValues,
+  action,
+}: ProgrammeDetailsFormProps) {
   const router = useRouter();
   const [state, formAction, pending] = useActionState(action, emptyActionState);
   const [categories, setCategories] = React.useState(initialCategories);
@@ -71,6 +81,24 @@ export function ProgrammeDetailsForm({ mode, programmeId, categories: initialCat
   const [coverVideoAsset, setCoverVideoAsset] = React.useState(initialValues?.coverVideoAsset ?? null);
   const [videoUploading, setVideoUploading] = React.useState(false);
   const [videoError, setVideoError] = React.useState<string | null>(null);
+
+  // Controlled, seeded once from initialValues — an uncontrolled
+  // defaultValue would get wiped when the server action returns
+  // validation errors (React resets uncontrolled form fields once a
+  // form action completes, success or not), silently discarding
+  // whatever the admin had typed in every OTHER field too.
+  const [title, setTitle] = React.useState(initialValues?.title ?? "");
+  const [code, setCode] = React.useState(initialValues?.code ?? "");
+  const [weeks, setWeeks] = React.useState(initialValues?.weeks != null ? String(initialValues.weeks) : "");
+  const [credits, setCredits] = React.useState(initialValues?.credits != null ? String(initialValues.credits) : "");
+  const [weeklyHoursLabel, setWeeklyHoursLabel] = React.useState(initialValues?.weeklyHoursLabel ?? "");
+  const [feeNaira, setFeeNaira] = React.useState(initialValues?.feeNaira != null ? String(initialValues.feeNaira) : "");
+  const [summary, setSummary] = React.useState(initialValues?.summary ?? "");
+  const [authorName, setAuthorName] = React.useState(initialValues?.authorName ?? "");
+  const [authors, setAuthors] = React.useState(initialAuthors ?? []);
+  const [addingAuthor, setAddingAuthor] = React.useState(!(initialValues?.authorName) && (initialAuthors ?? []).length === 0);
+  const [newAuthorName, setNewAuthorName] = React.useState("");
+  const [showSaved, setShowSaved] = React.useState(false);
 
   async function handleVideoUpload(file: File) {
     setVideoError(null);
@@ -93,6 +121,8 @@ export function ProgrammeDetailsForm({ mode, programmeId, categories: initialCat
   React.useEffect(() => {
     if (mode === "create" && state.ok && state.data?.id) {
       router.push(`/admin/programmes/${state.data.id}/content`);
+    } else if (mode === "edit" && state.ok) {
+      setShowSaved(true);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.ok, state.data]);
@@ -118,7 +148,7 @@ export function ProgrammeDetailsForm({ mode, programmeId, categories: initialCat
       <div className="grid grid-cols-[2fr_1fr] gap-3">
         <div>
           <Label htmlFor="title">Programme title</Label>
-          <Input id="title" name="title" defaultValue={initialValues?.title} invalid={!!errors.title} />
+          <Input id="title" name="title" value={title} onChange={(e) => setTitle(e.target.value)} invalid={!!errors.title} />
           <FieldError>{errors.title}</FieldError>
         </div>
         <div>
@@ -127,9 +157,9 @@ export function ProgrammeDetailsForm({ mode, programmeId, categories: initialCat
             id="code"
             name="code"
             placeholder="ELR-201"
-            defaultValue={initialValues?.code}
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
             invalid={!!errors.code}
-            className="uppercase"
           />
           <FieldError>{errors.code}</FieldError>
         </div>
@@ -154,12 +184,12 @@ export function ProgrammeDetailsForm({ mode, programmeId, categories: initialCat
         </div>
         <div>
           <Label htmlFor="weeks">Weeks</Label>
-          <Input id="weeks" name="weeks" type="number" min={1} defaultValue={initialValues?.weeks} invalid={!!errors.weeks} />
+          <Input id="weeks" name="weeks" type="number" min={1} value={weeks} onChange={(e) => setWeeks(e.target.value)} invalid={!!errors.weeks} />
           <FieldError>{errors.weeks}</FieldError>
         </div>
         <div>
           <Label htmlFor="credits">Credits</Label>
-          <Input id="credits" name="credits" type="number" min={1} defaultValue={initialValues?.credits} invalid={!!errors.credits} />
+          <Input id="credits" name="credits" type="number" min={1} value={credits} onChange={(e) => setCredits(e.target.value)} invalid={!!errors.credits} />
           <FieldError>{errors.credits}</FieldError>
         </div>
       </div>
@@ -171,7 +201,8 @@ export function ProgrammeDetailsForm({ mode, programmeId, categories: initialCat
             id="weeklyHoursLabel"
             name="weeklyHoursLabel"
             placeholder="6–8 hrs / week"
-            defaultValue={initialValues?.weeklyHoursLabel}
+            value={weeklyHoursLabel}
+            onChange={(e) => setWeeklyHoursLabel(e.target.value)}
             invalid={!!errors.weeklyHoursLabel}
           />
           <FieldError>{errors.weeklyHoursLabel}</FieldError>
@@ -185,7 +216,8 @@ export function ProgrammeDetailsForm({ mode, programmeId, categories: initialCat
             min={0}
             step={1}
             placeholder="450000"
-            defaultValue={initialValues?.feeNaira}
+            value={feeNaira}
+            onChange={(e) => setFeeNaira(e.target.value)}
             invalid={!!errors.feeNaira}
           />
           <FieldError>{errors.feeNaira}</FieldError>
@@ -333,8 +365,88 @@ export function ProgrammeDetailsForm({ mode, programmeId, categories: initialCat
 
       <div>
         <Label htmlFor="summary">Overview shown to candidates</Label>
-        <Textarea id="summary" name="summary" rows={3} defaultValue={initialValues?.summary} invalid={!!errors.summary} />
+        <Textarea id="summary" name="summary" rows={3} value={summary} onChange={(e) => setSummary(e.target.value)} invalid={!!errors.summary} />
         <FieldError>{errors.summary}</FieldError>
+      </div>
+
+      <div>
+        <Label>Author (optional)</Label>
+        {!addingAuthor ? (
+          <div className="flex flex-wrap gap-[7px]">
+            {authors.map((name) => (
+              <button
+                key={name}
+                type="button"
+                onClick={() => setAuthorName(name)}
+                className="cursor-pointer rounded-full px-[13px] py-1.5 font-body text-[12.5px] font-medium"
+                style={{
+                  border: `1.5px solid ${authorName === name ? "var(--color-accent)" : "var(--color-neutral-300)"}`,
+                  background: authorName === name ? "var(--color-accent-100)" : "transparent",
+                  color: authorName === name ? "var(--color-accent-700)" : "var(--color-neutral-700)",
+                }}
+              >
+                {name}
+              </button>
+            ))}
+            {authorName && !authors.includes(authorName) && (
+              <button
+                type="button"
+                onClick={() => setAuthorName(authorName)}
+                className="cursor-pointer rounded-full px-[13px] py-1.5 font-body text-[12.5px] font-medium"
+                style={{ border: "1.5px solid var(--color-accent)", background: "var(--color-accent-100)", color: "var(--color-accent-700)" }}
+              >
+                {authorName}
+              </button>
+            )}
+            {authorName && (
+              <button
+                type="button"
+                onClick={() => setAuthorName("")}
+                className="cursor-pointer rounded-full border-[1.5px] border-dashed border-neutral-400 bg-transparent px-[13px] py-1.5 font-body text-[12.5px] font-medium text-neutral-600"
+              >
+                No author
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setAddingAuthor(true)}
+              className="cursor-pointer rounded-full border-[1.5px] border-dashed border-neutral-400 bg-transparent px-[13px] py-1.5 font-body text-[12.5px] font-medium text-neutral-600"
+            >
+              + New author
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2">
+            <Input
+              autoFocus
+              className="flex-1"
+              placeholder="e.g. Chinelo Adeyemi"
+              value={newAuthorName}
+              onChange={(e) => setNewAuthorName(e.target.value)}
+            />
+            <Button
+              type="button"
+              onClick={() => {
+                const trimmed = newAuthorName.trim();
+                if (!trimmed) return;
+                setAuthors((names) => (names.includes(trimmed) ? names : [...names, trimmed]));
+                setAuthorName(trimmed);
+                setAddingAuthor(false);
+                setNewAuthorName("");
+              }}
+              className="h-[38px] flex-none text-[12.5px]"
+            >
+              Use this name
+            </Button>
+            {authors.length > 0 && (
+              <Button type="button" variant="secondary" onClick={() => setAddingAuthor(false)} className="h-[38px] flex-none text-[12.5px]">
+                Cancel
+              </Button>
+            )}
+          </div>
+        )}
+        <input type="hidden" name="authorName" value={authorName} />
+        <FieldError>{errors.authorName}</FieldError>
       </div>
 
       <div className="mt-2 flex items-center justify-between gap-3 border-t border-dashed border-neutral-300 pt-4">
@@ -352,6 +464,15 @@ export function ProgrammeDetailsForm({ mode, programmeId, categories: initialCat
           </Button>
         </div>
       </div>
+
+      <Dialog open={showSaved} onClose={() => setShowSaved(false)} title="Saved">
+        <p className="text-[13.5px] text-neutral-700">Programme details have been updated.</p>
+        <div className="flex justify-end">
+          <Button type="button" onClick={() => setShowSaved(false)}>
+            Done
+          </Button>
+        </div>
+      </Dialog>
     </form>
   );
 }
