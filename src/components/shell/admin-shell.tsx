@@ -107,6 +107,18 @@ export function AdminShell({ staff, crumb, headerTag, initialNotifications, chil
   const [signingOut, setSigningOut] = React.useState(false);
   const [inboxOpen, setInboxOpen] = React.useState(false);
   const [inbox, setInbox] = React.useState(initialNotifications ?? { unreadCount: 0, items: [] });
+  const inboxRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    if (!inboxOpen) return;
+    function onPointerDown(e: PointerEvent) {
+      if (inboxRef.current && !inboxRef.current.contains(e.target as Node)) {
+        setInboxOpen(false);
+      }
+    }
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [inboxOpen]);
 
   async function confirmSignOut() {
     setSigningOut(true);
@@ -304,7 +316,7 @@ export function AdminShell({ staff, crumb, headerTag, initialNotifications, chil
                 {headerTag}
               </span>
             )}
-            <div className="relative">
+            <div className="relative" ref={inboxRef}>
               <button
                 onClick={toggleInbox}
                 aria-label="Notifications"
