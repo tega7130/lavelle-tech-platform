@@ -48,6 +48,22 @@ export async function createStandaloneExamAction(input: builder.CreateStandalone
   return result;
 }
 
+export async function addExamModuleAction(examId: string, input: builder.ExamModuleInput) {
+  const staff = await requireStaffPermission(Permission.MANAGE_EXAMS);
+  const ip = await getClientIp();
+  const result = await builder.addExamModule(examId, input, staff.id, ip);
+  revalidatePath(`/admin/exam-builder`);
+  return result;
+}
+
+export async function updateExamModuleAction(moduleId: string, input: builder.ExamModuleInput) {
+  const staff = await requireStaffPermission(Permission.MANAGE_EXAMS);
+  const ip = await getClientIp();
+  const result = await builder.updateExamModule(moduleId, input, staff.id, ip);
+  revalidatePath(`/admin/exam-builder`);
+  return result;
+}
+
 export async function createExamWindowAction(examId: string, input: builder.ExamWindowInput) {
   const staff = await requireStaffPermission(Permission.MANAGE_EXAMS);
   const ip = await getClientIp();

@@ -9,5 +9,5 @@ export default async function Page({ params }: { params: Promise<{ code: string 
   const examId = await getExamIdByProgrammeCode(code);
   if (!examId) notFound();
   const detail = await getExamDetail(examId);
-  return <ExamDetail detail={detail} programmeCode={code} />;
+  return <ExamDetail detail={detail} />;
 }

@@ -17,11 +17,17 @@ function formatDate(d: Date | string | null | undefined) {
   return new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
 }
 
-export function ExamDetail({ detail, programmeCode }: { detail: Detail; programmeCode: string }) {
+export function ExamDetail({ detail }: { detail: Detail }) {
   const [stage, setStage] = React.useState<"browse" | "confirm">("browse");
   const [windowId, setWindowId] = React.useState<string | null>(detail.windows[0]?.id ?? null);
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  // Set once the candidate clicks "Register for a resit" / "Register
+  // again" on a concluded attempt — steps back out of the read-only
+  // existingRegistration view into the ordinary window-selection flow
+  // below, which reuses registerForExamAction exactly as a first attempt
+  // would (the server-side attempt gate is the real authority either way).
+  const [registerAgain, setRegisterAgain] = React.useState(false);
 
   const selectedWindow = detail.windows.find((w) => w.id === windowId) ?? null;
   const eligible = detail.eligibility.eligible;
@@ -169,8 +175,8 @@ export function ExamDetail({ detail, programmeCode }: { detail: Detail; programm
         </div>
       )}
 
-      {detail.existingRegistration ? (
-        <ExistingRegistration reg={detail.existingRegistration} detail={detail} programmeCode={programmeCode} />
+      {detail.existingRegistration && !registerAgain ? (
+        <ExistingRegistration reg={detail.existingRegistration} detail={detail} onRegisterAgain={() => setRegisterAgain(true)} />
       ) : stage === "browse" ? (
         <Card elev="sm">
           <CardKicker>Choose a window</CardKicker>
@@ -245,11 +251,11 @@ export function ExamDetail({ detail, programmeCode }: { detail: Detail; programm
 function ExistingRegistration({
   reg,
   detail,
-  programmeCode,
+  onRegisterAgain,
 }: {
   reg: NonNullable<Detail["existingRegistration"]>;
   detail: Detail;
-  programmeCode: string;
+  onRegisterAgain: () => void;
 }) {
   if (reg.paymentStatus === "PENDING") {
     return (
@@ -298,9 +304,19 @@ function ExistingRegistration({
     return (
       <Card elev="sm">
         <CardKicker>Result released</CardKicker>
-        <Link href={`/portal/exams/results/${reg.sittingId}`} className={buttonClassName("primary", "mt-3")}>
-          View your result
-        </Link>
+        <div className="flex gap-2 mt-3 flex-wrap items-center">
+          <Link href={`/portal/exams/results/${reg.sittingId}`} className={buttonClassName("primary")}>
+            View your result
+          </Link>
+          {detail.canRegisterAgain && (
+            <Button variant="secondary" onClick={onRegisterAgain}>
+              Register for a resit
+            </Button>
+          )}
+        </div>
+        {!detail.canRegisterAgain && detail.attemptGateReason && (
+          <p className="text-neutral-500 text-[12px] mt-2">{detail.attemptGateReason}</p>
+        )}
       </Card>
     );
   }
@@ -310,8 +326,18 @@ function ExistingRegistration({
       <Card elev="sm">
         <CardKicker>Sitting forfeited</CardKicker>
         <p className="text-neutral-600 text-[13px] mt-2">
-          You quit this sitting before submitting. Nothing was marked. {programmeCode ? "Contact support about a further attempt." : ""}
+          You quit this sitting before submitting. Nothing was marked.{" "}
+          {detail.canRegisterAgain ? "You can register again below." : "Contact support about a further attempt."}
         </p>
+        {detail.canRegisterAgain ? (
+          <Button variant="secondary" className="mt-3" onClick={onRegisterAgain}>
+            Register again
+          </Button>
+        ) : (
+          <Link href="/portal/support" className={buttonClassName("secondary", "mt-3")}>
+            Contact support
+          </Link>
+        )}
       </Card>
     );
   }

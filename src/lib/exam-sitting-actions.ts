@@ -7,7 +7,7 @@ import { computeExpiresAt, isSittingExpired } from "@/lib/exam-clock";
 import { resolveGradeBand } from "@/lib/grading";
 import { recomputeProgrammeResult } from "@/lib/programme-result";
 import { issueCertificate } from "@/lib/certificate-actions";
-import { EnrolmentStatus, MarkState, MarkableKind, type Prisma } from "@/generated/prisma/client";
+import { EnrolmentStatus, MarkState, MarkableKind, type AttemptPolicy, type ExamOutcome, type Prisma } from "@/generated/prisma/client";
 
 // No "server-only" / staff-auth / candidate-session import here,
 // deliberately — same discipline as enrolment-transaction.ts. candidateId
@@ -37,6 +37,54 @@ export class NotYourSittingError extends Error {
     super("This does not belong to you.");
     this.name = "NotYourSittingError";
   }
+}
+export class AttemptLimitReachedError extends Error {
+  constructor(message = "You have used all attempts permitted for this examination.") {
+    super(message);
+    this.name = "AttemptLimitReachedError";
+  }
+}
+export class PaymentRequiredError extends Error {
+  constructor() {
+    super("Payment for this examination has not been confirmed yet.");
+    this.name = "PaymentRequiredError";
+  }
+}
+
+export interface AttemptGate {
+  allowed: boolean;
+  reason: string | null;
+}
+
+/**
+ * The single source of truth for "can this candidate register another
+ * attempt at this exam right now" — used both to gate registerForExam
+ * itself and to decide whether the candidate portal offers a "register
+ * again" action after a released/forfeited attempt (rule: Attempts
+ * permitted must directly govern candidate attempt availability).
+ * priorAttempts counts every past registration, including a forfeited
+ * one — a candidate who quit mid-sitting has used that attempt.
+ */
+export function evaluateAttemptGate(
+  attemptPolicy: AttemptPolicy,
+  priorAttempts: number,
+  lastOutcome: ExamOutcome | null | undefined
+): AttemptGate {
+  if (attemptPolicy === "ONE_ATTEMPT") {
+    return priorAttempts >= 1 ? { allowed: false, reason: null } : { allowed: true, reason: null };
+  }
+  if (attemptPolicy === "TWO_ATTEMPTS") {
+    return priorAttempts >= 2 ? { allowed: false, reason: null } : { allowed: true, reason: null };
+  }
+  // ONE_RESIT_ON_REFERRAL
+  if (priorAttempts >= 2) return { allowed: false, reason: null };
+  if (priorAttempts === 1) {
+    if (lastOutcome === "PASS") return { allowed: false, reason: "You have already passed this examination — no resit is available." };
+    if (lastOutcome !== "REFER") {
+      return { allowed: false, reason: "Your previous attempt's result has not been released yet. A resit is only available after a referral." };
+    }
+  }
+  return { allowed: true, reason: null };
 }
 
 /**
@@ -69,7 +117,21 @@ export async function registerForExam(examId: string, windowId: string, candidat
   const enrolment = await prisma.enrolment.findFirst({
     where: { candidateId, programmeId: exam.programmeId, status: { in: [EnrolmentStatus.ACTIVE, EnrolmentStatus.COMPLETED] } },
   });
-  const priorAttempts = await prisma.examRegistration.count({ where: { candidateId, examId } });
+
+  // Every past registration (including a forfeited one) consumes an
+  // attempt — mirrors the attemptNumber this function has always
+  // assigned. ONE_RESIT_ON_REFERRAL additionally needs to know whether
+  // the most recent attempt's sitting was actually REFERRED before a
+  // second attempt is allowed (a pass or a still-unmarked paper does not
+  // earn a resit).
+  const priorRegistrations = await prisma.examRegistration.findMany({
+    where: { candidateId, examId },
+    orderBy: { attemptNumber: "desc" },
+    include: { sitting: { select: { outcome: true } } },
+  });
+  const priorAttempts = priorRegistrations.length;
+  const gate = evaluateAttemptGate(exam.attemptPolicy, priorAttempts, priorRegistrations[0]?.sitting?.outcome);
+  if (!gate.allowed) throw new AttemptLimitReachedError(gate.reason ?? undefined);
 
   const { registration, payment } = await prisma.$transaction(async (tx) => {
     const internalReference = generateInternalReference();
@@ -116,11 +178,12 @@ export async function registerForExam(examId: string, windowId: string, candidat
 export async function startSitting(registrationId: string, candidateId: string) {
   const registration = await prisma.examRegistration.findUniqueOrThrow({
     where: { id: registrationId },
-    include: { exam: true, window: true, sitting: true },
+    include: { exam: true, window: true, sitting: true, payment: true },
   });
   if (registration.candidateId !== candidateId) throw new NotYourSittingError();
   if (registration.cancelledAt) throw new Error("This registration has been cancelled.");
   if (registration.sitting) return registration.sitting;
+  if (registration.payment?.status !== "SUCCESS") throw new PaymentRequiredError();
 
   const now = new Date();
   if (now < registration.window.opensAt) throw new Error("This examination window has not opened yet.");

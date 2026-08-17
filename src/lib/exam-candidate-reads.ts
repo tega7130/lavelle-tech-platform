@@ -4,7 +4,7 @@ import { getCurrentCandidate } from "@/lib/candidate-session";
 import { checkExamEligibility } from "@/lib/exam-eligibility";
 import { EnrolmentStatus } from "@/generated/prisma/client";
 import type { PaperQuestion } from "@/lib/exam-draw";
-import { NotYourSittingError } from "@/lib/exam-sitting-actions";
+import { NotYourSittingError, evaluateAttemptGate } from "@/lib/exam-sitting-actions";
 
 async function findEnrolmentInfo(candidateId: string, programmeId: string) {
   const enrolment = await prisma.enrolment.findFirst({
@@ -57,12 +57,20 @@ export async function getExamDetail(examId: string) {
   const eligibility = await checkExamEligibility(candidate?.id ?? null, exam.programme);
   const enrolment = candidate ? await findEnrolmentInfo(candidate.id, exam.programmeId) : null;
 
+  // The MOST RECENT registration governs what's shown, not just a "live"
+  // (uncancelled) one — once a candidate resits after a referral, the new
+  // registration should take over display even though the old, concluded
+  // one is still technically uncancelled.
   let existingRegistration = null;
+  let canRegisterAgain = false;
+  let attemptGateReason: string | null = null;
   if (candidate) {
-    const reg = await prisma.examRegistration.findFirst({
-      where: { candidateId: candidate.id, examId, cancelledAt: null },
+    const registrations = await prisma.examRegistration.findMany({
+      where: { candidateId: candidate.id, examId },
+      orderBy: { attemptNumber: "desc" },
       include: { window: true, sitting: true, payment: true },
     });
+    const reg = registrations[0] ?? null;
     existingRegistration = reg
       ? {
           id: reg.id,
@@ -78,6 +86,10 @@ export async function getExamDetail(examId: string) {
           hasEnrolment: !!reg.enrolmentId,
         }
       : null;
+
+    const gate = evaluateAttemptGate(exam.attemptPolicy, registrations.length, reg?.sitting?.outcome);
+    canRegisterAgain = gate.allowed;
+    attemptGateReason = gate.reason;
   }
 
   return {
@@ -116,12 +128,22 @@ export async function getExamDetail(examId: string) {
     courseMet: !!enrolment,
     courseCompletedAt: enrolment?.completedAt ?? null,
     existingRegistration,
+    canRegisterAgain,
+    attemptGateReason,
   };
 }
 
-/** The [code] route param is the programme code, matching the catalogue's own convention — resolves it to the exam id getExamDetail actually wants. */
+/**
+ * The [code] route param is the programme code, matching the catalogue's
+ * own convention — resolves it to the exam id getExamDetail actually
+ * wants. Excludes DRAFT: a never-published exam must stay invisible to
+ * candidates even if its programme code is guessed directly. PUBLISHED,
+ * CLOSED, and ARCHIVED all resolve — a candidate who already registered
+ * before the exam closed/archived still needs their registration/result
+ * status to be reachable here.
+ */
 export async function getExamIdByProgrammeCode(code: string) {
-  const exam = await prisma.exam.findFirst({ where: { programme: { code } }, select: { id: true } });
+  const exam = await prisma.exam.findFirst({ where: { programme: { code }, status: { not: "DRAFT" } }, select: { id: true } });
   return exam?.id ?? null;
 }
 

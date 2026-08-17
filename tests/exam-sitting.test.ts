@@ -14,9 +14,12 @@ import {
   setExamContent,
   setExamRequirements,
   createStandaloneExam,
+  addExamModule,
+  updateExamModule,
   PublishBlockedError,
 } from "@/lib/exam-builder-actions";
 import { listProgrammes } from "@/lib/programme-reads";
+import { getExamIdByProgrammeCode } from "@/lib/exam-candidate-reads";
 import {
   registerForExam,
   startSitting,
@@ -25,8 +28,11 @@ import {
   forfeitSitting,
   expireOverdueSittings,
   releaseResults,
+  evaluateAttemptGate,
   IneligibleError,
   SittingExpiredError,
+  AttemptLimitReachedError,
+  PaymentRequiredError,
 } from "@/lib/exam-sitting-actions";
 
 async function seedStaffAndCategory() {
@@ -473,6 +479,140 @@ describe("releaseResults — a whole window at once, never a sitting whose writt
   });
 });
 
+describe("startSitting requires a confirmed payment (Part 35 — a registration cannot start an attempt on an unpaid fee)", () => {
+  it("rejects starting a sitting while the registration's payment is still PENDING, and allows it once confirmed", async () => {
+    const { staff, category } = await seedStaffAndCategory();
+    const programme = await seedProgramme(category.id, staff.id);
+    const mod = await seedModule(programme.id, 1);
+    const exam = await seedExam(programme.id);
+    await seedObjectiveQuestion(exam.id, mod.id);
+    const candidate = await seedCandidate();
+    const window = await seedWindow(exam.id);
+
+    // registerForExam creates the EXAMINATION_FEE payment PENDING — never confirmed here.
+    const { registration } = await registerForExam(exam.id, window.id, candidate.id, candidate.email);
+    await expect(startSitting(registration.id, candidate.id)).rejects.toThrow(PaymentRequiredError);
+    expect(await testPrisma.sitting.findUnique({ where: { registrationId: registration.id } })).toBeNull();
+
+    await testPrisma.payment.update({ where: { id: registration.paymentId! }, data: { status: "SUCCESS", confirmedAt: new Date() } });
+    const sitting = await startSitting(registration.id, candidate.id);
+    expect(sitting.state).toBe("IN_PROGRESS");
+
+    await cleanupCandidates([candidate.id]);
+    await cleanupProgramme(programme.id);
+    await cleanupRoot({ categoryId: category.id, staffId: staff.id });
+  });
+});
+
+describe("evaluateAttemptGate — the pure policy function behind AttemptPolicy (Part 35: Attempts permitted)", () => {
+  it("ONE_ATTEMPT allows a first registration and blocks any further one, regardless of outcome", () => {
+    expect(evaluateAttemptGate("ONE_ATTEMPT", 0, null).allowed).toBe(true);
+    expect(evaluateAttemptGate("ONE_ATTEMPT", 1, "PASS").allowed).toBe(false);
+    expect(evaluateAttemptGate("ONE_ATTEMPT", 1, "REFER").allowed).toBe(false);
+    expect(evaluateAttemptGate("ONE_ATTEMPT", 1, null).allowed).toBe(false);
+  });
+
+  it("TWO_ATTEMPTS allows a second registration regardless of the first's outcome, and blocks a third", () => {
+    expect(evaluateAttemptGate("TWO_ATTEMPTS", 1, "PASS").allowed).toBe(true);
+    expect(evaluateAttemptGate("TWO_ATTEMPTS", 1, "REFER").allowed).toBe(true);
+    expect(evaluateAttemptGate("TWO_ATTEMPTS", 1, null).allowed).toBe(true); // forfeited/unresolved still earns the second attempt
+    expect(evaluateAttemptGate("TWO_ATTEMPTS", 2, "REFER").allowed).toBe(false);
+  });
+
+  it("ONE_RESIT_ON_REFERRAL earns a second attempt only after a REFER, never after a PASS or while unresolved, and caps at two", () => {
+    expect(evaluateAttemptGate("ONE_RESIT_ON_REFERRAL", 0, null).allowed).toBe(true);
+    expect(evaluateAttemptGate("ONE_RESIT_ON_REFERRAL", 1, "REFER").allowed).toBe(true);
+    expect(evaluateAttemptGate("ONE_RESIT_ON_REFERRAL", 1, "PASS").allowed).toBe(false);
+    expect(evaluateAttemptGate("ONE_RESIT_ON_REFERRAL", 1, null).allowed).toBe(false); // unsubmitted/unreleased/forfeited
+    expect(evaluateAttemptGate("ONE_RESIT_ON_REFERRAL", 2, "REFER").allowed).toBe(false); // the resit itself is final
+  });
+});
+
+describe("registerForExam enforces the attempt gate end to end (Part 35: Attempts permitted -> Attempt availability)", () => {
+  it("ONE_ATTEMPT: a second registerForExam call for the same exam is rejected even for a different window", async () => {
+    const { staff, category } = await seedStaffAndCategory();
+    const programme = await seedProgramme(category.id, staff.id);
+    const mod = await seedModule(programme.id, 1);
+    const exam = await seedExam(programme.id);
+    await testPrisma.exam.update({ where: { id: exam.id }, data: { attemptPolicy: "ONE_ATTEMPT" } });
+    await seedObjectiveQuestion(exam.id, mod.id);
+    const candidate = await seedCandidate();
+    const window1 = await seedWindow(exam.id);
+    const window2 = await seedWindow(exam.id);
+
+    await registerForExam(exam.id, window1.id, candidate.id, candidate.email);
+    await expect(registerForExam(exam.id, window2.id, candidate.id, candidate.email)).rejects.toThrow(AttemptLimitReachedError);
+
+    await cleanupCandidates([candidate.id]);
+    await cleanupProgramme(programme.id);
+    await cleanupRoot({ categoryId: category.id, staffId: staff.id });
+  });
+
+  it("ONE_RESIT_ON_REFERRAL: a REFERRED first attempt unlocks a resit; a PASSED one does not", async () => {
+    const { staff, category } = await seedStaffAndCategory();
+    const programme = await seedProgramme(category.id, staff.id);
+    const mod = await seedModule(programme.id, 1);
+    const exam = await seedExam(programme.id, { passMarkPercent: 50 });
+    const question = await seedObjectiveQuestion(exam.id, mod.id, { correctIndex: 0 });
+    const window1 = await seedWindow(exam.id);
+    const window2 = await seedWindow(exam.id);
+    const window3 = await seedWindow(exam.id);
+
+    // A candidate who fails the first sitting earns exactly one resit.
+    const referredCandidate = await seedCandidate();
+    const regA = await seedPaidRegistration(referredCandidate.id, exam.id, window1.id);
+    const sittingA = await startSitting(regA.id, referredCandidate.id);
+    const wrongOption = question.options.find((o) => !o.isCorrect)!;
+    await saveSittingAnswer(sittingA.id, referredCandidate.id, { questionId: question.id, selectedOptionId: wrongOption.id });
+    await submitSitting(sittingA.id, referredCandidate.id);
+    await releaseResults(window1.id, staff.id, null);
+    const sittingAAfter = await testPrisma.sitting.findUniqueOrThrow({ where: { id: sittingA.id } });
+    expect(sittingAAfter.outcome).toBe("REFER");
+
+    const resit = await registerForExam(exam.id, window2.id, referredCandidate.id, referredCandidate.email);
+    expect(resit.registration.attemptNumber).toBe(2);
+    // The resit itself is final — a third registration is refused outright.
+    await expect(registerForExam(exam.id, window3.id, referredCandidate.id, referredCandidate.email)).rejects.toThrow(AttemptLimitReachedError);
+
+    // A candidate who passes the first sitting has nothing left to resit.
+    const passedCandidate = await seedCandidate();
+    const regB = await seedPaidRegistration(passedCandidate.id, exam.id, window1.id);
+    const sittingB = await startSitting(regB.id, passedCandidate.id);
+    const correctOption = question.options.find((o) => o.isCorrect)!;
+    await saveSittingAnswer(sittingB.id, passedCandidate.id, { questionId: question.id, selectedOptionId: correctOption.id });
+    await submitSitting(sittingB.id, passedCandidate.id);
+    await releaseResults(window1.id, staff.id, null);
+    const sittingBAfter = await testPrisma.sitting.findUniqueOrThrow({ where: { id: sittingB.id } });
+    expect(sittingBAfter.outcome).toBe("PASS");
+    await expect(registerForExam(exam.id, window2.id, passedCandidate.id, passedCandidate.email)).rejects.toThrow(AttemptLimitReachedError);
+
+    await cleanupCandidates([referredCandidate.id, passedCandidate.id]);
+    await cleanupProgramme(programme.id);
+    await cleanupRoot({ categoryId: category.id, staffId: staff.id });
+  });
+});
+
+describe("getExamIdByProgrammeCode — a never-published exam stays invisible to the candidate portal (Part 35: Candidate visibility)", () => {
+  it("resolves nothing for a DRAFT exam, but resolves once PUBLISHED", async () => {
+    const { staff, category } = await seedStaffAndCategory();
+    const programme = await seedProgramme(category.id, staff.id);
+    const exam = await seedExam(programme.id, { status: "DRAFT" });
+
+    expect(await getExamIdByProgrammeCode(programme.code)).toBeNull();
+
+    await testPrisma.exam.update({ where: { id: exam.id }, data: { status: "PUBLISHED" } });
+    expect(await getExamIdByProgrammeCode(programme.code)).toBe(exam.id);
+
+    // CLOSED/ARCHIVED still resolve — an already-registered candidate must
+    // keep reaching their own registration/result after the exam concludes.
+    await testPrisma.exam.update({ where: { id: exam.id }, data: { status: "CLOSED" } });
+    expect(await getExamIdByProgrammeCode(programme.code)).toBe(exam.id);
+
+    await cleanupProgramme(programme.id);
+    await cleanupRoot({ categoryId: category.id, staffId: staff.id });
+  });
+});
+
 describe("exam-builder-actions — lifecycle and validation additions", () => {
   it("createExam requires one exam per programme; createExamWindow enforces date ordering", async () => {
     const { staff, category } = await seedStaffAndCategory();
@@ -573,6 +713,36 @@ describe("exam-builder-actions — lifecycle and validation additions", () => {
     await cleanupRoot({ categoryId: category.id, staffId: staff.id });
   });
 
+  it("publishExam reopens a CLOSED or ARCHIVED exam back to PUBLISHED — an exam is reusable, not a one-way lifecycle", async () => {
+    const { staff, category } = await seedStaffAndCategory();
+    const programme = await seedProgramme(category.id, staff.id);
+    const mod = await seedModule(programme.id, 1);
+    const exam = await seedExam(programme.id, { status: "DRAFT" });
+    await seedObjectiveQuestion(exam.id, mod.id, { status: "APPROVED" });
+    await seedWindow(exam.id);
+    await testPrisma.exam.update({
+      where: { id: exam.id },
+      data: { description: "About this exam.", examFormat: "Objective + written", examinationAreas: ["Area one"], onPassing: ["Benefit one"] },
+    });
+    await publishExam(exam.id, staff.id, null);
+
+    const closed = await closeExam(exam.id, staff.id, null);
+    expect(closed.status).toBe("CLOSED");
+    const reopenedFromClosed = await publishExam(exam.id, staff.id, null);
+    expect(reopenedFromClosed.status).toBe("PUBLISHED");
+
+    const archived = await archiveExam(exam.id, staff.id, null);
+    expect(archived.status).toBe("ARCHIVED");
+    const reopenedFromArchived = await publishExam(exam.id, staff.id, null);
+    expect(reopenedFromArchived.status).toBe("PUBLISHED");
+    // A reopened exam can be closed again — the state machine isn't a dead end after reopening either.
+    const closedAgain = await closeExam(exam.id, staff.id, null);
+    expect(closedAgain.status).toBe("CLOSED");
+
+    await cleanupProgramme(programme.id);
+    await cleanupRoot({ categoryId: category.id, staffId: staff.id });
+  });
+
   it("setExamContent stores trimmed candidate-facing content and drops blank list entries", async () => {
     const { staff, category } = await seedStaffAndCategory();
     const programme = await seedProgramme(category.id, staff.id);
@@ -636,6 +806,58 @@ describe("standalone exams and optional eligibility requirements", () => {
     await testPrisma.exam.delete({ where: { id: first.id } });
     await testPrisma.programme.delete({ where: { id: shell.id } });
     await testPrisma.programmeCategory.delete({ where: { id: shell.categoryId } });
+    await cleanupRoot({ categoryId: category.id, staffId: staff.id });
+  });
+
+  it("addExamModule/updateExamModule let a standalone exam build its own question bank, and refuse a linked exam's programme", async () => {
+    const { staff, category } = await seedStaffAndCategory();
+    const code = `MKT-${crypto.randomUUID().slice(0, 6)}`;
+    const exam = await createStandaloneExam({ title: "Standalone Module Test", code, tier: "SPECIALIST", newCategoryName: `Topic ${crypto.randomUUID()}` }, staff.id, null);
+
+    // A brand-new standalone exam has no modules at all yet.
+    expect(await testPrisma.module.count({ where: { programmeId: exam.programmeId } })).toBe(0);
+
+    const mod = await addExamModule(exam.id, { title: "Contract formation", examQuestionDraw: 3 }, staff.id, null);
+    expect(mod.weekNumber).toBe(1);
+    expect(mod.examQuestionDraw).toBe(3);
+
+    // Once a module exists, the ordinary question-authoring path works exactly as for a linked exam.
+    const question = await createExamQuestion(exam.id, {
+      moduleId: mod.id,
+      type: "OBJECTIVE",
+      marks: 2,
+      prompt: "Q",
+      options: [
+        { text: "A", isCorrect: true },
+        { text: "B", isCorrect: false },
+      ],
+    });
+    expect(question.moduleId).toBe(mod.id);
+
+    const updated = await updateExamModule(mod.id, { title: "Contract formation (revised)", examQuestionDraw: 4 }, staff.id, null);
+    expect(updated.title).toBe("Contract formation (revised)");
+    expect(updated.examQuestionDraw).toBe(4);
+
+    // A second module continues the weekNumber/orderIndex sequence.
+    const mod2 = await addExamModule(exam.id, { title: "Remedies", examQuestionDraw: 2 }, staff.id, null);
+    expect(mod2.weekNumber).toBe(2);
+    expect(mod2.orderIndex).toBe(1);
+
+    // A LINKED exam's programme has real candidate-facing content — its modules must come from the content editor, not here.
+    const linkedProgramme = await seedProgramme(category.id, staff.id);
+    const linkedModule = await seedModule(linkedProgramme.id, 2);
+    const linkedExam = await seedExam(linkedProgramme.id, { status: "DRAFT" });
+    await expect(addExamModule(linkedExam.id, { title: "Should fail", examQuestionDraw: 2 }, staff.id, null)).rejects.toThrow("content editor");
+    await expect(updateExamModule(linkedModule.id, { title: "Should fail", examQuestionDraw: 2 }, staff.id, null)).rejects.toThrow("content editor");
+
+    await testPrisma.examQuestionOption.deleteMany({ where: { question: { examId: exam.id } } });
+    await testPrisma.examQuestion.deleteMany({ where: { examId: exam.id } });
+    await testPrisma.module.deleteMany({ where: { programmeId: exam.programmeId } });
+    const shellCategoryId = (await testPrisma.programme.findUniqueOrThrow({ where: { id: exam.programmeId } })).categoryId;
+    await testPrisma.exam.delete({ where: { id: exam.id } });
+    await testPrisma.programme.delete({ where: { id: exam.programmeId } });
+    await testPrisma.programmeCategory.delete({ where: { id: shellCategoryId } });
+    await cleanupProgramme(linkedProgramme.id);
     await cleanupRoot({ categoryId: category.id, staffId: staff.id });
   });
 

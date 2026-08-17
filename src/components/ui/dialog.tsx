@@ -37,16 +37,18 @@ export function Dialog({ open, onClose, title, children, actions, className }: D
         aria-modal="true"
         onClick={(e) => e.stopPropagation()}
         className={cn(
-          "relative flex flex-col gap-[var(--space-3)] w-[min(460px,100%)] p-[var(--space-6)] rounded-lg bg-bg shadow-lg",
+          "relative flex flex-col w-[min(460px,100%)] max-h-[85vh] rounded-lg bg-bg shadow-lg overflow-hidden",
           className
         )}
       >
         <CloseButton onClose={onClose} />
-        {title && <div className="font-heading font-bold text-xl pr-8">{title}</div>}
-        {children && <div className="text-sm text-neutral-700">{children}</div>}
-        {actions && (
-          <div className="flex justify-end gap-[var(--space-2)] mt-[var(--space-2)]">{actions}</div>
-        )}
+        <div className="flex flex-col gap-[var(--space-3)] p-[var(--space-6)] overflow-y-auto">
+          {title && <div className="font-heading font-bold text-xl pr-8">{title}</div>}
+          {children && <div className="text-sm text-neutral-700">{children}</div>}
+          {actions && (
+            <div className="flex justify-end gap-[var(--space-2)] mt-[var(--space-2)]">{actions}</div>
+          )}
+        </div>
       </div>
     </div>,
     document.body

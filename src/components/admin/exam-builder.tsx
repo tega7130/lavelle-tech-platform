@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
+import { cn } from "@/lib/cn";
 import { Card, CardKicker } from "@/components/ui/card";
 import { Tag, type TagVariant } from "@/components/ui/tag";
 import { Button } from "@/components/ui/button";
@@ -24,6 +25,8 @@ import {
   getQuestionUsageAction,
   getExamPreviewAction,
   createExamAction,
+  addExamModuleAction,
+  updateExamModuleAction,
   createExamWindowAction,
   updateExamWindowAction,
   setExamContentAction,
@@ -52,8 +55,8 @@ const STATUS_TAG_VARIANT: Record<string, TagVariant | "success" | "warning" | "d
 const STATUS_CAPTION: Record<string, string> = {
   DRAFT: "Draft — not visible to candidates",
   PUBLISHED: "Published — visible to eligible candidates",
-  CLOSED: "Closed — no new registrations or attempts",
-  ARCHIVED: "Archived — read-only historical record",
+  CLOSED: "Closed — no new registrations. Can be reopened.",
+  ARCHIVED: "Archived — hidden from candidates. Can be reopened.",
 };
 
 const STATUS_TAG: Record<string, TagVariant | "success" | "warning" | "danger"> = {
@@ -93,12 +96,125 @@ interface WindowFormState {
   uncapped: boolean;
 }
 
+function pad2(n: number): string {
+  return String(n).padStart(2, "0");
+}
+
+/**
+ * Local "YYYY-MM-DDTHH:mm" — deliberately NOT toISOString(), which is UTC.
+ * A datetime-local input's value (and what `new Date(str)` parses a
+ * timezone-less string back as) is the browser's LOCAL wall clock. Using
+ * toISOString() here silently shifted every displayed time by the
+ * admin's UTC offset, so editing an existing sitting without touching a
+ * field and hitting save would drift its stored instant by that offset
+ * on every round trip.
+ */
 function toDateInput(d: Date | string): string {
-  return new Date(d).toISOString().slice(0, 16);
+  const date = new Date(d);
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}T${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
 }
 
 function blankWindowForm(): WindowFormState {
   return { mode: "create", opensAt: "", closesAt: "", registrationDeadline: "", capacity: "", uncapped: true };
+}
+
+/** Splits/joins the same local "YYYY-MM-DDTHH:mm" string a 12-hour date+time picker needs — never UTC. */
+function splitLocalDateTime(value: string): { date: string; hour12: number; minute: number; ampm: "AM" | "PM" } {
+  if (!value) return { date: "", hour12: 9, minute: 0, ampm: "AM" };
+  const [date, time] = value.split("T");
+  const [h, m] = (time ?? "09:00").split(":").map(Number);
+  return { date: date ?? "", hour12: h % 12 === 0 ? 12 : h % 12, minute: m ?? 0, ampm: h < 12 ? "AM" : "PM" };
+}
+
+function joinLocalDateTime(date: string, hour12: number, minute: number, ampm: "AM" | "PM"): string {
+  if (!date) return "";
+  const h24 = ampm === "AM" ? hour12 % 12 : (hour12 % 12) + 12;
+  return `${date}T${pad2(h24)}:${pad2(minute)}`;
+}
+
+/** Date picker + explicit 12-hour clock (hour/minute/AM-PM) — a native datetime-local input's time portion renders in whatever format the OS locale dictates, which is not something HTML/CSS can force to 12-hour. */
+function DateTimeField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const { date, hour12, minute, ampm } = splitLocalDateTime(value);
+
+  function set(next: Partial<{ date: string; hour12: number; minute: number; ampm: "AM" | "PM" }>) {
+    onChange(joinLocalDateTime(next.date ?? date, next.hour12 ?? hour12, next.minute ?? minute, next.ampm ?? ampm));
+  }
+
+  return (
+    <div className="flex gap-2">
+      <input
+        type="date"
+        className="flex-1 min-w-0 h-[42px] border border-neutral-300 rounded-md px-3 text-[13px] bg-bg"
+        value={date}
+        onChange={(e) => set({ date: e.target.value })}
+      />
+      <input
+        type="number"
+        min={1}
+        max={12}
+        placeholder="HH"
+        disabled={!date}
+        className="w-[54px] flex-none h-[42px] border border-neutral-300 rounded-md px-2 text-[13px] bg-bg text-center"
+        value={date ? hour12 : ""}
+        onChange={(e) => set({ hour12: Math.min(12, Math.max(1, Number(e.target.value) || 1)) })}
+      />
+      <input
+        type="number"
+        min={0}
+        max={59}
+        placeholder="MM"
+        disabled={!date}
+        className="w-[54px] flex-none h-[42px] border border-neutral-300 rounded-md px-2 text-[13px] bg-bg text-center"
+        value={date ? pad2(minute) : ""}
+        onChange={(e) => set({ minute: Math.min(59, Math.max(0, Number(e.target.value) || 0)) })}
+      />
+      <select
+        className="w-[66px] flex-none h-[42px] border border-neutral-300 rounded-md px-2 text-[13px] bg-bg"
+        value={ampm}
+        disabled={!date}
+        onChange={(e) => set({ ampm: e.target.value as "AM" | "PM" })}
+      >
+        <option value="AM">AM</option>
+        <option value="PM">PM</option>
+      </select>
+    </div>
+  );
+}
+
+/** A selectable CTA, not a one-shot button — clicking it toggles the override on/off and stays visibly "chosen" (filled + check) until Save changes is clicked or it's toggled off again. */
+function OverrideToggle({
+  selected,
+  title,
+  description,
+  selectedLabel,
+  onClick,
+}: {
+  selected: boolean;
+  title: string;
+  description: string;
+  selectedLabel: string;
+  onClick: () => void;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-3">
+      <div>
+        <div className="text-[12.5px] font-medium text-accent-800">{title}</div>
+        <div className="text-accent-800 text-[11.5px] mt-0.5">{description}</div>
+      </div>
+      <button
+        type="button"
+        aria-pressed={selected}
+        onClick={onClick}
+        className={cn(
+          "h-[32px] px-3 rounded-md border text-xs font-heading font-semibold flex-none inline-flex items-center gap-1.5 cursor-pointer transition-colors",
+          selected ? "bg-accent border-accent text-white" : "bg-bg border-neutral-300 text-text hover:bg-neutral-100"
+        )}
+      >
+        {selected && <span aria-hidden>✓</span>}
+        {selected ? selectedLabel : title}
+      </button>
+    </div>
+  );
 }
 
 function blankForm(moduleId: string): QuestionFormState {
@@ -142,6 +258,8 @@ export function ExamBuilder({ exams, bank: initialBank }: { exams: ExamListItem[
   const [bank, setBank] = React.useState(initialBank);
   const [openModules, setOpenModules] = React.useState<Set<string>>(new Set(bank.modules.filter((m) => m.shortfall).map((m) => m.id)));
   const [form, setForm] = React.useState<QuestionFormState | null>(null);
+  const [moduleForm, setModuleForm] = React.useState<{ mode: "create" | "edit"; id?: string; title: string; examQuestionDraw: string } | null>(null);
+  const [moduleFormError, setModuleFormError] = React.useState<string | null>(null);
   const [retireTarget, setRetireTarget] = React.useState<{ moduleId: string; question: Question } | null>(null);
   const [retireReason, setRetireReason] = React.useState("");
   const [busy, setBusy] = React.useState(false);
@@ -177,6 +295,14 @@ export function ExamBuilder({ exams, bank: initialBank }: { exams: ExamListItem[
 
   const [windows, setWindows] = React.useState<ExamWindow[]>([]);
   const [windowForm, setWindowForm] = React.useState<WindowFormState | null>(null);
+  // Which override CTAs are currently selected, and the untouched date
+  // values to recompute from every time that selection changes — kept
+  // separate from windowForm itself so toggling an override never
+  // clobbers the OTHER fields (capacity, uncapped) the admin may have
+  // already edited, and so re-toggling always starts from the sitting's
+  // real baseline rather than compounding on a previous override.
+  const [activeOverrides, setActiveOverrides] = React.useState<Set<"registration" | "available">>(new Set());
+  const windowFormBaseline = React.useRef<{ opensAt: string; closesAt: string; registrationDeadline: string } | null>(null);
   const [releasingId, setReleasingId] = React.useState<string | null>(null);
   const [capacityValue, setCapacityValue] = React.useState("");
   const [uncapped, setUncapped] = React.useState(true);
@@ -264,6 +390,27 @@ export function ExamBuilder({ exams, bank: initialBank }: { exams: ExamListItem[
       setQuestionUsage(null);
       await refreshBank();
       router.refresh();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function submitModuleForm() {
+    if (!moduleForm) return;
+    setBusy(true);
+    setModuleFormError(null);
+    try {
+      const input = { title: moduleForm.title, examQuestionDraw: Number(moduleForm.examQuestionDraw) };
+      if (moduleForm.mode === "create") {
+        await addExamModuleAction(bank.exam.id, input);
+      } else if (moduleForm.id) {
+        await updateExamModuleAction(moduleForm.id, input);
+      }
+      setModuleForm(null);
+      await refreshBank();
+      router.refresh();
+    } catch (e) {
+      setModuleFormError(e instanceof Error ? e.message : "Could not save the module.");
     } finally {
       setBusy(false);
     }
@@ -388,6 +535,72 @@ export function ExamBuilder({ exams, bank: initialBank }: { exams: ExamListItem[
     }
   }
 
+  /**
+   * Opens the sitting-editor dialog and snapshots its starting date
+   * values as the override baseline — every override toggle recomputes
+   * from THIS snapshot, never from whatever the fields currently show,
+   * so re-toggling (or toggling both) is always deterministic instead of
+   * compounding on a previous override's output.
+   */
+  function openWindowForm(form: WindowFormState) {
+    windowFormBaseline.current = { opensAt: form.opensAt, closesAt: form.closesAt, registrationDeadline: form.registrationDeadline };
+    setActiveOverrides(new Set());
+    setWindowForm(form);
+  }
+
+  /**
+   * Pure function computing opensAt/closesAt/registrationDeadline from
+   * the override baseline for whichever override chip(s) are selected —
+   * "available" (candidates can sit right now) always wins over
+   * "registration" (registration is open) when both are selected,
+   * because registrationDeadline must be strictly before opensAt: a
+   * sitting that's open right now cannot simultaneously accept new
+   * registrations. Selecting both therefore still opens the sitting
+   * immediately, closing registration as of now — the only combination
+   * that's actually valid, and the more urgent of the two asks.
+   */
+  function computeOverrideDates(
+    base: { opensAt: string; closesAt: string; registrationDeadline: string },
+    active: Set<"registration" | "available">
+  ): { opensAt: string; closesAt: string; registrationDeadline: string } {
+    if (active.size === 0) return base;
+    const now = new Date();
+    let { opensAt, closesAt, registrationDeadline } = base;
+
+    if (active.has("registration")) {
+      const newDeadline = new Date(now.getTime() + 7 * 24 * 60 * 60_000);
+      const existingOpens = base.opensAt ? new Date(base.opensAt) : null;
+      const opensAtDate = existingOpens && existingOpens.getTime() > newDeadline.getTime() ? existingOpens : new Date(newDeadline.getTime() + 24 * 60 * 60_000);
+      const existingCloses = base.closesAt ? new Date(base.closesAt) : null;
+      closesAt = existingCloses && existingCloses.getTime() > opensAtDate.getTime() ? base.closesAt : toDateInput(new Date(opensAtDate.getTime() + 24 * 60 * 60_000));
+      opensAt = toDateInput(opensAtDate);
+      registrationDeadline = toDateInput(newDeadline);
+    }
+
+    if (active.has("available")) {
+      opensAt = toDateInput(now);
+      registrationDeadline = toDateInput(new Date(now.getTime() - 60_000));
+      const existingCloses = base.closesAt ? new Date(base.closesAt) : null;
+      closesAt = existingCloses && existingCloses.getTime() > now.getTime() + 60 * 60_000 ? base.closesAt : toDateInput(new Date(now.getTime() + 7 * 24 * 60 * 60_000));
+    }
+
+    return { opensAt, closesAt, registrationDeadline };
+  }
+
+  function toggleOverride(kind: "registration" | "available") {
+    setActiveOverrides((prev) => {
+      const next = new Set(prev);
+      if (next.has(kind)) next.delete(kind);
+      else next.add(kind);
+      const baseline = windowFormBaseline.current;
+      if (baseline) {
+        const dates = computeOverrideDates(baseline, next);
+        setWindowForm((cur) => (cur ? { ...cur, ...dates } : cur));
+      }
+      return next;
+    });
+  }
+
   async function runLifecycleAction() {
     if (!lifecycleTarget) return;
     setBusy(true);
@@ -458,8 +671,18 @@ export function ExamBuilder({ exams, bank: initialBank }: { exams: ExamListItem[
             </Button>
           )}
           {bank.exam.status === "CLOSED" && (
-            <Button variant="secondary" onClick={() => setLifecycleTarget("archive")} disabled={busy}>
-              Archive examination
+            <>
+              <Button onClick={() => setShowPublishConfirm(true)} disabled={busy}>
+                Reopen examination
+              </Button>
+              <Button variant="secondary" onClick={() => setLifecycleTarget("archive")} disabled={busy}>
+                Archive examination
+              </Button>
+            </>
+          )}
+          {bank.exam.status === "ARCHIVED" && (
+            <Button onClick={() => setShowPublishConfirm(true)} disabled={busy}>
+              Reopen examination
             </Button>
           )}
         </div>
@@ -632,6 +855,21 @@ export function ExamBuilder({ exams, bank: initialBank }: { exams: ExamListItem[
                 </button>
                 {open && (
                   <div className="border-t border-dashed border-neutral-300">
+                    {bank.exam.isExamOnlyShell && (
+                      <div className="px-5 py-2.5 border-b border-dashed border-neutral-300 flex justify-between items-center bg-neutral-50">
+                        <span className="text-neutral-500 text-[11px]">This module exists only for this examination's question bank.</span>
+                        <button
+                          type="button"
+                          className="text-accent text-[12px] font-medium cursor-pointer flex-none"
+                          onClick={() => {
+                            setModuleForm({ mode: "edit", id: mod.id, title: mod.title, examQuestionDraw: String(mod.draw) });
+                            setModuleFormError(null);
+                          }}
+                        >
+                          Edit module
+                        </button>
+                      </div>
+                    )}
                     {mod.questions.length === 0 && (
                       <div className="px-5 py-8 text-center">
                         <div className="font-heading font-semibold text-[13.5px]">This module has no questions</div>
@@ -692,6 +930,32 @@ export function ExamBuilder({ exams, bank: initialBank }: { exams: ExamListItem[
               </Card>
             );
           })}
+
+          {bank.modules.length === 0 && (
+            <Card elev="sm">
+              <div className="text-center py-8">
+                <div className="font-heading font-semibold text-[13.5px]">No modules in this question bank yet</div>
+                <p className="text-neutral-600 text-[12px] mt-1.5 max-w-[46ch] mx-auto">
+                  {bank.exam.isExamOnlyShell
+                    ? "A standalone examination has no programme content to draw modules from — add at least one module here to start writing questions against it."
+                    : "This programme has no modules yet — add them from its content editor, then return here to write questions against them."}
+                </p>
+              </div>
+            </Card>
+          )}
+
+          {bank.exam.isExamOnlyShell && (
+            <button
+              type="button"
+              className="text-accent text-[12.5px] font-medium cursor-pointer self-start"
+              onClick={() => {
+                setModuleForm({ mode: "create", title: "", examQuestionDraw: "2" });
+                setModuleFormError(null);
+              }}
+            >
+              + Add module
+            </button>
+          )}
         </div>
 
         <div className="flex flex-col gap-[var(--space-4)]">
@@ -817,7 +1081,7 @@ export function ExamBuilder({ exams, bank: initialBank }: { exams: ExamListItem[
           <Card elev="sm">
             <div className="flex items-center justify-between">
               <CardKicker>Sittings</CardKicker>
-              <button className="text-accent text-[12px] font-medium cursor-pointer" onClick={() => setWindowForm(blankWindowForm())}>
+              <button className="text-accent text-[12px] font-medium cursor-pointer" onClick={() => openWindowForm(blankWindowForm())}>
                 + Add sitting
               </button>
             </div>
@@ -827,7 +1091,7 @@ export function ExamBuilder({ exams, bank: initialBank }: { exams: ExamListItem[
                 <p className="text-neutral-600 text-[12px] mt-1.5 max-w-[36ch] mx-auto">
                   Sittings define when candidates can register and sit the examination.
                 </p>
-                <button className="text-accent text-[12.5px] font-medium cursor-pointer mt-2" onClick={() => setWindowForm(blankWindowForm())}>
+                <button className="text-accent text-[12.5px] font-medium cursor-pointer mt-2" onClick={() => openWindowForm(blankWindowForm())}>
                   + Add examination sitting
                 </button>
               </div>
@@ -846,7 +1110,7 @@ export function ExamBuilder({ exams, bank: initialBank }: { exams: ExamListItem[
                       <button
                         className="text-accent text-[11.5px] font-medium cursor-pointer flex-none"
                         onClick={() =>
-                          setWindowForm({
+                          openWindowForm({
                             mode: "edit",
                             id: w.id,
                             opensAt: toDateInput(w.opensAt),
@@ -875,6 +1139,39 @@ export function ExamBuilder({ exams, bank: initialBank }: { exams: ExamListItem[
           </Card>
         </div>
       </div>
+
+      {moduleForm && (
+        <Dialog open onClose={() => setModuleForm(null)} title={moduleForm.mode === "create" ? "Add module" : "Edit module"}>
+          <div className="flex flex-col gap-3">
+            <div>
+              <Label>Module title</Label>
+              <Input
+                value={moduleForm.title}
+                onChange={(e) => setModuleForm((f) => (f ? { ...f, title: e.target.value } : f))}
+                placeholder="Contract formation"
+              />
+            </div>
+            <div>
+              <Label>Objective questions drawn per sitting</Label>
+              <Input
+                type="number"
+                min={0}
+                value={moduleForm.examQuestionDraw}
+                onChange={(e) => setModuleForm((f) => (f ? { ...f, examQuestionDraw: e.target.value } : f))}
+              />
+            </div>
+            {moduleFormError && <div className="text-[#b42318] text-[12.5px]">{moduleFormError}</div>}
+            <div className="flex justify-end gap-2 mt-1">
+              <Button variant="secondary" onClick={() => setModuleForm(null)}>
+                Cancel
+              </Button>
+              <Button disabled={busy || !moduleForm.title.trim()} onClick={submitModuleForm}>
+                {moduleForm.mode === "create" ? "Add module" : "Save module"}
+              </Button>
+            </div>
+          </div>
+        </Dialog>
+      )}
 
       {retireTarget && (
         <Dialog open onClose={() => setRetireTarget(null)} title="Retire this question?">
@@ -908,32 +1205,41 @@ export function ExamBuilder({ exams, bank: initialBank }: { exams: ExamListItem[
       {windowForm && (
         <Dialog open onClose={() => setWindowForm(null)} title={windowForm.mode === "create" ? "Add examination sitting" : "Edit examination sitting"}>
           <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-2.5 p-3 rounded-md bg-accent-100 border border-accent-300">
+              <div className="text-[11px] font-semibold tracking-[0.06em] uppercase text-accent-800">Overrides — select one or both, then Save changes to apply</div>
+              <OverrideToggle
+                selected={activeOverrides.has("registration")}
+                title="Let candidates register now"
+                description="Extends registration for a week from today. Pushes the sitting date out only if it would otherwise clash."
+                selectedLabel="Registration opens now"
+                onClick={() => toggleOverride("registration")}
+              />
+              <div className="border-t border-dashed border-accent-300" />
+              <OverrideToggle
+                selected={activeOverrides.has("available")}
+                title="Let candidates sit the exam now"
+                description="Opens the sitting immediately so already-registered candidates can start straight away. Closes new registration — a sitting can't accept registrations after it opens."
+                selectedLabel="Sitting opens now"
+                onClick={() => toggleOverride("available")}
+              />
+              {activeOverrides.has("registration") && activeOverrides.has("available") && (
+                <div className="text-accent-800 text-[11.5px] pt-2 border-t border-dashed border-accent-300">
+                  Both selected — since the sitting is opening immediately, registration closes as of now too (a sitting can't stay open
+                  for registration once it's started).
+                </div>
+              )}
+            </div>
             <div>
               <Label>Examination window opens</Label>
-              <input
-                type="datetime-local"
-                className="w-full h-[42px] border border-neutral-300 rounded-md px-3 text-[13px] bg-bg"
-                value={windowForm.opensAt}
-                onChange={(e) => setWindowForm({ ...windowForm, opensAt: e.target.value })}
-              />
+              <DateTimeField value={windowForm.opensAt} onChange={(v) => setWindowForm({ ...windowForm, opensAt: v })} />
             </div>
             <div>
               <Label>Examination window closes</Label>
-              <input
-                type="datetime-local"
-                className="w-full h-[42px] border border-neutral-300 rounded-md px-3 text-[13px] bg-bg"
-                value={windowForm.closesAt}
-                onChange={(e) => setWindowForm({ ...windowForm, closesAt: e.target.value })}
-              />
+              <DateTimeField value={windowForm.closesAt} onChange={(v) => setWindowForm({ ...windowForm, closesAt: v })} />
             </div>
             <div>
               <Label>Registration closes</Label>
-              <input
-                type="datetime-local"
-                className="w-full h-[42px] border border-neutral-300 rounded-md px-3 text-[13px] bg-bg"
-                value={windowForm.registrationDeadline}
-                onChange={(e) => setWindowForm({ ...windowForm, registrationDeadline: e.target.value })}
-              />
+              <DateTimeField value={windowForm.registrationDeadline} onChange={(v) => setWindowForm({ ...windowForm, registrationDeadline: v })} />
               <div className="text-neutral-500 text-[11.5px] mt-1.5">Must be before the window opens.</div>
             </div>
             <div>
@@ -974,10 +1280,11 @@ export function ExamBuilder({ exams, bank: initialBank }: { exams: ExamListItem[
       )}
 
       {showPublishConfirm && (
-        <Dialog open onClose={() => setShowPublishConfirm(false)} title="Publish examination?">
+        <Dialog open onClose={() => setShowPublishConfirm(false)} title={bank.exam.status === "DRAFT" ? "Publish examination?" : "Reopen this examination?"}>
           <p>
-            Once published, this examination will become available to eligible candidates according to its configured registration and
-            examination schedule.
+            {bank.exam.status === "DRAFT"
+              ? "Once published, this examination will become available to eligible candidates according to its configured registration and examination schedule."
+              : "This examination will become available to eligible candidates again, according to its configured registration and examination schedule — check the sittings below first if the existing schedule has already passed; use the sitting overrides to open registration or the exam itself immediately if needed."}
           </p>
           <p className="mt-2">
             Questions already used by candidates cannot be modified. Future edits to used questions create a new version, and
@@ -988,7 +1295,7 @@ export function ExamBuilder({ exams, bank: initialBank }: { exams: ExamListItem[
               Cancel
             </Button>
             <Button disabled={busy} onClick={confirmPublish}>
-              {busy ? "Publishing…" : "Publish examination"}
+              {busy ? "Publishing…" : bank.exam.status === "DRAFT" ? "Publish examination" : "Reopen examination"}
             </Button>
           </div>
         </Dialog>

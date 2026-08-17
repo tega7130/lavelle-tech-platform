@@ -67,6 +67,7 @@ export async function listExamBank(examId: string) {
       status: exam.status,
       programmeId: exam.programmeId,
       programmeTitle: exam.programme.title,
+      isExamOnlyShell: exam.programme.isExamOnlyShell,
       publishedAt: exam.publishedAt,
       durationMinutes: exam.durationMinutes,
       passMarkPercent: exam.passMarkPercent,

@@ -140,6 +140,72 @@ export async function createStandaloneExam(input: CreateStandaloneExamInput, sta
   return exam;
 }
 
+export interface ExamModuleInput {
+  title: string;
+  examQuestionDraw: number;
+}
+
+/**
+ * A standalone exam's shell Programme starts with zero Modules (rule:
+ * the shell has no candidate-facing content, so nothing else ever
+ * creates one) — without this, a standalone exam has no module to hang
+ * questions off, and createExamQuestion has nowhere to point. A linked
+ * exam's modules already exist from the programme's own content editor
+ * (weeks/lectures), so this is refused there — creating a lecture-less
+ * "week" from inside the exam builder would surface as a broken empty
+ * week to real enrolled candidates on that real programme.
+ */
+export async function addExamModule(examId: string, input: ExamModuleInput, staffId: string, ipAddress: string | null) {
+  const exam = await prisma.exam.findUniqueOrThrow({ where: { id: examId }, include: { programme: true } });
+  if (!exam.programme.isExamOnlyShell) {
+    throw new Error("This examination is linked to a programme — add or edit its modules from the programme's own content editor.");
+  }
+  const title = input.title.trim();
+  if (!title) throw new Error("Module title is required.");
+  const draw = Math.trunc(input.examQuestionDraw);
+  if (!Number.isFinite(draw) || draw < 0) throw new Error("Questions drawn must be zero or a positive whole number.");
+
+  const count = await prisma.module.count({ where: { programmeId: exam.programmeId } });
+  const created = await prisma.module.create({
+    data: { programmeId: exam.programmeId, weekNumber: count + 1, title, examQuestionDraw: draw, orderIndex: count },
+  });
+
+  await recordAuditEvent(prisma, {
+    actorStaffId: staffId,
+    subjectType: "exam",
+    subjectId: examId,
+    action: "exam.module_added",
+    description: `Added module "${created.title}" to the question bank`,
+    ipAddress,
+  });
+
+  return created;
+}
+
+export async function updateExamModule(moduleId: string, input: ExamModuleInput, staffId: string, ipAddress: string | null) {
+  const existing = await prisma.module.findUniqueOrThrow({ where: { id: moduleId }, include: { programme: { include: { exam: true } } } });
+  if (!existing.programme.isExamOnlyShell) {
+    throw new Error("This examination is linked to a programme — add or edit its modules from the programme's own content editor.");
+  }
+  const title = input.title.trim();
+  if (!title) throw new Error("Module title is required.");
+  const draw = Math.trunc(input.examQuestionDraw);
+  if (!Number.isFinite(draw) || draw < 0) throw new Error("Questions drawn must be zero or a positive whole number.");
+
+  const updated = await prisma.module.update({ where: { id: moduleId }, data: { title, examQuestionDraw: draw } });
+
+  await recordAuditEvent(prisma, {
+    actorStaffId: staffId,
+    subjectType: "exam",
+    subjectId: existing.programme.exam?.id ?? existing.programmeId,
+    action: "exam.module_updated",
+    description: `Updated module "${updated.title}"`,
+    ipAddress,
+  });
+
+  return updated;
+}
+
 export interface CreateExamQuestionInput {
   moduleId: string;
   type: ExamQuestionType;
