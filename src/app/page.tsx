@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { SiteHeroHeader } from "@/components/site/site-header";
 import { SiteFooter } from "@/components/site/site-footer";
@@ -30,7 +31,7 @@ const TIERS = [
 const STEPS = [
   { n: "01", title: "Register free, with no commitment", body: "Give us your name, email and a password. You receive a provisional applicant number and full access to the catalogue.", note: "No payment details required" },
   { n: "02", title: "Choose a specialization and tier", body: "Browse by practice area and level. Each programme lists its syllabus module by module, its faculty, its intake dates and its fee.", note: null },
-  { n: "03", title: "Enrol and pay for that programme", body: "Pay in Naira by card, transfer or USSD. Payment confirms your enrolment, opens the material and issues your Candidate ID card.", note: null },
+  { n: "03", title: "Enrol in a Programme", body: "Choose a programme that fits your goals and complete your enrolment. Once you're enrolled, you'll get access to your learning materials and receive your Candidate ID card.", note: null },
   { n: "04", title: "Learn, practise and be assessed", body: "Recorded lectures with narration, applied scenarios, drafting exercises marked by faculty, and a quiz at the close of every module.", note: null },
   { n: "05", title: "Sit the certifying examination", body: "A proctored paper of objective and written questions. Pass it and your certificate is issued, verifiable publicly the same day.", note: "Certificates carry a Lavelle pathway mark" },
 ] as const;
@@ -104,9 +105,17 @@ export default async function HomePage() {
             </div>
 
             <div className="hidden lg:block relative">
-              <div className="relative rounded-2xl overflow-hidden aspect-[4/5] shadow-[0_30px_70px_rgba(0,0,0,0.42)] bg-gradient-to-br from-accent-800 to-[#061529] flex items-center justify-center">
-                <span className="text-white/25 text-[13px]">Practitioner portrait</span>
-                <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-[#061529]/82" />
+              <div className="relative rounded-2xl overflow-hidden aspect-[4/5] shadow-[0_30px_70px_rgba(0,0,0,0.42)] bg-[#061529]">
+                <Image
+                  src="/images/practitioner-portrait.jpg"
+                  alt="A Lavelle-credentialed practitioner"
+                  fill
+                  priority
+                  sizes="(min-width: 1024px) 45vw, 0px"
+                  className="object-cover object-[84%_center]"
+                />
+                <div className="absolute inset-0 bg-gradient-to-b from-[#061529]/10 via-transparent to-[#061529]/82" />
+                <div className="absolute inset-0 ring-1 ring-inset ring-white/10 rounded-2xl" />
               </div>
               <div className="absolute -left-7 bottom-11 w-[250px] p-[17px] rounded-[13px] bg-white/97 shadow-[0_22px_48px_rgba(0,0,0,0.34)] backdrop-blur">
                 <div className="flex items-center gap-[9px]">
@@ -184,7 +193,7 @@ export default async function HomePage() {
               <h2 className="font-heading font-semibold text-[40px] leading-[1.14] mt-4 tracking-[-0.022em]">Pick the sector your next brief comes from.</h2>
             </div>
             <p className="text-[14.5px] leading-[1.7] text-neutral-600 max-w-[44ch]">
-              Each programme is authored and marked by practitioners who work in that field today, and tests drafting and judgement, not recall. Open one to see the full syllabus and fee.
+              Our programmes go beyond theory to develop the practical knowledge, skills and judgement required in today's legal landscape. Explore each programme to discover what you'll learn.
             </p>
           </div>
 
