@@ -19,7 +19,7 @@ import {
   PublishBlockedError,
 } from "@/lib/exam-builder-actions";
 import { listProgrammes } from "@/lib/programme-reads";
-import { getExamIdByProgrammeCode } from "@/lib/exam-candidate-reads";
+import { getExamIdByProgrammeCode, getExamResultForCandidate } from "@/lib/exam-candidate-reads";
 import {
   registerForExam,
   startSitting,
@@ -466,6 +466,12 @@ describe("releaseResults — a whole window at once, never a sitting whose writt
     expect(readyAfter.state).toBe("RELEASED");
     expect(readyAfter.outcome).toBe("PASS");
     expect(readyAfter.totalPercent).not.toBeNull();
+
+    // The candidate-facing result surfaces who marked the written answer
+    // and a certificate to download, once released and passed.
+    const candidateResult = await getExamResultForCandidate(sittingReady.id, candidateReady.id);
+    expect(candidateResult.markedByNames).toEqual([staff.name]);
+    expect(candidateResult.certificateNumber).not.toBeNull();
 
     const pendingAfter = await testPrisma.sitting.findUniqueOrThrow({ where: { id: sittingPending.id } });
     expect(pendingAfter.state).toBe("SUBMITTED"); // untouched — waits for the next release pass

@@ -221,10 +221,22 @@ export async function getExamResultForCandidate(sittingId: string, candidateId: 
     where: { id: sittingId },
     include: {
       registration: { include: { exam: { include: { programme: true } }, window: true } },
-      answers: { include: { question: true, mark: true } },
+      answers: { include: { question: true, mark: { include: { markedByStaff: { select: { name: true } } } } } },
+      certificate: { select: { certificateNumber: true } },
     },
   });
   if (sitting.registration.candidateId !== candidateId) throw new NotYourSittingError();
+
+  // Distinct marker names across every returned written answer — usually
+  // one person, but the data model allows different questions to be
+  // marked by different staff, so this never silently drops a name.
+  const markedByNames = Array.from(
+    new Set(
+      sitting.answers
+        .filter((a) => a.question.type === "WRITTEN" && a.mark?.state === "RETURNED" && a.mark.markedByStaff?.name)
+        .map((a) => a.mark!.markedByStaff!.name)
+    )
+  );
 
   const writtenAnswers = sitting.answers
     .filter((a) => a.question.type === "WRITTEN")
@@ -252,5 +264,7 @@ export async function getExamResultForCandidate(sittingId: string, candidateId: 
     programme: { title: sitting.registration.exam.programme.title, code: sitting.registration.exam.programme.code },
     window: { opensAt: sitting.registration.window.opensAt },
     writtenAnswers,
+    markedByNames,
+    certificateNumber: sitting.certificate?.certificateNumber ?? null,
   };
 }

@@ -378,3 +378,63 @@ describe("revocation leaves programme access untouched (rule 5)", () => {
     await cleanupRoot({ categoryId: category.id, staffId: staff.id });
   });
 });
+
+describe("certificate band — a fixed 60%/Distinction, else Pass scale, independent of GradeBandDefinition (Merit never appears on a certificate)", () => {
+  it("41-59% earns Pass, 60%+ earns Distinction, and the printed bandLabel/finalPercent both reflect it — never a raw percentage anywhere else", async () => {
+    const { staff, category } = await seedStaffAndCategory();
+    const programme = await seedProgramme(category.id, staff.id);
+    await seedTemplate(staff.id);
+
+    const mod = await testPrisma.module.create({ data: { programmeId: programme.id, weekNumber: 1, title: "Week 1", orderIndex: 0, examQuestionDraw: 2 } });
+    // passMarkPercent well below 41 so a 50% scorer still passes — the exam's
+    // OWN pass mark stays the real pass/fail gate; the fixed band scale only
+    // decides Distinction vs Pass for whoever already cleared it.
+    const exam = await testPrisma.exam.create({ data: { programmeId: programme.id, status: "PUBLISHED", durationMinutes: 60, passMarkPercent: 30, feeMinor: 1_000_000 } });
+    const q1 = await testPrisma.examQuestion.create({
+      data: { examId: exam.id, moduleId: mod.id, type: "OBJECTIVE", status: "APPROVED", prompt: "Q1", marks: 1, options: { create: [{ orderIndex: 0, text: "Right", isCorrect: true }, { orderIndex: 1, text: "Wrong", isCorrect: false }] } },
+      include: { options: true },
+    });
+    const q2 = await testPrisma.examQuestion.create({
+      data: { examId: exam.id, moduleId: mod.id, type: "OBJECTIVE", status: "APPROVED", prompt: "Q2", marks: 1, options: { create: [{ orderIndex: 0, text: "Right", isCorrect: true }, { orderIndex: 1, text: "Wrong", isCorrect: false }] } },
+      include: { options: true },
+    });
+    const window = await testPrisma.examWindow.create({
+      data: { examId: exam.id, opensAt: new Date(Date.now() - 60_000), closesAt: new Date(Date.now() + 3_600_000), registrationDeadline: new Date(Date.now() + 3_600_000) },
+    });
+
+    async function sit(correctCount: 1 | 2) {
+      const candidate = await seedCandidate();
+      const payment = await testPrisma.payment.create({
+        data: { candidateId: candidate.id, purpose: "EXAMINATION_FEE", amountMinor: 1_000_000, provider: "paystack", internalReference: `LVL-PAY-TEST-${crypto.randomUUID().slice(0, 8)}`, status: "SUCCESS", confirmedAt: new Date() },
+      });
+      const registration = await testPrisma.examRegistration.create({
+        data: { candidateId: candidate.id, examId: exam.id, windowId: window.id, paymentId: payment.id, attemptNumber: 1, registeredAt: new Date() },
+      });
+      const sitting = await startSitting(registration.id, candidate.id);
+      await saveSittingAnswer(sitting.id, candidate.id, { questionId: q1.id, selectedOptionId: q1.options[0]!.id }); // always correct
+      await saveSittingAnswer(sitting.id, candidate.id, { questionId: q2.id, selectedOptionId: correctCount === 2 ? q2.options[0]!.id : q2.options[1]!.id });
+      await submitSitting(sitting.id, candidate.id);
+      return { candidate, sitting };
+    }
+
+    const passRange = await sit(1); // 1/2 = 50%
+    const distinctionRange = await sit(2); // 2/2 = 100%
+
+    await releaseResults(window.id, staff.id, null);
+
+    const passSitting = await testPrisma.sitting.findUniqueOrThrow({ where: { id: passRange.sitting.id } });
+    expect(passSitting.totalPercent).toBe(50);
+    expect(passSitting.outcome).toBe("PASS"); // cleared the exam's own 30% pass mark
+    const passCert = await testPrisma.certificate.findUniqueOrThrow({ where: { sittingId: passRange.sitting.id } });
+    expect(passCert.band).toBe("PASS");
+    expect(passCert.finalPercent).toBe(50); // stored for the record, never shown on the certificate itself
+
+    const distinctionCert = await testPrisma.certificate.findUniqueOrThrow({ where: { sittingId: distinctionRange.sitting.id } });
+    expect(distinctionCert.band).toBe("DISTINCTION");
+    expect(distinctionCert.finalPercent).toBe(100);
+
+    await testPrisma.candidate.deleteMany({ where: { id: { in: [passRange.candidate.id, distinctionRange.candidate.id] } } });
+    await cleanupProgramme(programme.id);
+    await cleanupRoot({ categoryId: category.id, staffId: staff.id });
+  });
+});

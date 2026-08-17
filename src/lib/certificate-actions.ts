@@ -13,6 +13,23 @@ import type { CertificateStatus, GradeBand, Prisma } from "@/generated/prisma/cl
 
 const BAND_LABEL: Record<GradeBand, string> = { DISTINCTION: "Distinction", MERIT: "Merit", PASS: "Pass", REFER: "Refer" };
 
+/**
+ * The printed certificate's own band — deliberately NOT the same scale
+ * as GradeBandDefinition (which still resolves Sitting.band, a 4-tier
+ * scale including Merit, used for internal/result-page display and the
+ * Advanced Practitioner "Merit or above" eligibility check). A
+ * certificate only ever reads Distinction or Pass, on a fixed
+ * institutional scale independent of any per-exam configuration: 60%+ is
+ * Distinction, anything else that already passed is Pass. Whether a
+ * sitting passed at all is untouched — that's still entirely the exam's
+ * own configured passMarkPercent (resolved into Sitting.outcome by
+ * releaseResults); this only decides which of the two certificate-worthy
+ * labels a PASS gets.
+ */
+function certificateBandFor(totalPercent: number): "DISTINCTION" | "PASS" {
+  return totalPercent >= 60 ? "DISTINCTION" : "PASS";
+}
+
 export class CertificateNotFoundError extends Error {
   constructor() {
     super("That certificate does not exist.");
@@ -93,13 +110,14 @@ export async function issueCertificate(sittingId: string, mintedByStaffId: strin
     const pathway = registration.enrolmentId ? "PATHWAY" : "EXAMINATION_ONLY";
     const holderName = `${candidate.firstName} ${candidate.lastName}`;
     const issuedAt = new Date();
+    const certBand = certificateBandFor(sitting.totalPercent);
 
     const pdfBytes = await renderCertificatePdf({
       certificateNumber,
       holderName,
       programmeTitle: programme.title,
       tierLabel: tierLabel(programme.tier),
-      bandLabel: BAND_LABEL[sitting.band],
+      bandLabel: BAND_LABEL[certBand],
       pathway,
       issuedAt,
       signatoryBlock: template.signatoryBlock,
@@ -130,7 +148,7 @@ export async function issueCertificate(sittingId: string, mintedByStaffId: strin
         programmeTitle: programme.title,
         tier: programme.tier,
         finalPercent: sitting.totalPercent,
-        band: sitting.band,
+        band: certBand,
         status: "ACTIVE",
         issuedAt,
         issuedByStaffId: null, // automatic issue

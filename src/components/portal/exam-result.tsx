@@ -19,7 +19,7 @@ function fmtDate(d: Date | string | null) {
 }
 
 export function ExamResult({ data }: { data: Data }) {
-  const { sitting, exam, programme, writtenAnswers } = data;
+  const { sitting, exam, programme, writtenAnswers, markedByNames, certificateNumber } = data;
   const passed = sitting.outcome === "PASS";
 
   return (
@@ -52,6 +52,11 @@ export function ExamResult({ data }: { data: Data }) {
                 ? `You met the pass mark of ${exam.passMarkPercent}%.`
                 : `The pass mark for this examination is ${exam.passMarkPercent}%. Contact support about a resit under your attempt policy.`}
             </p>
+            {markedByNames.length > 0 && (
+              <p className="text-neutral-500 text-[12px] mt-1.5">
+                Marked by {markedByNames.join(", ")}.
+              </p>
+            )}
           </div>
         </div>
 
@@ -65,6 +70,18 @@ export function ExamResult({ data }: { data: Data }) {
             <div className="text-[15px] font-medium mt-0.5">{sitting.writtenPercent != null ? `${sitting.writtenPercent}%` : "—"}</div>
           </div>
         </div>
+
+        {certificateNumber && (
+          <div className="flex items-center justify-between gap-3 mt-5 pt-5 border-t border-dashed border-neutral-300 flex-wrap">
+            <div>
+              <div className="font-heading font-semibold text-[13.5px]">Your certificate is ready</div>
+              <div className="text-neutral-500 text-[12px] mt-0.5">Certificate {certificateNumber}</div>
+            </div>
+            <Link href={`/portal/credentials/${certificateNumber}`} className={buttonClassName("primary")}>
+              View and download
+            </Link>
+          </div>
+        )}
       </Card>
 
       {writtenAnswers.length > 0 && (
