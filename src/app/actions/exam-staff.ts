@@ -8,6 +8,7 @@ import { getClientIp } from "@/lib/request-info";
 import * as examStaff from "@/lib/exam-staff";
 import { listExamCandidates, getExamSittingDetail } from "@/lib/exam-reads";
 import * as markingActions from "@/lib/marking-actions";
+import * as sittingActions from "@/lib/exam-sitting-actions";
 import { prisma } from "@/lib/prisma";
 
 export async function listExamStaffAssignmentsAction(examId: string) {
@@ -77,4 +78,25 @@ async function assertMarkBelongsToExam(markId: string, examId: string) {
   if (mark?.examWrittenAnswer?.sitting.registration.examId !== examId) {
     throw new Error("This mark does not belong to this examination.");
   }
+}
+
+/**
+ * Release entry point for the exam-scoped candidates page — gated on
+ * requireExamAccess(examId), same reasoning as claimExamMarkAction/
+ * returnExamMarkAction above, so an exam-assigned staff member without
+ * the blanket MARK_SUBMISSIONS permission can release results for the
+ * exam they were assigned to. Reuses the exact same releaseResults core
+ * (scoring, banding, certificate issuance, candidate notification) as
+ * the exam builder's own release button.
+ */
+export async function releaseExamResultsAction(examId: string, windowId: string) {
+  const staff = await requireExamAccess(examId);
+  const window = await prisma.examWindow.findUnique({ where: { id: windowId }, select: { examId: true } });
+  if (window?.examId !== examId) throw new Error("This sitting does not belong to this examination.");
+  const ip = await getClientIp();
+  const result = await sittingActions.releaseResults(windowId, staff.id, ip);
+  revalidatePath(`/admin/exam-builder/${examId}/candidates`);
+  revalidatePath("/admin/exam-builder");
+  revalidatePath("/portal/exams");
+  return result;
 }

@@ -47,10 +47,10 @@ export default async function CataloguePage({
       ) : (
         <div className="grid grid-cols-3 gap-[var(--space-4)]">
           {programmes.map((p) => (
-            <Card key={p.id} elev="sm">
-              <div className="flex gap-1.5">
-                <Tag variant="accent">{tierLabel(p.tier)}</Tag>
-                <Tag variant="neutral">{p.category.name}</Tag>
+            <Card key={p.id} elev="sm" className="overflow-hidden">
+              <div className="flex gap-1.5 min-w-0">
+                <Tag variant="accent" className="flex-none">{tierLabel(p.tier)}</Tag>
+                <Tag variant="neutral" className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">{p.category.name}</Tag>
               </div>
               <CardTitle className="mt-1.5">{p.title}</CardTitle>
               <CardBody>{p.summary}</CardBody>

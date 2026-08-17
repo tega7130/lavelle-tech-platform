@@ -185,40 +185,48 @@ describe("confirmPayment — the enrolment transaction", () => {
         data: { candidateId: candidateB.id, purpose: "PROGRAMME_FEE", enrolmentId: enrolB.id, amountMinor: fixture.programme.feeMinor, provider: "paystack", internalReference: `LVL-PAY-TEST-${crypto.randomUUID()}`, status: "PENDING" },
       });
 
-      const [resultA, resultB] = await Promise.all([
-        confirmPayment(paymentA.id, { auditAction: "payment.confirmed" }),
-        confirmPayment(paymentB.id, { auditAction: "payment.confirmed" }),
-      ]);
+      // try/finally, deliberately — this test asserts on a real Postgres
+      // row-lock race, so an occasional assertion failure is expected. The
+      // cleanup must still run on that path, or the fixture (programme,
+      // category, staff, intake, cohort, both candidates) leaks permanently
+      // and starts showing up as phantom "Enrol Test Category" programmes
+      // in the live catalogue — exactly what happened before this fix.
+      try {
+        const [resultA, resultB] = await Promise.all([
+          confirmPayment(paymentA.id, { auditAction: "payment.confirmed" }),
+          confirmPayment(paymentB.id, { auditAction: "payment.confirmed" }),
+        ]);
 
-      // Exactly one of the two got the cohort place; the other is flagged,
-      // never both placed (that would exceed capacity) and never neither
-      // (the money was taken for both).
-      const placedCount = [resultA, resultB].filter((r) => r.cohortAssigned).length;
-      const unavailableCount = [resultA, resultB].filter((r) => r.cohortUnavailable).length;
-      expect(placedCount).toBe(1);
-      expect(unavailableCount).toBe(1);
+        // Exactly one of the two got the cohort place; the other is flagged,
+        // never both placed (that would exceed capacity) and never neither
+        // (the money was taken for both).
+        const placedCount = [resultA, resultB].filter((r) => r.cohortAssigned).length;
+        const unavailableCount = [resultA, resultB].filter((r) => r.cohortUnavailable).length;
+        expect(placedCount).toBe(1);
+        expect(unavailableCount).toBe(1);
 
-      const finalEnrolments = await testPrisma.enrolment.findMany({ where: { id: { in: [enrolA.id, enrolB.id] } } });
-      expect(finalEnrolments.every((e) => e.status === "ACTIVE")).toBe(true); // both confirmed ACTIVE — a placement problem never un-confirms the payment
-      const placedEnrolments = finalEnrolments.filter((e) => e.cohortId != null);
-      expect(placedEnrolments).toHaveLength(1); // capacity 1 — never both placed
+        const finalEnrolments = await testPrisma.enrolment.findMany({ where: { id: { in: [enrolA.id, enrolB.id] } } });
+        expect(finalEnrolments.every((e) => e.status === "ACTIVE")).toBe(true); // both confirmed ACTIVE — a placement problem never un-confirms the payment
+        const placedEnrolments = finalEnrolments.filter((e) => e.cohortId != null);
+        expect(placedEnrolments).toHaveLength(1); // capacity 1 — never both placed
 
-      const finalPayments = await testPrisma.payment.findMany({ where: { id: { in: [paymentA.id, paymentB.id] } } });
-      expect(finalPayments.every((p) => p.status === "SUCCESS")).toBe(true); // both payments confirmed regardless of placement outcome
+        const finalPayments = await testPrisma.payment.findMany({ where: { id: { in: [paymentA.id, paymentB.id] } } });
+        expect(finalPayments.every((p) => p.status === "SUCCESS")).toBe(true); // both payments confirmed regardless of placement outcome
 
-      const cohortUnavailableEvents = await testPrisma.auditEvent.count({ where: { action: "enrolment.cohort_unavailable" } });
-      expect(cohortUnavailableEvents).toBeGreaterThanOrEqual(1); // the "admin task" trail
-
-      await testPrisma.payment.deleteMany({ where: { candidateId: { in: [candidateA.id, candidateB.id] } } });
-      await testPrisma.enrolment.deleteMany({ where: { candidateId: { in: [candidateA.id, candidateB.id] } } });
-      await testPrisma.idCard.deleteMany({ where: { candidateId: { in: [candidateA.id, candidateB.id] } } });
-      await testPrisma.notification.deleteMany({ where: { candidateId: { in: [candidateA.id, candidateB.id] } } });
-      await testPrisma.candidate.deleteMany({ where: { id: { in: [candidateA.id, candidateB.id] } } });
-      await testPrisma.cohort.delete({ where: { id: cohort.id } });
-      await testPrisma.programme.delete({ where: { id: fixture.programme.id } });
-      await testPrisma.programmeCategory.delete({ where: { id: fixture.category.id } });
-      await testPrisma.staff.delete({ where: { id: fixture.staff.id } });
-      await testPrisma.intake.delete({ where: { id: fixture.intake.id } });
+        const cohortUnavailableEvents = await testPrisma.auditEvent.count({ where: { action: "enrolment.cohort_unavailable" } });
+        expect(cohortUnavailableEvents).toBeGreaterThanOrEqual(1); // the "admin task" trail
+      } finally {
+        await testPrisma.payment.deleteMany({ where: { candidateId: { in: [candidateA.id, candidateB.id] } } });
+        await testPrisma.enrolment.deleteMany({ where: { candidateId: { in: [candidateA.id, candidateB.id] } } });
+        await testPrisma.idCard.deleteMany({ where: { candidateId: { in: [candidateA.id, candidateB.id] } } });
+        await testPrisma.notification.deleteMany({ where: { candidateId: { in: [candidateA.id, candidateB.id] } } });
+        await testPrisma.candidate.deleteMany({ where: { id: { in: [candidateA.id, candidateB.id] } } });
+        await testPrisma.cohort.delete({ where: { id: cohort.id } });
+        await testPrisma.programme.delete({ where: { id: fixture.programme.id } });
+        await testPrisma.programmeCategory.delete({ where: { id: fixture.category.id } });
+        await testPrisma.staff.delete({ where: { id: fixture.staff.id } });
+        await testPrisma.intake.delete({ where: { id: fixture.intake.id } });
+      }
     });
   });
 

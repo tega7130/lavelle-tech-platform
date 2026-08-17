@@ -447,7 +447,10 @@ export async function expireSittingIfOverdue(sittingId: string, candidateId: str
  * (never per candidate).
  */
 export async function releaseResults(windowId: string, staffId: string, ipAddress: string | null) {
-  const window = await prisma.examWindow.findUniqueOrThrow({ where: { id: windowId }, include: { exam: true } });
+  const window = await prisma.examWindow.findUniqueOrThrow({
+    where: { id: windowId },
+    include: { exam: { include: { programme: { select: { title: true } } } } },
+  });
 
   // Slice 11 Part B rule 3: a sitting referred to the examinations panel
   // is held back from release entirely, not just its certificate — the
@@ -510,6 +513,19 @@ export async function releaseResults(windowId: string, staffId: string, ipAddres
     if (outcome === "PASS") {
       await issueCertificate(sitting.id, staffId);
     }
+
+    const programmeTitle = window.exam.programme.title;
+    await prisma.notification.create({
+      data: {
+        candidateId: sitting.registration.candidateId,
+        category: "EXAMINATION",
+        title: outcome === "PASS" ? "Your result is in — well done!" : "Your result is in",
+        body:
+          outcome === "PASS"
+            ? `Great news — your ${programmeTitle} examination has been marked and you've passed. See your result and download your certificate.`
+            : `Your ${programmeTitle} examination has been marked. Your result and feedback are ready to view.`,
+      },
+    });
 
     releasedCount++;
   }

@@ -53,8 +53,6 @@ const HANDBOOK_SECTIONS = [
 ];
 
 interface ContactValues {
-  firstName: string;
-  lastName: string;
   email: string;
   phone: string;
 }
@@ -93,8 +91,8 @@ export function ProfilePage({
 
   const [contactState, contactAction, contactPending] = useActionState(updateCandidateContactDetails, emptyActionState);
   const initialValues: ContactValues = React.useMemo(
-    () => ({ firstName: candidate.firstName, lastName: candidate.lastName, email: candidate.email, phone: candidate.phone ?? "" }),
-    [candidate.firstName, candidate.lastName, candidate.email, candidate.phone]
+    () => ({ email: candidate.email, phone: candidate.phone ?? "" }),
+    [candidate.email, candidate.phone]
   );
   const [values, setValues] = React.useState(initialValues);
   const [errors, setErrors] = React.useState<Record<string, string>>({});
@@ -237,24 +235,25 @@ export function ProfilePage({
                   <Label htmlFor="firstName">First name</Label>
                   <Input
                     id="firstName"
-                    name="firstName"
-                    value={values.firstName}
-                    onChange={field("firstName")}
-                    invalid={!!errors.firstName}
+                    value={candidate.firstName}
+                    readOnly
+                    disabled
+                    className="bg-neutral-100 text-neutral-500 cursor-not-allowed"
                   />
-                  <FieldError>{errors.firstName}</FieldError>
                 </div>
                 <div>
                   <Label htmlFor="lastName">Last name</Label>
                   <Input
                     id="lastName"
-                    name="lastName"
-                    value={values.lastName}
-                    onChange={field("lastName")}
-                    invalid={!!errors.lastName}
+                    value={candidate.lastName}
+                    readOnly
+                    disabled
+                    className="bg-neutral-100 text-neutral-500 cursor-not-allowed"
                   />
-                  <FieldError>{errors.lastName}</FieldError>
                 </div>
+              </div>
+              <div className="text-[11.5px] text-neutral-500 -mt-2">
+                Your legal name is fixed to your record. Contact support if it needs correcting.
               </div>
               <div>
                 <Label htmlFor="candidateId">Candidate ID</Label>

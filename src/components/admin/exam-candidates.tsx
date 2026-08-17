@@ -10,6 +10,8 @@ import {
   unassignExamStaffAction,
   getExamSittingDetailAction,
   returnExamMarkAction,
+  releaseExamResultsAction,
+  listExamCandidatesAction,
 } from "@/app/actions/exam-staff";
 import { ROLE_LABELS } from "@/lib/permissions";
 import type { listExamCandidates, getExamSittingDetail } from "@/lib/exam-reads";
@@ -54,11 +56,106 @@ export function ExamCandidates({
   assignments: Assignments;
   assignable: Assignable;
 }) {
+  const [rows, setRows] = React.useState(candidates);
+
+  async function refresh() {
+    setRows(await listExamCandidatesAction(examId));
+  }
+
   return (
     <div className="flex flex-col gap-[var(--space-5)]">
+      <ReleaseResultsCard examId={examId} candidates={rows} onReleased={refresh} />
       {canManageStaff && <AssignedStaffCard examId={examId} assignments={assignments} assignable={assignable} />}
-      <RosterCard examId={examId} candidates={candidates} />
+      <RosterCard examId={examId} candidates={rows} />
     </div>
+  );
+}
+
+interface WindowGroup {
+  windowId: string;
+  windowOpensAt: string | Date;
+  submitted: number;
+  released: number;
+  total: number;
+}
+
+function ReleaseResultsCard({
+  examId,
+  candidates,
+  onReleased,
+}: {
+  examId: string;
+  candidates: Candidates;
+  onReleased: () => void | Promise<void>;
+}) {
+  const [releasingId, setReleasingId] = React.useState<string | null>(null);
+
+  const groups = React.useMemo<WindowGroup[]>(() => {
+    const byWindow = new Map<string, WindowGroup>();
+    for (const c of candidates) {
+      if (!c.sitting) continue;
+      let g = byWindow.get(c.windowId);
+      if (!g) {
+        g = { windowId: c.windowId, windowOpensAt: c.windowOpensAt, submitted: 0, released: 0, total: 0 };
+        byWindow.set(c.windowId, g);
+      }
+      g.total++;
+      if (c.sitting.state === "SUBMITTED") g.submitted++;
+      if (c.sitting.state === "RELEASED") g.released++;
+    }
+    return [...byWindow.values()]
+      .filter((g) => g.submitted > 0 || g.released > 0)
+      .sort((a, b) => new Date(b.windowOpensAt).getTime() - new Date(a.windowOpensAt).getTime());
+  }, [candidates]);
+
+  const releasable = groups.filter((g) => g.submitted > 0);
+
+  if (groups.length === 0) return null;
+
+  async function release(windowId: string) {
+    setReleasingId(windowId);
+    try {
+      await releaseExamResultsAction(examId, windowId);
+      await onReleased();
+    } finally {
+      setReleasingId(null);
+    }
+  }
+
+  return (
+    <Card elev="sm" className={releasable.length > 0 ? "border-accent-2-300 bg-accent-2-100" : undefined}>
+      <CardKicker>Release results</CardKicker>
+      <p className="text-neutral-600 text-[12.5px] mt-1">
+        Once every written answer in a sitting window is marked, release it here — candidates immediately see their result,
+        get a notification, and a certificate is issued automatically if they passed.
+      </p>
+      <div className="flex flex-col gap-2 mt-3">
+        {groups.map((g) => (
+          <div
+            key={g.windowId}
+            className="flex items-center justify-between gap-3 py-2.5 px-3 rounded-md border border-neutral-200 bg-bg"
+          >
+            <div>
+              <div className="text-[13px] font-medium">
+                Window {new Date(g.windowOpensAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+              </div>
+              <div className="text-neutral-500 text-[11.5px] mt-0.5">
+                {g.submitted > 0
+                  ? `${g.submitted} of ${g.total} awaiting release`
+                  : `All ${g.released} result${g.released === 1 ? "" : "s"} released`}
+              </div>
+            </div>
+            {g.submitted > 0 ? (
+              <Button className="h-8 px-3 text-xs flex-none" disabled={releasingId === g.windowId} onClick={() => release(g.windowId)}>
+                {releasingId === g.windowId ? "Releasing…" : `Release ${g.submitted} result${g.submitted === 1 ? "" : "s"}`}
+              </Button>
+            ) : (
+              <Tag variant="success">Released</Tag>
+            )}
+          </div>
+        ))}
+      </div>
+    </Card>
   );
 }
 

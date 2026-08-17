@@ -267,7 +267,7 @@ export async function updateCandidateContactDetails(
   try {
     await prisma.candidate.update({
       where: { id: candidate.id },
-      data: { firstName: data.firstName, lastName: data.lastName, email: data.email, phone: data.phone ?? null },
+      data: { email: data.email, phone: data.phone ?? null },
     });
   } catch (e) {
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002" && p2002Target(e).includes("email")) {

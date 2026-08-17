@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Card, CardKicker } from "@/components/ui/card";
 import { Tag, type TagVariant } from "@/components/ui/tag";
 import { buttonClassName } from "@/components/ui/button";
+import { cn } from "@/lib/cn";
 import type { getExamResultForCandidate } from "@/lib/exam-candidate-reads";
 
 type Data = Awaited<ReturnType<typeof getExamResultForCandidate>>;
@@ -32,6 +33,12 @@ export function ExamResult({ data }: { data: Data }) {
         <div className="text-neutral-500 text-[12.5px] mt-1">
           Window {fmtDate(data.window.opensAt)} · Released {fmtDate(sitting.releasedAt)}
         </div>
+      </div>
+
+      <div className={cn("rounded-md px-4 py-3.5 text-[13px] leading-relaxed", passed ? "bg-accent-2-100 text-accent-2-800" : "bg-neutral-100 text-neutral-700")}>
+        {passed
+          ? "Well done — you put in the work, and it shows. Here's how you did."
+          : "You've completed this examination. Here's your result and the feedback behind it."}
       </div>
 
       <Card elev="md" className={passed ? "border-accent-2-300" : "border-[#f3c4bf]"}>

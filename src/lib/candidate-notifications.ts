@@ -12,6 +12,7 @@ const CATEGORY_DESTINATION: Record<NotificationCategory, string> = {
   FINANCE: "/portal/dashboard",
   SUPPORT: "/portal/support",
   ANNOUNCEMENT: "/portal/dashboard",
+  EXAMINATION: "/portal/exams",
 };
 
 const PANEL_SIZE = 30;

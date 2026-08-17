@@ -14,6 +14,7 @@ const CATEGORY_DESTINATION: Record<NotificationCategory, string> = {
   CREDENTIAL: "/admin/certificates",
   ACCOUNT: "/admin/staff",
   ANNOUNCEMENT: "/admin/announcements",
+  EXAMINATION: "/admin/exam-builder",
 };
 
 const PANEL_SIZE = 30;

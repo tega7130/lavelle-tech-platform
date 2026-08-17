@@ -92,8 +92,6 @@ export const updateProfileSchema = z
 export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
 
 export const updateContactDetailsSchema = z.object({
-  firstName: z.string().trim().min(1, "Required").max(80, "Required"),
-  lastName: z.string().trim().min(1, "Required").max(80, "Required"),
   email: z.string().trim().min(1, EMAIL_MESSAGE).regex(EMAIL_RE, EMAIL_MESSAGE),
   phone: z
     .string()
