@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/field";
+import { LogoMark } from "@/components/ui/logo-mark";
 import { tierLabel } from "@/lib/format";
 import type { VerifyResult } from "@/lib/certificate-verify";
 
@@ -50,9 +51,7 @@ export function VerifyPortal({ initialNumber }: { initialNumber: string }) {
     <div className="min-h-screen flex flex-col bg-bg">
       <header className="flex items-center justify-between gap-4 px-8 py-4 border-b border-divider">
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 flex-none rounded-md bg-accent-2 flex items-center justify-center font-heading font-bold text-[16px] text-accent">
-            L
-          </div>
+          <LogoMark size={32} />
           <div>
             <div className="font-heading font-bold text-[15px]">Lavelle Institute</div>
             <div className="text-neutral-500 text-[10px] tracking-[0.08em] uppercase">Credential Verification Portal</div>

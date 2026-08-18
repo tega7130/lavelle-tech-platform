@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { buttonClassName } from "@/components/ui/button";
+import { LogoMark } from "@/components/ui/logo-mark";
 import { cn } from "@/lib/cn";
 
 const NAV_LINKS = [
@@ -22,9 +23,7 @@ export function SiteHeroHeader() {
     <header className="relative z-10">
       <div className="mx-auto max-w-[1200px] flex items-center justify-between gap-8 px-10 pt-6 pb-6">
         <div className="flex items-center gap-[11px]">
-          <div className="w-[38px] h-[38px] flex-none rounded-[9px] bg-accent-2 flex items-center justify-center font-heading font-bold text-[21px] text-[#08234a]">
-            L
-          </div>
+          <LogoMark size={38} />
           <div>
             <div className="font-heading font-bold text-[16px] tracking-[0.02em] text-white">LAVELLE INSTITUTE</div>
             <div className="text-[9.5px] tracking-[0.15em] uppercase text-white/55">Professional Specialization</div>
@@ -59,9 +58,7 @@ export function SiteCompactHeader() {
     <div className="bg-[linear-gradient(158deg,#0c356f_0%,#08234a_60%,#061529_100%)]">
       <div className="mx-auto max-w-[1200px] flex items-center justify-between gap-8 px-10 py-[22px]">
         <Link href="/" className="flex items-center gap-[11px] no-underline">
-          <div className="w-[34px] h-[34px] flex-none rounded-lg bg-accent-2 flex items-center justify-center font-heading font-bold text-[19px] text-[#08234a]">
-            L
-          </div>
+          <LogoMark size={34} />
           <div>
             <div className="font-heading font-bold text-[15px] tracking-[0.02em] text-white">LAVELLE INSTITUTE</div>
             <div className="text-[9.5px] tracking-[0.15em] uppercase text-white/55">Professional Specialization</div>

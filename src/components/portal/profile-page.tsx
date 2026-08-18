@@ -8,6 +8,7 @@ import { cn } from "@/lib/cn";
 import { Card, CardKicker } from "@/components/ui/card";
 import { Button, buttonClassName } from "@/components/ui/button";
 import { Label, Input, FieldError } from "@/components/ui/field";
+import { LogoMark } from "@/components/ui/logo-mark";
 import { updateProfile, updateCandidateContactDetails } from "@/app/actions/candidate-auth";
 import { finaliseCandidatePhotoUpload } from "@/app/actions/uploads";
 import { emptyActionState } from "@/lib/action-state";
@@ -294,9 +295,7 @@ export function ProfilePage({
           <h3 className="mb-3">Candidate ID card</h3>
           <div className="rounded-xl p-[var(--space-5)] text-white" style={{ background: "#1668e3" }}>
             <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-md bg-accent-2 text-accent-800 flex items-center justify-center font-heading font-bold text-[13px]">
-                L
-              </div>
+              <LogoMark size={28} />
               <div className="font-heading font-semibold text-[14px]">Lavelle Institute</div>
             </div>
 

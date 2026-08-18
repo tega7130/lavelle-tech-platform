@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { LogoMark } from "@/components/ui/logo-mark";
 
 const FOOTER_COLS = [
   {
@@ -37,9 +38,7 @@ export function SiteFooter() {
         <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1.2fr)_minmax(0,2fr)] gap-14">
           <div>
             <div className="flex items-center gap-[11px]">
-              <div className="w-[34px] h-[34px] flex-none rounded-lg bg-accent-2 flex items-center justify-center font-heading font-bold text-[18px] text-[#08234a]">
-                L
-              </div>
+              <LogoMark size={34} />
               <div>
                 <div className="font-heading font-bold text-[15px] tracking-[0.02em]">LAVELLE INSTITUTE</div>
                 <div className="text-[9.5px] tracking-[0.14em] uppercase text-neutral-700">Professional Specialization</div>

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { Tag, type TagVariant } from "@/components/ui/tag";
 import { Button, buttonClassName } from "@/components/ui/button";
+import { LogoMark } from "@/components/ui/logo-mark";
 import { tierLabel } from "@/lib/format";
 import { getCertificateDownloadUrlAction } from "@/app/actions/certificates";
 import type { getOwnCertificate } from "@/lib/certificate-candidate-reads";
@@ -64,9 +65,7 @@ export function CertificateView({ certificate: c }: { certificate: Certificate }
 
       <Card elev="md" className={`p-0 overflow-hidden ${revoked ? "border-[#f3c4bf]" : superseded ? "border-neutral-300" : "border-accent-2-300"}`}>
         <div className="border-[3px] border-double m-4 rounded-sm px-8 py-10 text-center" style={{ borderColor: "var(--color-accent-300)" }}>
-          <div className="w-9 h-9 rounded-md bg-accent text-accent-2 flex items-center justify-center font-heading font-bold text-[16px] mx-auto">
-            L
-          </div>
+          <LogoMark size={36} className="mx-auto" />
           <div className="font-heading font-bold text-[15px] mt-2.5 tracking-[0.01em]">LAVELLE INSTITUTE</div>
           <div className="text-neutral-500 text-[9.5px] tracking-[0.16em] uppercase mt-0.5">Professional Specialization</div>
 

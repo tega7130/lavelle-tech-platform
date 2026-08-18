@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { buttonClassName } from "@/components/ui/button";
+import { LogoMark } from "@/components/ui/logo-mark";
 
 /** Copy verbatim from Lavelle States.dc.html's "Not found" full-page state. */
 export default function NotFound() {
@@ -7,9 +8,7 @@ export default function NotFound() {
     <div className="min-h-screen bg-bg flex items-center justify-center p-[var(--space-6)]">
       <div className="text-center max-w-[420px]">
         <div className="flex items-center justify-center gap-2.5">
-          <div className="w-[30px] h-[30px] rounded-md bg-accent-2 flex items-center justify-center font-heading font-bold text-[16px] text-accent-900">
-            L
-          </div>
+          <LogoMark size={30} />
           <span className="font-heading font-bold text-sm tracking-[0.02em]">LAVELLE INSTITUTE</span>
         </div>
 

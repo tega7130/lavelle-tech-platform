@@ -25,6 +25,7 @@ import {
   SignOutIcon,
   BellIcon,
 } from "@/components/icons";
+import { LogoMark } from "@/components/ui/logo-mark";
 
 export interface CandidateShellNavItem {
   key: string;
@@ -163,9 +164,7 @@ export function CandidateShell({
     <div className="flex h-screen bg-bg text-text font-body">
       <aside className="w-[236px] flex-none flex flex-col border-r border-divider p-[var(--space-4)] px-[var(--space-3)]">
         <div className="flex items-center gap-[10px] px-[2px] pb-[var(--space-6)]">
-          <div className="w-[34px] h-[34px] flex-none rounded-lg bg-accent-2 flex items-center justify-center font-heading font-bold text-[17px] text-accent">
-            L
-          </div>
+          <LogoMark size={34} />
           <div>
             <div className="font-heading font-bold text-[17px] tracking-[-0.01em]">Lavelle</div>
             <div className="text-[10px] tracking-[0.08em] uppercase text-neutral-500">

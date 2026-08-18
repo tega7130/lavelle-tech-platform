@@ -8,6 +8,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { AdminNavIcon, ChevronLeftIcon, ChevronRightIcon } from "@/components/icons";
 import { Dialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { LogoMark } from "@/components/ui/logo-mark";
 import { staffSignOut } from "@/app/actions/staff-auth";
 import { listStaffNotificationsAction, markNotificationReadAction, markAllNotificationsReadAction } from "@/app/actions/notifications";
 
@@ -174,9 +175,7 @@ export function AdminShell({ staff, crumb, headerTag, initialNotifications, chil
             !railOpen && "justify-center"
           )}
         >
-          <div className="w-[34px] h-[34px] flex-none rounded-lg bg-accent-2 flex items-center justify-center font-heading font-bold text-[17px] text-accent">
-            L
-          </div>
+          <LogoMark size={34} />
           {railOpen && (
             <div className="flex-1 min-w-0">
               <div className="font-heading font-bold text-[17px] tracking-[-0.01em]">Lavelle</div>

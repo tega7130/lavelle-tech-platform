@@ -1,4 +1,5 @@
 import * as React from "react";
+import { LogoMark } from "@/components/ui/logo-mark";
 
 export interface AuthSplitScreenProps {
   kicker: string;
@@ -45,9 +46,7 @@ export function AuthSplitScreen({
         />
 
         <div className="relative flex items-center gap-3">
-          <div className="flex h-11 w-11 flex-none items-center justify-center rounded-[10px] bg-accent-2 font-heading text-2xl font-bold text-[#08234a]">
-            L
-          </div>
+          <LogoMark size={44} />
           <div>
             <div className="font-heading text-lg font-bold tracking-[0.02em]">LAVELLE INSTITUTE</div>
             <div className="text-[10px] tracking-[0.14em] text-white/62 uppercase">{logoSubtitle}</div>

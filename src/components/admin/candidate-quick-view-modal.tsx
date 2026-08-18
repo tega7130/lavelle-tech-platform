@@ -6,6 +6,7 @@ import { Dialog } from "@/components/ui/dialog";
 import { Button, buttonClassName } from "@/components/ui/button";
 import { Tag } from "@/components/ui/tag";
 import { Input } from "@/components/ui/field";
+import { LogoMark } from "@/components/ui/logo-mark";
 import { tierLabel } from "@/lib/format";
 import { getCandidateQuickViewAction } from "@/app/actions/candidate-admin";
 import { reissueIdCard } from "@/app/actions/payment";
@@ -130,7 +131,7 @@ export function CandidateQuickViewModal({ candidateId, onClose }: { candidateId:
           {showIdCard && data.idCard && (
             <div className="mt-4 rounded-xl p-4 text-white" style={{ background: "#1668e3" }}>
               <div className="flex items-center gap-2">
-                <div className="w-6 h-6 rounded-md bg-accent-2 text-accent-800 flex items-center justify-center font-heading font-bold text-[12px]">L</div>
+                <LogoMark size={24} />
                 <div className="font-heading font-semibold text-[12px]">Lavelle Institute</div>
               </div>
               <div className="font-heading font-bold text-[16px] text-accent-2 mt-3">

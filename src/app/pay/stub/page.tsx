@@ -1,5 +1,6 @@
 import { Card, CardKicker, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { LogoMark } from "@/components/ui/logo-mark";
 import { formatNaira } from "@/lib/format";
 import { simulateProviderSuccess, simulateProviderDecline } from "@/app/actions/payment-stub";
 
@@ -26,9 +27,7 @@ export default async function PaymentStubPage({
     <div className="min-h-screen bg-surface flex items-center justify-center p-[var(--space-6)]">
       <Card elev="lg" className="w-full max-w-[420px] p-[var(--space-6)] gap-[var(--space-4)]">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-md bg-accent-2 flex items-center justify-center font-heading font-bold text-accent-900">
-            L
-          </div>
+          <LogoMark size={32} />
           <div>
             <CardTitle>Lavelle checkout — dev simulator</CardTitle>
             <div className="text-[11px] text-neutral-500">
