@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import crypto from "node:crypto";
 import { testPrisma } from "./db";
 import { hashPassword } from "@/lib/password";
@@ -43,6 +43,15 @@ async function cleanupStaff(...ids: string[]) {
 beforeAll(async () => {
   const stray = await testPrisma.staff.findMany({ where: { email: { startsWith: "staff-access-test-" } }, select: { id: true } });
   if (stray.length > 0) await cleanupStaff(...stray.map((s) => s.id));
+
+  const strayCandidates = await testPrisma.candidate.findMany({
+    where: { firstName: "Session", lastName: "Independence" },
+    select: { id: true },
+  });
+  if (strayCandidates.length > 0) {
+    await testPrisma.session.deleteMany({ where: { candidateId: { in: strayCandidates.map((c) => c.id) } } });
+    await testPrisma.candidate.deleteMany({ where: { id: { in: strayCandidates.map((c) => c.id) } } });
+  }
 });
 
 describe("staffSignInCore — the five failure cases are indistinguishable (README A5 rule 1)", () => {
@@ -269,6 +278,12 @@ describe("candidate and staff sessions revoke independently (README A1)", () => 
     staffId = staff.id;
   });
 
+  afterAll(async () => {
+    await testPrisma.session.deleteMany({ where: { OR: [{ candidateId }, { staffId }] } });
+    await testPrisma.candidate.delete({ where: { id: candidateId } }).catch(() => {});
+    await cleanupStaff(staffId);
+  });
+
   it("signing out the candidate session leaves a live staff session on the same machine untouched, and vice versa", async () => {
     const candidateToken = await createSessionRecord(testPrisma, candidateId, { userAgent: null, ipAddress: null });
     const staffToken = await createStaffSessionRecord(testPrisma, staffId, { userAgent: null, ipAddress: null });
@@ -287,8 +302,6 @@ describe("candidate and staff sessions revoke independently (README A1)", () => 
     const candidateToken2 = await createSessionRecord(testPrisma, candidateId, { userAgent: null, ipAddress: null });
     await revokeAllStaffSessions(staffId);
     expect((await resolveCandidateFromToken(candidateToken2))?.id).toBe(candidateId);
-
-    await testPrisma.session.deleteMany({ where: { OR: [{ candidateId }, { staffId }] } });
   });
 });
 
