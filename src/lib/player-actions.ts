@@ -1,6 +1,8 @@
 import { prisma } from "@/lib/prisma";
-import { LectureState, SubmissionState, MarkableKind, MarkState } from "@/generated/prisma/client";
+import { LectureState, SubmissionState, MarkableKind, MarkState, EnrolmentStatus } from "@/generated/prisma/client";
 import { deriveLectureSteps, isLectureComplete, type LectureStep } from "@/lib/lecture-steps";
+import { recordAuditEvent } from "@/lib/audit";
+import { issueCertificateForCourseCompletion, NotEligibleForCourseCertificateError } from "@/lib/certificate-actions";
 
 // No "server-only" / candidate-session import here, deliberately — same
 // discipline as src/lib/offline-recording.ts and enrolment-transaction.ts.
@@ -70,7 +72,8 @@ async function computeStepsForLecture(lectureId: string): Promise<LectureStep[]>
     },
   });
   const isLastInModule = lecture.module.lectures[lecture.module.lectures.length - 1]?.id === lectureId;
-  const moduleHasQuiz = !!lecture.module.quiz && lecture.module.quiz.questions.length > 0;
+  const moduleHasQuiz =
+    !!lecture.module.quiz && lecture.module.quiz.status === "PUBLISHED" && lecture.module.quiz.questions.length > 0;
   return deriveLectureSteps({
     scenarioPrompt: lecture.scenarioPrompt,
     draftingPrompt: lecture.draftingPrompt,
@@ -181,6 +184,7 @@ export async function startQuizAttempt(candidateId: string, enrolmentId: string,
     where: { id: quizId },
     include: { questions: { orderBy: { orderIndex: "asc" }, include: { options: { orderBy: { orderIndex: "asc" } } } } },
   });
+  if (quiz.status !== "PUBLISHED") throw new Error("This quiz is not currently available.");
 
   const inProgress = await prisma.quizAttempt.findFirst({ where: { enrolmentId, quizId, submittedAt: null } });
   const attempt =
@@ -282,4 +286,72 @@ export async function submitQuizAttempt(
   if (lastLecture) await completeStep(candidateId, attempt.enrolmentId, lastLecture.id, "quiz");
 
   return { scorePercent, passed, passMarkPercent: attempt.quiz.passMarkPercent, results };
+}
+
+/**
+ * The candidate-facing "Complete Programme" moment — every PUBLISHED
+ * lecture must already be COMPLETED (recomputed here, never trusted from
+ * the caller, same discipline as completeStep). Idempotent: re-clicking
+ * after completion just re-reads the same certificate state rather than
+ * erroring.
+ *
+ * Two very different certificate paths meet here:
+ *  - A programme WITH a certifying exam: a certificate is NOT minted
+ *    here — issueCertificate only fires off a passed, released exam
+ *    Sitting (src/lib/certificate-actions.ts), a separate staff-graded
+ *    flow. This just reports whether one already exists.
+ *  - A programme with NO exam at all: there's no Sitting to gate on, so
+ *    finishing the course is what earns it — issued right here via
+ *    issueCertificateForCourseCompletion, which re-validates completion
+ *    and every module quiz's pass state itself before minting anything.
+ */
+export async function completeProgramme(candidateId: string, enrolmentId: string) {
+  const enrolment = await assertOwnedEnrolment(candidateId, enrolmentId);
+
+  const [totalPublished, completedCount] = await Promise.all([
+    prisma.lecture.count({ where: { module: { programmeId: enrolment.programmeId }, status: "PUBLISHED" } }),
+    prisma.lectureProgress.count({ where: { enrolmentId, state: LectureState.COMPLETED } }),
+  ]);
+  if (totalPublished === 0 || completedCount < totalPublished) {
+    throw new Error("Not every lecture in this programme has been completed yet.");
+  }
+
+  const now = new Date();
+  if (!enrolment.completedAt) {
+    await prisma.enrolment.update({
+      where: { id: enrolmentId },
+      data: {
+        completedAt: now,
+        status: enrolment.status === EnrolmentStatus.ACTIVE ? EnrolmentStatus.COMPLETED : enrolment.status,
+      },
+    });
+    await recordAuditEvent(prisma, {
+      actorStaffId: null,
+      subjectType: "enrolment",
+      subjectId: enrolmentId,
+      action: "enrolment.programme_completed",
+      description: `Candidate ${candidateId} completed every lecture in programme ${enrolment.programmeId}`,
+      ipAddress: null,
+    });
+  }
+
+  const programmeHasExam = !!(await prisma.exam.findFirst({ where: { programmeId: enrolment.programmeId }, select: { id: true } }));
+  if (!programmeHasExam) {
+    try {
+      const certificate = await issueCertificateForCourseCompletion(enrolmentId);
+      return { certificateNumber: certificate.certificateNumber };
+    } catch (e) {
+      if (!(e instanceof NotEligibleForCourseCertificateError)) throw e;
+      // Not eligible yet (a module quiz not yet passed, or no template
+      // active for the tier) — fall through to the read-only lookup below,
+      // same "results still pending" outcome as the exam-gated path.
+    }
+  }
+
+  const certificate = await prisma.certificate.findFirst({
+    where: { candidateId, programmeId: enrolment.programmeId, status: "ACTIVE" },
+    select: { certificateNumber: true },
+  });
+
+  return { certificateNumber: certificate?.certificateNumber ?? null };
 }

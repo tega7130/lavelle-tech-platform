@@ -28,6 +28,7 @@ export function CertificateView({ certificate: c }: { certificate: Certificate }
   const revoked = c.status === "REVOKED";
   const superseded = c.status === "SUPERSEDED";
   const isPathway = c.pathway === "PATHWAY";
+  const isCourseOnly = isPathway && !c.sittingId; // no certifying exam exists for this programme at all
 
   async function download() {
     setBusy(true);
@@ -55,12 +56,19 @@ export function CertificateView({ certificate: c }: { certificate: Certificate }
         <h1 className="font-heading text-2xl mt-2 mb-0">{c.programmeTitle}</h1>
       </div>
 
-      {isPathway && (
+      {isCourseOnly ? (
         <div className="rounded-md bg-accent-2-100 border border-accent-2-300 px-4 py-3.5 text-[12.5px] leading-[1.6] text-accent-2-800">
-          Credentialed via the Lavelle {c.programmeTitle} pathway — the programme was completed in full before the
-          certifying examination was sat. The pathway mark records how the credential was earned; it does not change
-          its standing.
+          Credentialed via the Lavelle {c.programmeTitle} pathway — earned by completing every lecture and passing
+          every module quiz. This programme carries no separate certifying examination.
         </div>
+      ) : (
+        isPathway && (
+          <div className="rounded-md bg-accent-2-100 border border-accent-2-300 px-4 py-3.5 text-[12.5px] leading-[1.6] text-accent-2-800">
+            Credentialed via the Lavelle {c.programmeTitle} pathway — the programme was completed in full before the
+            certifying examination was sat. The pathway mark records how the credential was earned; it does not
+            change its standing.
+          </div>
+        )
       )}
 
       <Card elev="md" className={`p-0 overflow-hidden ${revoked ? "border-[#f3c4bf]" : superseded ? "border-neutral-300" : "border-accent-2-300"}`}>

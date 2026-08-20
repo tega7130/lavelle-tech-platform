@@ -179,6 +179,145 @@ export async function issueCertificate(sittingId: string, mintedByStaffId: strin
   });
 }
 
+export class NotEligibleForCourseCertificateError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "NotEligibleForCourseCertificateError";
+  }
+}
+
+/**
+ * The other issuing path, for a programme that carries no certifying
+ * examination at all (Programme.exam is null) — there's no Sitting to
+ * pass, so completing the course itself is what earns the credential.
+ * Only reachable from completeProgramme once every lecture is COMPLETED;
+ * re-checks eligibility here anyway (never trust the caller). Idempotent
+ * like issueCertificate. Every module quiz must have a passed attempt —
+ * finalPercent is their average, or 100 (an automatic Distinction) when
+ * the programme has no quizzes to average. pathway is always PATHWAY:
+ * a no-exam programme has no EXAMINATION_ONLY route.
+ */
+export async function issueCertificateForCourseCompletion(enrolmentId: string) {
+  return prisma.$transaction(async (tx) => {
+    const enrolment = await tx.enrolment.findUniqueOrThrow({
+      where: { id: enrolmentId },
+      include: { candidate: true, programme: { include: { exam: { select: { id: true } } } } },
+    });
+    if (enrolment.programme.exam) {
+      throw new NotEligibleForCourseCertificateError("This programme has a certifying examination.");
+    }
+
+    const existing = await tx.certificate.findFirst({
+      where: { candidateId: enrolment.candidateId, programmeId: enrolment.programmeId, status: "ACTIVE" },
+    });
+    if (existing) return existing; // idempotent — re-clicking Complete Programme must not mint two
+
+    const [totalPublished, completedCount] = await Promise.all([
+      tx.lecture.count({ where: { module: { programmeId: enrolment.programmeId }, status: "PUBLISHED" } }),
+      tx.lectureProgress.count({ where: { enrolmentId, state: "COMPLETED" } }),
+    ]);
+    if (totalPublished === 0 || completedCount < totalPublished) {
+      throw new NotEligibleForCourseCertificateError("Not every lecture in this programme has been completed yet.");
+    }
+
+    const modules = await tx.module.findMany({
+      where: { programmeId: enrolment.programmeId },
+      include: { quiz: { include: { questions: { select: { id: true } } } } },
+    });
+    const quizModules = modules.filter((m) => m.quiz && m.quiz.status === "PUBLISHED" && m.quiz.questions.length > 0);
+
+    let scoreSum = 0;
+    for (const m of quizModules) {
+      const latest = await tx.quizAttempt.findFirst({
+        where: { enrolmentId, quizId: m.quiz!.id, submittedAt: { not: null } },
+        orderBy: { attemptNumber: "desc" },
+      });
+      if (!latest || !latest.passed) {
+        throw new NotEligibleForCourseCertificateError(`The "${m.title}" quiz has not been passed yet.`);
+      }
+      scoreSum += latest.scorePercent ?? 0;
+    }
+    const finalPercent = quizModules.length > 0 ? Math.round(scoreSum / quizModules.length) : 100;
+    const band = certificateBandFor(finalPercent);
+
+    const template = await findActiveTemplate(enrolment.programme.tier, tx);
+    if (!template) throw new NoActiveTemplateError();
+
+    const numberRows = await tx.$queryRaw<{ next_certificate_number: string }[]>`SELECT next_certificate_number()`;
+    const certificateNumber = numberRows[0]!.next_certificate_number;
+    const { candidate, programme } = enrolment;
+    const holderName = `${candidate.firstName} ${candidate.lastName}`;
+    const issuedAt = new Date();
+
+    const pdfBytes = await renderCertificatePdf({
+      certificateNumber,
+      holderName,
+      programmeTitle: programme.title,
+      tierLabel: tierLabel(programme.tier),
+      bandLabel: BAND_LABEL[band],
+      pathway: "PATHWAY",
+      issuedAt,
+      signatoryBlock: template.signatoryBlock,
+    });
+    const storageKey = `certificates/${certificateNumber}.pdf`;
+    await writeBlob(storageKey, pdfBytes);
+    const pdfAsset = await tx.mediaAsset.create({
+      data: {
+        kind: "document",
+        storageKey,
+        mimeType: "application/pdf",
+        bytes: pdfBytes.length,
+        originalFilename: `${certificateNumber}.pdf`,
+        // No staff acted here — attributed to the candidate whose
+        // completion triggered it, same as their own profile photo.
+        uploadedByCandidateId: candidate.id,
+      },
+    });
+
+    const certificate = await tx.certificate.create({
+      data: {
+        certificateNumber,
+        candidateId: candidate.id,
+        programmeId: programme.id,
+        sittingId: null,
+        enrolmentId,
+        pathway: "PATHWAY",
+        holderName,
+        candidateNumber: candidate.candidateNumber,
+        programmeTitle: programme.title,
+        tier: programme.tier,
+        finalPercent,
+        band,
+        status: "ACTIVE",
+        issuedAt,
+        issuedByStaffId: null, // automatic issue
+        templateId: template.id,
+        pdfAssetId: pdfAsset.id,
+      },
+    });
+
+    await tx.notification.create({
+      data: {
+        candidateId: candidate.id,
+        category: "CREDENTIAL",
+        title: `Certificate issued — ${certificateNumber}`,
+        body: `Your certificate for ${programme.title} has been issued. Find it under Credentials.`,
+      },
+    });
+
+    await recordAuditEvent(tx, {
+      actorStaffId: null,
+      subjectType: "certificate",
+      subjectId: certificate.id,
+      action: "certificate.issued",
+      description: `Certificate ${certificateNumber} issued to ${holderName} for ${programme.title} on course completion`,
+      ipAddress: null,
+    });
+
+    return certificate;
+  });
+}
+
 /**
  * Catch-up, not the normal path — releaseResults already issues a
  * certificate for every PASS sitting automatically the moment a window

@@ -20,10 +20,12 @@ export function QuizPlayer({
   enrolmentId,
   quizId,
   onCompleted,
+  onAttemptStart,
 }: {
   enrolmentId: string;
   quizId: string;
   onCompleted?: () => void;
+  onAttemptStart?: () => void;
 }) {
   const [attempt, setAttempt] = React.useState<QuizAttemptData | null>(null);
   const [qIndex, setQIndex] = React.useState(0);
@@ -34,6 +36,7 @@ export function QuizPlayer({
   async function start() {
     setBusy(true);
     try {
+      onAttemptStart?.();
       const data = await startQuizAttemptAction(enrolmentId, quizId);
       setAttempt(data);
       setQIndex(0);

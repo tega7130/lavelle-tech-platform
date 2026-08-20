@@ -45,3 +45,11 @@ export async function submitQuizAttemptAction(
   revalidatePath("/portal/programme");
   return result;
 }
+
+export async function completeProgrammeAction(enrolmentId: string) {
+  const candidateId = await requireCandidateId();
+  const result = await playerActions.completeProgramme(candidateId, enrolmentId);
+  revalidatePath("/portal/programme");
+  revalidatePath("/portal/credentials");
+  return result;
+}

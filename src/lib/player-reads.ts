@@ -23,7 +23,7 @@ export class LectureLockedError extends Error {
 async function loadOwnedEnrolment(candidateId: string, enrolmentId: string) {
   const enrolment = await prisma.enrolment.findUnique({
     where: { id: enrolmentId },
-    include: { programme: true },
+    include: { programme: { include: { exam: { select: { id: true } } } } },
   });
   if (!enrolment || enrolment.candidateId !== candidateId) throw new NotYourEnrolmentError();
   return enrolment;
@@ -44,7 +44,12 @@ async function loadModuleTree(enrolmentId: string, programmeId: string) {
       where: { programmeId },
       orderBy: { orderIndex: "asc" },
       include: {
-        lectures: { orderBy: { orderIndex: "asc" } },
+        // PUBLISHED only — DRAFT (not yet released) and ARCHIVED (soft-
+        // deleted, rule: never hard-delete a lecture) both drop out of the
+        // candidate-facing tree here, which is also what blocks direct
+        // navigation to a stale lecture URL (getLecturePlayer below looks
+        // the id up in this same tree and 404s if it's missing).
+        lectures: { where: { status: "PUBLISHED" }, orderBy: { orderIndex: "asc" } },
         quiz: { include: { questions: { select: { id: true } } } },
       },
     }),
@@ -62,7 +67,7 @@ async function loadModuleTree(enrolmentId: string, programmeId: string) {
   const moduleTree = modules.map((mod) => {
     const release = releaseByModule.get(mod.id);
     const isReleased = !release || release.dueAt.getTime() <= now.getTime();
-    const moduleHasQuiz = !!mod.quiz && mod.quiz.questions.length > 0;
+    const moduleHasQuiz = !!mod.quiz && mod.quiz.status === "PUBLISHED" && mod.quiz.questions.length > 0;
 
     let moduleCompleted = 0;
     const lectures = mod.lectures.map((lec, i) => {
@@ -193,6 +198,7 @@ export async function getLecturePlayer(candidateId: string, enrolmentId: string,
   return {
     enrolment,
     programme: enrolment.programme,
+    hasExam: !!enrolment.programme.exam,
     module: { id: currentModule.id, title: currentModule.title, weekNumber: currentModule.weekNumber },
     lecture: {
       id: lecture.id,

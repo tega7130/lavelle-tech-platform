@@ -3,16 +3,29 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import confetti from "canvas-confetti";
 import { Tag } from "@/components/ui/tag";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/field";
+import { Dialog } from "@/components/ui/dialog";
 import { LectureStateDot } from "@/components/portal/lecture-state-dot";
 import { QuizPlayer } from "@/components/portal/quiz-player";
 import { ChevronLeftIcon, LockIcon } from "@/components/icons";
 import { computePercent } from "@/lib/progress";
 import type { LectureStep } from "@/lib/lecture-steps";
-import { completeStepAction, submitDraftingAction } from "@/app/actions/player";
+import { completeStepAction, submitDraftingAction, completeProgrammeAction } from "@/app/actions/player";
 import type { getLecturePlayer } from "@/lib/player-reads";
+
+function fireConfetti() {
+  const duration = 2000;
+  const end = Date.now() + duration;
+  (function frame() {
+    confetti({ particleCount: 4, angle: 60, spread: 60, origin: { x: 0 }, colors: ["#B45309", "#15803d", "#0b1322"] });
+    confetti({ particleCount: 4, angle: 120, spread: 60, origin: { x: 1 }, colors: ["#B45309", "#15803d", "#0b1322"] });
+    if (Date.now() < end) requestAnimationFrame(frame);
+  })();
+  confetti({ particleCount: 120, spread: 90, origin: { y: 0.6 }, colors: ["#B45309", "#15803d", "#0b1322"] });
+}
 
 type PlayerData = Awaited<ReturnType<typeof getLecturePlayer>>;
 
@@ -105,7 +118,39 @@ export function LecturePlayer({ enrolmentId, data }: { enrolmentId: string; data
   );
 
   const draftingComplete = completed.has("drafting");
-  const isCurrentStepBlocking = activeStep === "drafting" && !draftingComplete;
+  const isCurrentStepBlocking =
+    (activeStep === "drafting" && !draftingComplete) || (activeStep === "scenario" && !completed.has("scenario"));
+
+  // ── Programme completion ──
+  // Gated on every authored step of THIS lecture being done, not merely
+  // stepIndex reaching the last page — reaching the quiz page doesn't mean
+  // the quiz was submitted (QuizPlayer marks "quiz" complete on submit).
+  const lectureFullyComplete = steps.every((s) => completed.has(s));
+  // A quiz that was already completed in an earlier session (data.stepsCompleted)
+  // stays "complete" while the candidate retakes it — quizResultVisible tracks
+  // whether the CURRENT attempt has a result on screen, so the finishing CTA
+  // doesn't appear mid-retake, before "Submit quiz" is clicked (rule from
+  // candidate report: button must not show while the quiz form is still up).
+  const [quizResultVisible, setQuizResultVisible] = React.useState(completed.has("quiz"));
+  const readyToFinish = lectureFullyComplete && (!steps.includes("quiz") || quizResultVisible);
+  const [completingProgramme, setCompletingProgramme] = React.useState(false);
+  const [completeError, setCompleteError] = React.useState<string | null>(null);
+  const [completionModal, setCompletionModal] = React.useState<{ certificateNumber: string | null } | null>(null);
+
+  async function handleCompleteProgramme() {
+    setCompletingProgramme(true);
+    setCompleteError(null);
+    try {
+      const result = await completeProgrammeAction(enrolmentId);
+      fireConfetti();
+      setCompletionModal(result);
+      router.refresh();
+    } catch (e) {
+      setCompleteError(e instanceof Error ? e.message : "Something went wrong — try again.");
+    } finally {
+      setCompletingProgramme(false);
+    }
+  }
 
   return (
     <div className="min-h-screen bg-bg grid" style={{ gridTemplateColumns: "300px 1fr" }}>
@@ -259,17 +304,14 @@ export function LecturePlayer({ enrolmentId, data }: { enrolmentId: string; data
                   </span>
                   <Button
                     variant="secondary"
-                    disabled={
-                      slideIndex >= lecture.slides.length - 1 ||
-                      (lecture.narrationRequireFull && !!currentSlide?.narrationUrl && !narrationPlayed)
-                    }
+                    disabled={lecture.narrationRequireFull && !!currentSlide?.narrationUrl && !narrationPlayed}
                     onClick={() => {
                       setNarrationPlayed(false);
                       if (slideIndex < lecture.slides.length - 1) setSlideIndex((i) => i + 1);
                       else markStepComplete("content");
                     }}
                   >
-                    Next slide
+                    {slideIndex < lecture.slides.length - 1 ? "Next slide" : "Finish content"}
                   </Button>
                 </div>
               </div>
@@ -281,6 +323,11 @@ export function LecturePlayer({ enrolmentId, data }: { enrolmentId: string; data
           <div>
             <p className="text-[14px] leading-relaxed">{lecture.scenarioPrompt}</p>
             {lecture.scenarioGuidance && <p className="text-[13px] text-neutral-600">{lecture.scenarioGuidance}</p>}
+            {!completed.has("scenario") && (
+              <Button className="mt-4" onClick={() => markStepComplete("scenario")}>
+                Continue
+              </Button>
+            )}
           </div>
         )}
 
@@ -296,32 +343,89 @@ export function LecturePlayer({ enrolmentId, data }: { enrolmentId: string; data
         )}
 
         {activeStep === "quiz" && quiz && (
-          <QuizPlayer enrolmentId={enrolmentId} quizId={quiz.quizId} onCompleted={() => markStepComplete("quiz")} />
+          <QuizPlayer
+            enrolmentId={enrolmentId}
+            quizId={quiz.quizId}
+            onAttemptStart={() => setQuizResultVisible(false)}
+            onCompleted={() => {
+              markStepComplete("quiz");
+              setQuizResultVisible(true);
+            }}
+          />
         )}
         {activeStep === "quiz" && !quiz && (
           <div className="text-[13px] text-neutral-500">No quiz is available for this module yet.</div>
         )}
 
         {/* Bottom nav */}
-        <div className="flex items-center justify-between mt-[var(--space-6)] pt-[var(--space-4)] border-t border-divider">
-          <Button variant="secondary" onClick={goPrevStep} disabled={stepIndex === 0}>
-            Previous
-          </Button>
-          {stepIndex < steps.length - 1 ? (
-            <Button onClick={goNextStep} disabled={isCurrentStepBlocking}>
-              Next
+        <div className="flex flex-col items-end gap-2 mt-[var(--space-6)] pt-[var(--space-4)] border-t border-divider">
+          <div className="w-full flex items-center justify-between">
+            <Button variant="secondary" onClick={goPrevStep} disabled={stepIndex === 0}>
+              Previous
             </Button>
-          ) : isLastLectureInProgramme ? (
-            <Tag variant="success">Programme complete — nice work</Tag>
-          ) : nextLectureId ? (
-            <Link href={`/learn/${enrolmentId}/${nextLectureId}`} className="inline-flex">
-              <Button>Next lecture →</Button>
-            </Link>
-          ) : (
-            <LockIcon width={14} height={14} className="text-neutral-400" />
-          )}
+            {stepIndex < steps.length - 1 ? (
+              <Button onClick={goNextStep} disabled={isCurrentStepBlocking}>
+                Next
+              </Button>
+            ) : isLastLectureInProgramme ? (
+              readyToFinish ? (
+                <Button onClick={handleCompleteProgramme} disabled={completingProgramme}>
+                  {completingProgramme ? "Completing…" : "Complete Programme"}
+                </Button>
+              ) : null
+            ) : readyToFinish && steps.includes("quiz") ? (
+              // Last lecture of a non-final module — the quiz result stays
+              // on screen until the candidate chooses to move on, rather
+              // than jumping straight into the next module's first lecture.
+              <Link href={`/portal/programme?programme=${data.programme.code}`} className="inline-flex">
+                <Button>Back to programme →</Button>
+              </Link>
+            ) : readyToFinish && nextLectureId ? (
+              <Link href={`/learn/${enrolmentId}/${nextLectureId}`} className="inline-flex">
+                <Button>Complete Lecture →</Button>
+              </Link>
+            ) : readyToFinish ? (
+              <LockIcon width={14} height={14} className="text-neutral-400" />
+            ) : null}
+          </div>
+          {completeError && <div className="text-[12px] text-[#b91c1c]">{completeError}</div>}
         </div>
       </main>
+
+      <Dialog
+        open={!!completionModal}
+        onClose={() => setCompletionModal(null)}
+        title="🎉 Programme complete!"
+        actions={
+          completionModal?.certificateNumber ? (
+            <Link href={`/portal/credentials/${completionModal.certificateNumber}`} className="inline-flex">
+              <Button>View your certificate</Button>
+            </Link>
+          ) : (
+            <Link href="/portal/credentials" className="inline-flex">
+              <Button variant="secondary">Go to Credentials</Button>
+            </Link>
+          )
+        }
+      >
+        {completionModal?.certificateNumber ? (
+          <p>
+            Congratulations — you passed <strong>{data.programme.title}</strong>. Your certificate is ready to view
+            and download.
+          </p>
+        ) : data.hasExam ? (
+          <p>
+            Nice work finishing every lecture in <strong>{data.programme.title}</strong>. Your final result depends
+            on your examination — we&rsquo;ll notify you the moment your certificate is ready under Credentials.
+          </p>
+        ) : (
+          <p>
+            You&rsquo;ve finished every lecture in <strong>{data.programme.title}</strong>, but at least one module
+            quiz hasn&rsquo;t been passed yet. Retake it from the module and your certificate will be issued the
+            moment you pass.
+          </p>
+        )}
+      </Dialog>
     </div>
   );
 }
