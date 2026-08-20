@@ -18,6 +18,8 @@ import {
   reorderSlides,
   deleteSlide,
   upsertQuiz,
+  setLectureStatus,
+  setQuizStatus,
 } from "@/app/actions/programme-content";
 import { setProgrammeStatus } from "@/app/actions/programme";
 import { finaliseUpload } from "@/app/actions/uploads";
@@ -25,6 +27,8 @@ import { formatNaira, statusLabel } from "@/lib/format";
 
 // ── Types — a plain mirror of getProgrammeContent()'s shape, kept free of
 // server-only Prisma-client imports so this file stays a clean client component. ──
+
+type ContentStatus = "DRAFT" | "PUBLISHED" | "ARCHIVED";
 
 interface AssetRef {
   id: string;
@@ -45,6 +49,7 @@ interface LectureData {
   id: string;
   orderIndex: number;
   title: string;
+  status: ContentStatus;
   mediaKind: "SLIDES" | "VIDEO";
   videoUrl: string | null;
   narrationMode: "NONE" | "PER_SLIDE" | "FULL_LECTURE";
@@ -74,6 +79,7 @@ interface QuizQuestionData {
 }
 interface QuizData {
   id: string;
+  status: ContentStatus;
   passMarkPercent: number;
   questions: QuizQuestionData[];
 }
@@ -116,6 +122,38 @@ function computeDuration(lecture: LectureData): { seconds: number | null; label:
 }
 function fmt(s: number) {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+}
+
+const contentStatusLabel: Record<ContentStatus, string> = { DRAFT: "Draft", PUBLISHED: "Published", ARCHIVED: "Archived" };
+
+/** A compact select doubling as the status badge — used for both lectures and the module quiz. */
+function ContentStatusSelect({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: ContentStatus;
+  onChange: (status: ContentStatus) => void;
+  disabled: boolean;
+}) {
+  return (
+    <select
+      value={value}
+      disabled={disabled}
+      onClick={(e) => e.stopPropagation()}
+      onChange={(e) => {
+        e.stopPropagation();
+        onChange(e.target.value as ContentStatus);
+      }}
+      className="h-6 flex-none rounded border border-neutral-300 bg-bg px-1 text-[10.5px]"
+    >
+      {(Object.keys(contentStatusLabel) as ContentStatus[]).map((s) => (
+        <option key={s} value={s}>
+          {contentStatusLabel[s]}
+        </option>
+      ))}
+    </select>
+  );
 }
 
 async function uploadFile(file: File, kind: "audio" | "video" | "image" | "document") {
@@ -164,6 +202,26 @@ export function ProgrammeContentEditor({ programme }: { programme: ProgrammeData
     try {
       const lecture = await addLecture(moduleId, { title: "Untitled lecture", mediaKind: "SLIDES" });
       setSelectedLectureId(lecture.id);
+      refresh();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleSetLectureStatus(lectureId: string, status: ContentStatus) {
+    setBusy(true);
+    try {
+      await setLectureStatus(lectureId, status);
+      refresh();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleSetQuizStatus(quizId: string, status: ContentStatus) {
+    setBusy(true);
+    try {
+      await setQuizStatus(quizId, status);
       refresh();
     } finally {
       setBusy(false);
@@ -238,6 +296,13 @@ export function ProgrammeContentEditor({ programme }: { programme: ProgrammeData
           {programme.status !== "ARCHIVED" && (
             <Button variant="secondary" disabled={busy} onClick={() => handleSetStatus("ARCHIVED")}>
               Archive
+            </Button>
+          )}
+          {programme.status === "ARCHIVED" && (
+            // Back to DRAFT, not straight to ACTIVE — re-publishing still has
+            // to pass the publish checks below, same as any other draft.
+            <Button disabled={busy} onClick={() => handleSetStatus("DRAFT")}>
+              Unarchive
             </Button>
           )}
           {programme.status === "DRAFT" && (
@@ -318,6 +383,11 @@ export function ProgrammeContentEditor({ programme }: { programme: ProgrammeData
                           >
                             <span className="w-5 flex-none text-[11.5px] text-neutral-500">{li + 1}.</span>
                             <span className="flex-1 text-[13px]">{lec.title}</span>
+                            <ContentStatusSelect
+                              value={lec.status}
+                              disabled={busy}
+                              onChange={(status) => handleSetLectureStatus(lec.id, status)}
+                            />
                             <span className="flex flex-none gap-1">
                               <button
                                 onClick={(e) => {
@@ -345,12 +415,21 @@ export function ProgrammeContentEditor({ programme }: { programme: ProgrammeData
                       </Button>
                     </div>
 
-                    <button
-                      onClick={() => setQuizModuleId(quizModuleId === mod.id ? null : mod.id)}
-                      className="self-start text-xs font-medium text-accent"
-                    >
-                      Module quiz ({mod.quiz?.questions.length ?? 0} questions) {quizModuleId === mod.id ? "▾" : "▸"}
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setQuizModuleId(quizModuleId === mod.id ? null : mod.id)}
+                        className="self-start text-xs font-medium text-accent"
+                      >
+                        Module quiz ({mod.quiz?.questions.length ?? 0} questions) {quizModuleId === mod.id ? "▾" : "▸"}
+                      </button>
+                      {mod.quiz && (
+                        <ContentStatusSelect
+                          value={mod.quiz.status}
+                          disabled={busy}
+                          onChange={(status) => handleSetQuizStatus(mod.quiz!.id, status)}
+                        />
+                      )}
+                    </div>
                     {quizModuleId === mod.id && <ModuleQuizEditor mod={mod} onSaved={refresh} />}
                   </div>
                 )}

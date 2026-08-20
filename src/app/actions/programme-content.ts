@@ -1,8 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { Permission } from "@/generated/prisma/client";
+import { Permission, ContentStatus } from "@/generated/prisma/client";
 import { requireStaffPermission } from "@/lib/staff-auth";
 import { recordAuditEvent } from "@/lib/audit";
 import { QuizValidationError } from "@/lib/programme-errors";
@@ -15,6 +16,30 @@ import {
   upsertQuizSchema,
   type NarrationConfigInput,
 } from "@/lib/validation/programme";
+
+/**
+ * upsertQuizSchema.parse() throws a raw ZodError whose .message is a JSON
+ * array of issues — fine for a safeParse+fieldErrors form, useless as a
+ * banner string (the editor just renders e.message verbatim). Turns the
+ * first issue's path back into the same "Question N, option M" language
+ * the editor's UI uses, so a candidate-invisible authoring mistake reads
+ * like one.
+ */
+function describeQuizIssue(error: z.ZodError): string {
+  const issue = error.issues[0];
+  if (!issue) return "Check the quiz for missing fields.";
+  const [root, qIndex, field, oIndex] = issue.path;
+  if (root === "questions" && typeof qIndex === "number") {
+    const qLabel = `Question ${qIndex + 1}`;
+    if (field === "options" && typeof oIndex === "number") {
+      return `${qLabel}, option ${oIndex + 1}: ${issue.message}`;
+    }
+    if (field === "options") return `${qLabel}: ${issue.message}`;
+    if (field === "prompt") return `${qLabel}: prompt is required.`;
+    return `${qLabel}: ${issue.message}`;
+  }
+  return issue.message;
+}
 
 async function revalidateContent(programmeId: string) {
   revalidatePath(`/programmes/${programmeId}/content`);
@@ -137,6 +162,33 @@ export async function reorderLectures(moduleId: string, orderedLectureIds: strin
     description: `Reordered ${orderedLectureIds.length} lectures in "${mod.title}"`,
   });
   await revalidateContent(mod.programmeId);
+}
+
+/**
+ * DRAFT/PUBLISHED/ARCHIVED — never a hard delete. "Removing" a lecture is
+ * setting it ARCHIVED: it drops out of the candidate-facing module tree
+ * (loadModuleTree in player-reads.ts only loads PUBLISHED lectures) but
+ * the row, its slides, and any candidate's LectureProgress against it stay
+ * in place — a candidate who already completed it simply stops seeing it
+ * going forward, and a certificate already issued reads from Marks/
+ * Certificate records, never from the live Lecture table, so it can't be
+ * affected by this either way.
+ */
+export async function setLectureStatus(lectureId: string, status: ContentStatus) {
+  const staff = await requireStaffPermission(Permission.MANAGE_PROGRAMMES);
+
+  const updated = await prisma.lecture.update({ where: { id: lectureId }, data: { status } });
+  const mod = await prisma.module.findUniqueOrThrow({ where: { id: updated.moduleId } });
+
+  await recordAuditEvent(prisma, {
+    actorStaffId: staff.id,
+    subjectType: "programme",
+    subjectId: mod.programmeId,
+    action: "programme.lecture_status_changed",
+    description: `Changed lecture "${updated.title}" status to ${status}`,
+  });
+  await revalidateContent(mod.programmeId);
+  return updated;
 }
 
 /**
@@ -271,7 +323,9 @@ export async function deleteSlide(slideId: string) {
 /** Replace-all semantics — validates exactly one correct option per question (rule 8) before writing anything. */
 export async function upsertQuiz(moduleId: string, input: unknown) {
   const staff = await requireStaffPermission(Permission.MANAGE_PROGRAMMES);
-  const data = upsertQuizSchema.parse(input);
+  const parsed = upsertQuizSchema.safeParse(input);
+  if (!parsed.success) throw new QuizValidationError(describeQuizIssue(parsed.error));
+  const data = parsed.data;
 
   const violation = validateOneCorrectOptionPerQuestion(data.questions);
   if (violation) throw new QuizValidationError(violation);
@@ -312,4 +366,22 @@ export async function upsertQuiz(moduleId: string, input: unknown) {
   });
   await revalidateContent(mod.programmeId);
   return quiz;
+}
+
+/** Same DRAFT/PUBLISHED/ARCHIVED soft-delete model as setLectureStatus — see that function's comment. */
+export async function setQuizStatus(quizId: string, status: ContentStatus) {
+  const staff = await requireStaffPermission(Permission.MANAGE_PROGRAMMES);
+
+  const updated = await prisma.quiz.update({ where: { id: quizId }, data: { status } });
+  const mod = await prisma.module.findUniqueOrThrow({ where: { id: updated.moduleId } });
+
+  await recordAuditEvent(prisma, {
+    actorStaffId: staff.id,
+    subjectType: "programme",
+    subjectId: mod.programmeId,
+    action: "programme.quiz_status_changed",
+    description: `Changed the quiz status for "${mod.title}" to ${status}`,
+  });
+  await revalidateContent(mod.programmeId);
+  return updated;
 }

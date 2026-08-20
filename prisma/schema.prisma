@@ -521,6 +521,18 @@ enum LectureMediaKind {
   VIDEO
 }
 
+// DRAFT — hidden from candidates while authoring. PUBLISHED — visible and
+// accessible. ARCHIVED — the soft-delete state (rule: never hard-delete a
+// Lecture/Quiz once candidates may have progress against it); hidden from
+// candidates same as DRAFT, but distinct so admins can tell "never
+// released" apart from "removed after release". Existing rows default to
+// PUBLISHED so this migration doesn't hide already-live content.
+enum ContentStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
 // NONE — no audio.
 // PER_SLIDE — each slide carries its own narrationAssetId; narrationAutoAdvance
 //   decides whether finishing it advances the slide.
@@ -539,6 +551,7 @@ model Lecture {
 
   orderIndex Int
   title      String
+  status     ContentStatus @default(PUBLISHED)
 
   mediaKind LectureMediaKind
   videoUrl  String? // video only — a pasted hosted URL; nothing to probe, duration shows "pending"
@@ -652,6 +665,8 @@ model Quiz {
   id       String @id @default(uuid())
   moduleId String @unique
   module   Module @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+
+  status ContentStatus @default(PUBLISHED)
 
   passMarkPercent Int @default(60)
 
