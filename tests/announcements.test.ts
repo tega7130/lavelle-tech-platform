@@ -154,7 +154,12 @@ describe("withdrawal timing (rule 8: only before send)", () => {
       staffId: staff.id,
       title: "Already sent",
       body: "Body",
-      audienceFilter: { enrolmentStatus: "ALL" },
+      // Scoped to this test's own programme — otherwise "ALL" would send a
+      // real in-app notification to every candidate in the shared dev
+      // database (confirmed: this leaked 1,692 undeletable Notification
+      // rows before scoping was added, since Notification carries no FK
+      // back to the Announcement that created it).
+      audienceFilter: { enrolmentStatus: "ALL", programmeId: programme.id },
       channels: ["IN_APP"],
     });
     await sendAnnouncement(announcement.id, staff.id);
