@@ -6,6 +6,25 @@ import { buttonClassName } from "@/components/ui/button";
 import { cn } from "@/lib/cn";
 import { getListingDetail, getPublishedListings } from "@/lib/website-reads";
 
+function ProgrammeVideo({ video, title }: { video: { embedUrl: string | null; directVideoUrl: string | null }; title: string }) {
+  return (
+    <div className="mt-8 aspect-video max-w-[720px] overflow-hidden rounded-xl border border-divider bg-[#0b1322]">
+      {video.embedUrl ? (
+        <iframe
+          src={video.embedUrl}
+          title={`${title} — preview`}
+          className="h-full w-full"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+          allowFullScreen
+        />
+      ) : (
+        // eslint-disable-next-line jsx-a11y/media-has-caption
+        <video src={video.directVideoUrl!} controls className="h-full w-full" />
+      )}
+    </div>
+  );
+}
+
 // Statically pre-rendered for every published listing (rule 6) — the
 // highest-traffic, lowest-personalisation surface in the system.
 // revalidatePath in publishListing/unpublishListing keeps this current
@@ -42,6 +61,8 @@ export default async function ProgrammeDetailPage({ params }: { params: Promise<
               </div>
               <h1 className="font-heading font-semibold text-[38px] leading-[1.12] mt-4 max-w-[22ch] tracking-[-0.022em]">{detail.title}</h1>
               <p className="text-[16px] leading-[1.7] text-neutral-700 mt-[18px] max-w-[60ch]">{detail.pitch}</p>
+
+              {detail.video && <ProgrammeVideo video={detail.video} title={detail.title} />}
 
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-8">
                 {detail.facts.map((f) => (

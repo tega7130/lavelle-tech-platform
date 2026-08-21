@@ -22,6 +22,14 @@ export interface UpsertListingInput {
   includes?: string[];
   assessmentNote?: string | null;
   paymentNote?: string | null;
+  // The preview video: useCoverVideo=true reuses Programme.coverVideoUrl/
+  // coverVideoAsset (resolved on read, see website-reads.ts), false uses
+  // videoUrl/videoAssetId below as a website-only override. Exactly one
+  // of videoUrl/videoAssetId should be set when overriding, same
+  // either/or shape as Programme.coverVideoUrl/coverVideoAssetId.
+  useCoverVideo?: boolean;
+  videoUrl?: string | null;
+  videoAssetId?: string | null;
 }
 
 export async function upsertListing(programmeId: string, input: UpsertListingInput) {

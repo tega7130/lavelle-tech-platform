@@ -4,14 +4,28 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardKicker } from "@/components/ui/card";
 import { Tag } from "@/components/ui/tag";
-import { Button } from "@/components/ui/button";
+import { Button, buttonClassName } from "@/components/ui/button";
 import { Textarea, Field, Label, Input } from "@/components/ui/field";
 import { Dialog } from "@/components/ui/dialog";
 import { formatNaira, tierLabel } from "@/lib/format";
 import { upsertListingAction, publishListingAction, unpublishListingAction } from "@/app/actions/website-admin";
+import { finaliseUpload } from "@/app/actions/uploads";
 import type { getListingForEditor } from "@/lib/website-admin";
 
 type ListingData = Awaited<ReturnType<typeof getListingForEditor>>;
+
+async function uploadVideo(file: File) {
+  const signRes = await fetch("/api/uploads/sign", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ kind: "video", mimeType: file.type, bytes: file.size }),
+  });
+  if (!signRes.ok) throw new Error("Could not get an upload URL.");
+  const { storageKey, uploadUrl } = await signRes.json();
+  const putRes = await fetch(uploadUrl, { method: "PUT", body: file });
+  if (!putRes.ok) throw new Error("Upload failed.");
+  return finaliseUpload({ storageKey, kind: "video", mimeType: file.type, originalFilename: file.name });
+}
 
 export function WebsiteListingEditor({ listing: programme }: { listing: ListingData }) {
   const router = useRouter();
@@ -21,6 +35,12 @@ export function WebsiteListingEditor({ listing: programme }: { listing: ListingD
   const [summary, setSummary] = React.useState(existing?.summary ?? programme.summary);
   const [outcomes, setOutcomes] = React.useState<string[]>((existing?.outcomes as string[] | null) ?? []);
   const [includes, setIncludes] = React.useState<string[]>((existing?.includes as string[] | null) ?? []);
+  const [useCoverVideo, setUseCoverVideo] = React.useState(existing?.useCoverVideo ?? true);
+  const [videoMode, setVideoMode] = React.useState<"url" | "upload">(existing?.videoAsset ? "upload" : "url");
+  const [videoUrl, setVideoUrl] = React.useState(existing?.videoUrl ?? "");
+  const [videoAsset, setVideoAsset] = React.useState(existing?.videoAsset ?? null);
+  const [videoUploading, setVideoUploading] = React.useState(false);
+  const [videoError, setVideoError] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [notice, setNotice] = React.useState<string | null>(null);
@@ -29,6 +49,19 @@ export function WebsiteListingEditor({ listing: programme }: { listing: ListingD
 
   const isPublished = existing?.isPublished ?? false;
   const totalLectures = programme.modules.reduce((sum, m) => sum + m.lectures.length, 0);
+
+  async function handleVideoUpload(file: File) {
+    setVideoError(null);
+    setVideoUploading(true);
+    try {
+      const asset = await uploadVideo(file);
+      setVideoAsset({ id: asset.id, originalFilename: asset.originalFilename });
+    } catch (err) {
+      setVideoError(err instanceof Error ? err.message : "Upload failed.");
+    } finally {
+      setVideoUploading(false);
+    }
+  }
 
   async function save() {
     setBusy(true);
@@ -40,6 +73,13 @@ export function WebsiteListingEditor({ listing: programme }: { listing: ListingD
         summary: useDefaults ? null : summary,
         outcomes: useDefaults ? undefined : outcomes,
         includes: useDefaults ? undefined : includes,
+        useCoverVideo,
+        // Mutually exclusive, same rule as Programme.coverVideoUrl/
+        // coverVideoAssetId (programme.ts's own upsert): whichever mode
+        // is active wins, the other is cleared so a stale value can't
+        // linger and get picked up if the mode is switched back later.
+        videoUrl: useCoverVideo ? null : videoMode === "url" ? videoUrl : null,
+        videoAssetId: useCoverVideo ? null : videoMode === "upload" ? (videoAsset?.id ?? null) : null,
       });
       setNotice("Listing updated. The public page reflects these changes immediately.");
       router.refresh();
@@ -171,6 +211,105 @@ export function WebsiteListingEditor({ listing: programme }: { listing: ListingD
             <Label>Programme fee</Label>
             <Input value={formatNaira(programme.feeMinor)} disabled />
           </Field>
+
+          <div>
+            <Label>Preview video</Label>
+            <div className="text-neutral-600 text-[12px] leading-[1.55] mb-3">
+              Shown to visitors on the public page, before they register. Optional.
+            </div>
+
+            <div className="flex border border-neutral-300 rounded-md overflow-hidden w-full">
+              {[
+                { value: true, label: "Use the programme's cover video" },
+                { value: false, label: "Different video for the website" },
+              ].map((o, i) => (
+                <label
+                  key={o.label}
+                  className={`flex-1 flex items-center justify-center gap-1.5 px-3.5 py-2 text-[13px] font-medium cursor-pointer ${i > 0 ? "border-l border-neutral-300" : ""} ${useCoverVideo === o.value ? "text-accent bg-accent-100" : "hover:bg-neutral-100"}`}
+                >
+                  <input
+                    type="radio"
+                    name="video-source"
+                    className="sr-only"
+                    checked={useCoverVideo === o.value}
+                    onChange={() => setUseCoverVideo(o.value)}
+                  />
+                  {o.label}
+                </label>
+              ))}
+            </div>
+
+            <div className="mt-3">
+              {useCoverVideo ? (
+                programme.coverVideoUrl || programme.coverVideoAsset ? (
+                  <div className="text-[12.5px] text-neutral-700 px-3 py-2.5 rounded-md bg-neutral-100 border border-divider">
+                    {programme.coverVideoAsset ? `Uploaded file: ${programme.coverVideoAsset.originalFilename}` : programme.coverVideoUrl}
+                  </div>
+                ) : (
+                  <div className="text-[12.5px] text-neutral-600 px-3 py-2.5 rounded-md bg-neutral-100 border border-divider">
+                    This programme has no cover video yet. Add one from the programme&rsquo;s edit page, or choose
+                    &ldquo;Different video for the website&rdquo; above.
+                  </div>
+                )
+              ) : (
+                <>
+                  <div className="flex gap-1.5 rounded-md bg-neutral-100 p-[3px] w-fit mb-3">
+                    <button
+                      type="button"
+                      onClick={() => setVideoMode("url")}
+                      className="h-8 rounded-[6px] px-3 text-[12.5px] font-medium"
+                      style={{
+                        background: videoMode === "url" ? "var(--color-accent-100)" : "transparent",
+                        color: videoMode === "url" ? "var(--color-accent)" : "var(--color-neutral-700)",
+                      }}
+                    >
+                      Link (e.g. YouTube)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setVideoMode("upload")}
+                      className="h-8 rounded-[6px] px-3 text-[12.5px] font-medium"
+                      style={{
+                        background: videoMode === "upload" ? "var(--color-accent-100)" : "transparent",
+                        color: videoMode === "upload" ? "var(--color-accent)" : "var(--color-neutral-700)",
+                      }}
+                    >
+                      Upload
+                    </button>
+                  </div>
+
+                  {videoMode === "url" ? (
+                    <Input
+                      placeholder="https://www.youtube.com/watch?v=…"
+                      value={videoUrl}
+                      onChange={(e) => setVideoUrl(e.target.value)}
+                    />
+                  ) : (
+                    <div className="flex items-center gap-3">
+                      <label className="cursor-pointer">
+                        <span className={buttonClassName("secondary")}>
+                          {videoUploading ? "Uploading…" : "Choose video file"}
+                        </span>
+                        <input
+                          type="file"
+                          accept="video/mp4,video/webm"
+                          className="hidden"
+                          disabled={videoUploading}
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            e.target.value = "";
+                            if (file) handleVideoUpload(file);
+                          }}
+                        />
+                      </label>
+                      {videoAsset && <div className="text-[12.5px] text-neutral-600">{videoAsset.originalFilename}</div>}
+                    </div>
+                  )}
+                  {videoError && <div className="mt-1.5 text-[11.5px] text-[#c0392b]">{videoError}</div>}
+                </>
+              )}
+            </div>
+          </div>
         </div>
 
         <div className="flex justify-end mt-5">

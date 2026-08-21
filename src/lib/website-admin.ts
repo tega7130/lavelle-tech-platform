@@ -50,7 +50,8 @@ export async function getListingForEditor(programmeId: string) {
   const programme = await prisma.programme.findUniqueOrThrow({
     where: { id: programmeId },
     include: {
-      listing: true,
+      listing: { include: { videoAsset: { select: { id: true, originalFilename: true } } } },
+      coverVideoAsset: { select: { id: true, originalFilename: true } },
       modules: { orderBy: { orderIndex: "asc" }, include: { lectures: { orderBy: { orderIndex: "asc" }, select: { title: true } } } },
       assessmentWeightings: true,
     },

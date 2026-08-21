@@ -308,8 +308,8 @@ model Staff {
   suspendedAt        DateTime?
   suspendedReason    String?
   suspendedByStaffId String?
-  suspendedByStaff   Staff?     @relation("StaffSuspendedBy", fields: [suspendedByStaffId], references: [id])
-  suspendedStaff     Staff[]    @relation("StaffSuspendedBy")
+  suspendedByStaff   Staff?    @relation("StaffSuspendedBy", fields: [suspendedByStaffId], references: [id])
+  suspendedStaff     Staff[]   @relation("StaffSuspendedBy")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -338,16 +338,16 @@ model Staff {
   publishedListings       ProgrammeListing[]    @relation("ListingPublishedBy")
   enquiriesHandled        ContactEnquiry[]      @relation("EnquiryHandledBy")
 
-  sessions           Session[]              @relation("StaffSessions")
-  notifications      Notification[]         @relation("StaffNotifications")
-  invitationTokens   StaffInvitationToken[] @relation("StaffInvitationTokenHolder")
-  sentInvitations    StaffInvitationToken[] @relation("StaffInvitationTokenSender")
-  assignedByRequests SupportRequest[]       @relation("SupportRequestAssignedBy")
-  resolvedRequests   SupportRequest[]       @relation("SupportRequestResolvedBy")
-  reviewedSittings   Sitting[]              @relation("SittingReviewedBy")
-  moderatedReviews   Review[]               @relation("ReviewModeratedBy")
-  examAssignments      ExamStaffAssignment[] @relation("ExamStaffAssignmentHolder")
-  examAssignmentsGiven ExamStaffAssignment[] @relation("ExamStaffAssignmentGrantedBy")
+  sessions             Session[]              @relation("StaffSessions")
+  notifications        Notification[]         @relation("StaffNotifications")
+  invitationTokens     StaffInvitationToken[] @relation("StaffInvitationTokenHolder")
+  sentInvitations      StaffInvitationToken[] @relation("StaffInvitationTokenSender")
+  assignedByRequests   SupportRequest[]       @relation("SupportRequestAssignedBy")
+  resolvedRequests     SupportRequest[]       @relation("SupportRequestResolvedBy")
+  reviewedSittings     Sitting[]              @relation("SittingReviewedBy")
+  moderatedReviews     Review[]               @relation("ReviewModeratedBy")
+  examAssignments      ExamStaffAssignment[]  @relation("ExamStaffAssignmentHolder")
+  examAssignmentsGiven ExamStaffAssignment[]  @relation("ExamStaffAssignmentGrantedBy")
 
   @@index([role])
   @@index([status])
@@ -654,26 +654,27 @@ model MediaAsset {
   // mirroring Session/Notification) — this row was uploaded either by
   // staff (programme/finance/certificate content) or by a candidate
   // (their own profile photo), never both, never neither.
-  uploadedByStaffId String?
-  uploadedBy        Staff?     @relation(fields: [uploadedByStaffId], references: [id])
-  uploadedByCandidateId String? @db.Uuid
+  uploadedByStaffId     String?
+  uploadedBy            Staff?     @relation(fields: [uploadedByStaffId], references: [id])
+  uploadedByCandidateId String?    @db.Uuid
   uploadedByCandidate   Candidate? @relation(fields: [uploadedByCandidateId], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now())
 
   // Arrays, not single relations — not @unique on the FK side above, so a
   // MediaAsset can be shared by more than one lecture/slide.
-  lectureFullNarrations Lecture[]             @relation("LectureFullNarration")
-  lectureVideos         Lecture[]             @relation("LectureVideo")
-  slideImages           Slide[]               @relation("SlideImage")
-  slideNarrations       Slide[]               @relation("SlideNarration")
-  receiptForPayments    Payment[]             @relation("PaymentReceipt")
-  idCardPhotos          IdCard[]              @relation("IdCardPhoto")
-  draftingAttachments   DraftingSubmission[]  @relation("DraftingAttachment")
-  certificatePdf        Certificate?          @relation("CertificatePdf")
-  certificateArtworks   CertificateTemplate[] @relation("CertificateArtwork")
-  listingHeroes         ProgrammeListing[]
-  coverVideoForProgrammes Programme[] @relation("ProgrammeCoverVideo")
+  lectureFullNarrations   Lecture[]             @relation("LectureFullNarration")
+  lectureVideos           Lecture[]             @relation("LectureVideo")
+  slideImages             Slide[]               @relation("SlideImage")
+  slideNarrations         Slide[]               @relation("SlideNarration")
+  receiptForPayments      Payment[]             @relation("PaymentReceipt")
+  idCardPhotos            IdCard[]              @relation("IdCardPhoto")
+  draftingAttachments     DraftingSubmission[]  @relation("DraftingAttachment")
+  certificatePdf          Certificate?          @relation("CertificatePdf")
+  certificateArtworks     CertificateTemplate[] @relation("CertificateArtwork")
+  listingHeroes           ProgrammeListing[]
+  listingVideos           ProgrammeListing[]    @relation("ListingVideo")
+  coverVideoForProgrammes Programme[]           @relation("ProgrammeCoverVideo")
 }
 
 // Module-close quizzes — auto-marked and formative. NOT the examination
@@ -1398,11 +1399,11 @@ model Exam {
   // candidate exam-detail page — never hard-coded on that side. All
   // optional so a DRAFT exam can exist before anyone writes copy for it;
   // publishExam requires them filled in before PUBLISHED.
-  description       String? // "About this examination"
-  instructions      String? // candidate exam-day instructions
-  examFormat        String? // e.g. "Objective + written"
-  examinationAreas  Json? // "What is examined" — string[]
-  onPassing         Json? // "On passing" — string[]
+  description      String? // "About this examination"
+  instructions     String? // candidate exam-day instructions
+  examFormat       String? // e.g. "Objective + written"
+  examinationAreas Json? // "What is examined" — string[]
+  onPassing        Json? // "On passing" — string[]
 
   publishedAt        DateTime?
   publishedByStaffId String?
@@ -1419,11 +1420,11 @@ model Exam {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  questions     ExamQuestion[]
-  windows       ExamWindow[]
-  registrations ExamRegistration[]
+  questions        ExamQuestion[]
+  windows          ExamWindow[]
+  registrations    ExamRegistration[]
   staffAssignments ExamStaffAssignment[]
-  requirements  ExamRequirement[]
+  requirements     ExamRequirement[]
 }
 
 // Freeform, admin-authored eligibility notes — display-only (rule: no
@@ -2075,6 +2076,17 @@ model ProgrammeListing {
 
   heroAssetId String?
   heroAsset   MediaAsset? @relation(fields: [heroAssetId], references: [id])
+
+  // The public page's preview video. When true, it's the same clip
+  // already recorded for the candidate-facing catalogue
+  // (Programme.coverVideoUrl/coverVideoAsset) — resolved fresh on every
+  // read, same "computed not copied" rule as useDefaults above, so
+  // re-recording the cover video reaches the site with no republish.
+  // When false, videoUrl/videoAsset below is a website-only override.
+  useCoverVideo Boolean     @default(true)
+  videoUrl      String?
+  videoAssetId  String?
+  videoAsset    MediaAsset? @relation("ListingVideo", fields: [videoAssetId], references: [id])
 
   orderIndex Int @default(0)
 

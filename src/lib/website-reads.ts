@@ -1,6 +1,7 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
-import { formatNaira, tierLabel } from "@/lib/format";
+import { formatNaira, tierLabel, youtubeEmbedUrl } from "@/lib/format";
+import { getSignedAssetUrl } from "@/lib/storage";
 
 /**
  * Defaults are computed here, on every read, never copied at publish
@@ -54,16 +55,50 @@ export async function getPublishedListings() {
 }
 
 /**
+ * Resolves the listing's preview video, one level of either/or on top of
+ * Programme.coverVideoUrl/coverVideoAsset's own either/or: useCoverVideo
+ * reuses that clip (resolved here, never copied — a re-recorded cover
+ * video reaches the site with no republish), or the listing's own
+ * videoUrl/videoAsset overrides it for the public page specifically.
+ * A hosted URL always wins the embed check first — an uploaded file is
+ * only used as a direct <video> src when there's no recognizable
+ * YouTube link.
+ */
+function effectiveVideo(
+  listing: {
+    useCoverVideo: boolean;
+    videoUrl: string | null;
+    videoAsset: { storageKey: string } | null;
+  },
+  programme: {
+    coverVideoUrl: string | null;
+    coverVideoAsset: { storageKey: string } | null;
+  }
+) {
+  const url = listing.useCoverVideo ? programme.coverVideoUrl : listing.videoUrl;
+  const asset = listing.useCoverVideo ? programme.coverVideoAsset : listing.videoAsset;
+  if (!url && !asset) return null;
+
+  const embedUrl = url ? youtubeEmbedUrl(url) : null;
+  const directVideoUrl = asset ? getSignedAssetUrl(asset.storageKey) : !embedUrl ? url : null;
+  if (!embedUrl && !directVideoUrl) return null;
+  return { embedUrl, directVideoUrl };
+}
+
+/**
  * The standalone programme page. Titles and structure only — no slide
- * bodies, no narration/video URLs (rule 4: this is the paid product).
- * The syllabus always comes from the live Module/Lecture rows, never an
- * override (rule 3): an out-of-date public syllabus is worse than none.
+ * bodies (rule 4: this is the paid product) — plus an optional preview
+ * video, a deliberate exception: short and explanatory, not the course
+ * itself. The syllabus always comes from the live Module/Lecture rows,
+ * never an override (rule 3): an out-of-date public syllabus is worse
+ * than none.
  */
 export async function getListingDetail(code: string) {
   const programme = await prisma.programme.findUnique({
     where: { code },
     include: {
-      listing: true,
+      listing: { include: { videoAsset: { select: { storageKey: true } } } },
+      coverVideoAsset: { select: { storageKey: true } },
       modules: {
         orderBy: { orderIndex: "asc" },
         include: {
@@ -76,6 +111,7 @@ export async function getListingDetail(code: string) {
   if (!programme || !programme.listing || !programme.listing.isPublished) return null;
 
   const content = effectiveContent(programme.listing, programme);
+  const video = effectiveVideo(programme.listing, programme);
   const totalLectures = programme.modules.reduce((sum, m) => sum + m.lectures.length, 0);
 
   const ASSESSMENT_LABEL: Record<string, string> = { QUIZ: "Module quizzes", DRAFTING: "Drafting exercises", EXAMINATION: "Certifying examination" };
@@ -94,6 +130,7 @@ export async function getListingDetail(code: string) {
     isArchived: programme.status === "ARCHIVED",
     title: content.headline,
     pitch: content.summary,
+    video,
     fee: formatNaira(programme.feeMinor),
     feeNote: content.paymentNote,
     facts: [
