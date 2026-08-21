@@ -12,6 +12,7 @@ import { LectureStateDot } from "@/components/portal/lecture-state-dot";
 import { QuizPlayer } from "@/components/portal/quiz-player";
 import { ChevronLeftIcon, LockIcon } from "@/components/icons";
 import { computePercent } from "@/lib/progress";
+import { youtubeEmbedUrl } from "@/lib/format";
 import type { LectureStep } from "@/lib/lecture-steps";
 import { completeStepAction, submitDraftingAction, completeProgrammeAction } from "@/app/actions/player";
 import type { getLecturePlayer } from "@/lib/player-reads";
@@ -59,6 +60,11 @@ export function LecturePlayer({ enrolmentId, data }: { enrolmentId: string; data
   const [narrationPlayed, setNarrationPlayed] = React.useState(false);
 
   const currentSlide = lecture.slides[slideIndex];
+  // A pasted link (YouTube etc.) plays as an iframe embed, not a raw
+  // <video> src — a YouTube watch/embed URL has no video bytes to stream.
+  // Uploaded assets never resolve here (embedUrl stays null) since
+  // lecture.videoUrl is only ever the signed asset URL or a pasted link.
+  const embedUrl = lecture.videoUrl ? youtubeEmbedUrl(lecture.videoUrl) : null;
 
   // ── Position autosave — throttled to ~10s and on unload, never per interaction ──
   const positionRef = React.useRef({ slideIndex: resumePosition.slideIndex, mediaPositionSeconds: resumePosition.mediaPositionSeconds });
@@ -232,27 +238,51 @@ export function LecturePlayer({ enrolmentId, data }: { enrolmentId: string; data
           <div>
             {lecture.mediaKind === "VIDEO" ? (
               <div className="relative rounded-md overflow-hidden bg-black">
-                {mediaBuffering && (
-                  <div className="absolute inset-0 flex flex-col items-center justify-center text-white bg-black/70 text-[13px] z-10">
-                    <div>Preparing {mod.title}, {lecture.title}</div>
-                    <div className="text-white/60 text-[11px] mt-1">Video is loading. Your progress is saved.</div>
-                  </div>
+                {embedUrl ? (
+                  <iframe
+                    src={embedUrl}
+                    title={`${mod.title} — ${lecture.title}`}
+                    className="w-full aspect-video"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                  />
+                ) : (
+                  <>
+                    {mediaBuffering && (
+                      <div className="absolute inset-0 flex flex-col items-center justify-center text-white bg-black/70 text-[13px] z-10">
+                        <div>Preparing {mod.title}, {lecture.title}</div>
+                        <div className="text-white/60 text-[11px] mt-1">Video is loading. Your progress is saved.</div>
+                      </div>
+                    )}
+                    <video
+                      ref={videoRef}
+                      src={lecture.videoUrl ?? undefined}
+                      controls
+                      className="w-full aspect-video"
+                      onCanPlay={() => setMediaBuffering(false)}
+                      onWaiting={() => setMediaBuffering(true)}
+                      onPlaying={() => setMediaBuffering(false)}
+                      onTimeUpdate={(e) => {
+                        positionRef.current.mediaPositionSeconds = Math.floor(e.currentTarget.currentTime);
+                      }}
+                      onEnded={() => markStepComplete("content")}
+                    />
+                  </>
                 )}
-                <video
-                  ref={videoRef}
-                  src={lecture.videoUrl ?? undefined}
-                  controls
-                  className="w-full aspect-video"
-                  onCanPlay={() => setMediaBuffering(false)}
-                  onWaiting={() => setMediaBuffering(true)}
-                  onPlaying={() => setMediaBuffering(false)}
-                  onTimeUpdate={(e) => {
-                    positionRef.current.mediaPositionSeconds = Math.floor(e.currentTarget.currentTime);
-                  }}
-                  onEnded={() => markStepComplete("content")}
-                />
               </div>
-            ) : (
+            ) : null}
+            {lecture.mediaKind === "VIDEO" && embedUrl && (
+              // A YouTube embed can't report "ended" back to us (no player
+              // API wired up here) — the candidate confirms manually,
+              // same manual-complete pattern as the scenario step below.
+              <div className="mt-3 flex items-center gap-4">
+                <div className="flex-1 text-[12px] text-neutral-600">Done watching? Click 'Mark as watched' below, then 'Next' to continue.</div>
+                <Button onClick={() => markStepComplete("content")} disabled={completed.has("content")} className="flex-shrink-0">
+                  {completed.has("content") ? "Marked as watched" : "Mark as watched"}
+                </Button>
+              </div>
+            )}
+            {lecture.mediaKind !== "VIDEO" && (
               <div>
                 {mediaBuffering && currentSlide?.narrationUrl && (
                   <div className="rounded-md p-[var(--space-6)] text-center mb-3" style={{ background: "#0b1020" }}>

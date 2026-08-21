@@ -542,44 +542,169 @@ function MediaTab({
   onSaved: () => void;
 }) {
   const [uploading, setUploading] = React.useState(false);
+  // Default to "url" unless bytes are already uploaded — mirrors the
+  // cover-video toggle in programme-details-form.tsx.
+  const [videoMode, setVideoMode] = React.useState<"url" | "upload">(lecture.videoAsset ? "upload" : "url");
+  const [videoUrl, setVideoUrl] = React.useState(lecture.videoUrl ?? "");
+  const [videoError, setVideoError] = React.useState<string | null>(null);
+  const [mediaKind, setMediaKind] = React.useState(lecture.mediaKind);
+  const [savingKind, setSavingKind] = React.useState(false);
+
+  // The candidate player branches on mediaKind, not on whether a video
+  // happens to be attached — pasting a link or uploading a file with
+  // mediaKind still "SLIDES" saves fine but never shows to a candidate.
+  async function handleMediaKindChange(next: "SLIDES" | "VIDEO") {
+    if (next === mediaKind) return;
+    setSavingKind(true);
+    try {
+      await updateLecture(lecture.id, { mediaKind: next });
+      setMediaKind(next);
+      onSaved();
+    } finally {
+      setSavingKind(false);
+    }
+  }
 
   async function handleVideoUpload(file: File) {
     setUploading(true);
+    setVideoError(null);
     try {
       const asset = await uploadFile(file, "video");
-      await updateLecture(lecture.id, { videoAssetId: asset.id });
+      // videoUrl cleared explicitly — a lecture carries at most one video
+      // source. mediaKind forced to VIDEO — attaching a video is a clear
+      // signal of intent; leaving it on SLIDES would hide it from candidates.
+      await updateLecture(lecture.id, { videoAssetId: asset.id, videoUrl: null, mediaKind: "VIDEO" });
+      setMediaKind("VIDEO");
       onSaved();
+    } catch (e) {
+      setVideoError(e instanceof Error ? e.message : "Upload failed.");
     } finally {
       setUploading(false);
     }
   }
 
+  async function handleSaveVideoUrl() {
+    const trimmed = videoUrl.trim();
+    if (!trimmed || trimmed === lecture.videoUrl) return;
+    setVideoError(null);
+    try {
+      // videoAssetId cleared explicitly — switching to a link drops any
+      // previously uploaded file as this lecture's active video source.
+      // mediaKind forced to VIDEO, same reasoning as handleVideoUpload.
+      await updateLecture(lecture.id, { videoUrl: trimmed, videoAssetId: null, mediaKind: "VIDEO" });
+      setMediaKind("VIDEO");
+      onSaved();
+    } catch {
+      setVideoError("Enter a valid video URL (e.g. a YouTube link).");
+    }
+  }
+
   return (
     <div className="flex flex-col gap-3">
+      <div>
+        <label className="mb-1.5 block text-xs font-medium text-neutral-700">Content type</label>
+        <div className="flex gap-1.5 rounded-[9px] border border-neutral-300 bg-bg p-1 w-fit">
+          <button
+            type="button"
+            onClick={() => handleMediaKindChange("SLIDES")}
+            disabled={savingKind}
+            className="h-7 rounded-[6px] px-2.5 text-[11.5px] font-medium"
+            style={{
+              background: mediaKind === "SLIDES" ? "var(--color-accent-100)" : "transparent",
+              color: mediaKind === "SLIDES" ? "var(--color-accent)" : "var(--color-neutral-700)",
+            }}
+          >
+            Slides
+          </button>
+          <button
+            type="button"
+            onClick={() => handleMediaKindChange("VIDEO")}
+            disabled={savingKind}
+            className="h-7 rounded-[6px] px-2.5 text-[11.5px] font-medium"
+            style={{
+              background: mediaKind === "VIDEO" ? "var(--color-accent-100)" : "transparent",
+              color: mediaKind === "VIDEO" ? "var(--color-accent)" : "var(--color-neutral-700)",
+            }}
+          >
+            Video
+          </button>
+        </div>
+        <div className="mt-1.5 text-[11.5px] text-neutral-600">
+          {mediaKind === "VIDEO"
+            ? "Candidates see the video below as this lecture's content."
+            : "Candidates see the slide deck (Narration tab) as this lecture's content."}
+        </div>
+      </div>
+
+      {mediaKind === "VIDEO" && (
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="mb-1.5 block text-xs font-medium text-neutral-700">Video</label>
-          <div className="flex aspect-video flex-col items-center justify-center gap-1.5 rounded-md border-[1.5px] border-dashed border-neutral-300">
-            {lecture.videoAsset ? (
-              <div className="text-center text-xs text-neutral-600">
-                {lecture.videoAsset.originalFilename}
-                <br />
-                {duration.label}
-              </div>
-            ) : (
-              <div className="text-xs text-neutral-500">MP4 up to 2GB</div>
-            )}
-            <label className="cursor-pointer text-xs font-medium text-accent">
-              {uploading ? "Uploading…" : "Upload video"}
-              <input
-                type="file"
-                accept="video/*"
-                hidden
-                disabled={uploading}
-                onChange={(e) => e.target.files?.[0] && handleVideoUpload(e.target.files[0])}
-              />
-            </label>
+          <div className="mb-2 flex gap-1.5 rounded-[9px] border border-neutral-300 bg-bg p-1 w-fit">
+            <button
+              type="button"
+              onClick={() => setVideoMode("url")}
+              className="h-7 rounded-[6px] px-2.5 text-[11.5px] font-medium"
+              style={{
+                background: videoMode === "url" ? "var(--color-accent-100)" : "transparent",
+                color: videoMode === "url" ? "var(--color-accent)" : "var(--color-neutral-700)",
+              }}
+            >
+              Link (e.g. YouTube)
+            </button>
+            <button
+              type="button"
+              onClick={() => setVideoMode("upload")}
+              className="h-7 rounded-[6px] px-2.5 text-[11.5px] font-medium"
+              style={{
+                background: videoMode === "upload" ? "var(--color-accent-100)" : "transparent",
+                color: videoMode === "upload" ? "var(--color-accent)" : "var(--color-neutral-700)",
+              }}
+            >
+              Upload
+            </button>
           </div>
+
+          {videoMode === "url" ? (
+            <div className="flex flex-col gap-1.5">
+              <div className="flex gap-1.5">
+                <input
+                  type="text"
+                  value={videoUrl}
+                  onChange={(e) => setVideoUrl(e.target.value)}
+                  onBlur={handleSaveVideoUrl}
+                  placeholder="https://www.youtube.com/watch?v=…"
+                  className="h-9 flex-1 rounded-md border border-neutral-300 bg-bg px-2.5 text-xs"
+                />
+              </div>
+              {lecture.videoUrl && !lecture.videoAsset && (
+                <div className="text-[11px] text-neutral-500">Currently: {lecture.videoUrl}</div>
+              )}
+            </div>
+          ) : (
+            <div className="flex aspect-video flex-col items-center justify-center gap-1.5 rounded-md border-[1.5px] border-dashed border-neutral-300">
+              {lecture.videoAsset ? (
+                <div className="text-center text-xs text-neutral-600">
+                  {lecture.videoAsset.originalFilename}
+                  <br />
+                  {duration.label}
+                </div>
+              ) : (
+                <div className="text-xs text-neutral-500">MP4 up to 2GB</div>
+              )}
+              <label className="cursor-pointer text-xs font-medium text-accent">
+                {uploading ? "Uploading…" : "Upload video"}
+                <input
+                  type="file"
+                  accept="video/*"
+                  hidden
+                  disabled={uploading}
+                  onChange={(e) => e.target.files?.[0] && handleVideoUpload(e.target.files[0])}
+                />
+              </label>
+            </div>
+          )}
+          {videoError && <div className="mt-1.5 text-[11px] text-[#c0392b]">{videoError}</div>}
         </div>
         <div>
           <label className="mb-1.5 block text-xs font-medium text-neutral-700">Lecture duration</label>
@@ -591,6 +716,7 @@ function MediaTab({
           </div>
         </div>
       </div>
+      )}
       {narrationWarning && (
         <div className="rounded-md border border-warning-border bg-warning-bg px-3 py-2 text-xs text-warning-text">
           {narrationWarning} — authorable, not blocking.

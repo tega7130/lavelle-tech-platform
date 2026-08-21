@@ -84,7 +84,7 @@ export const moduleInputSchema = z.object({
 export const lectureInputSchema = z.object({
   title: z.string().trim().min(1, "Required"),
   mediaKind: z.enum(["SLIDES", "VIDEO"]),
-  videoUrl: z.string().trim().url().optional(),
+  videoUrl: z.string().trim().url().nullable().optional(),
   videoAssetId: z.string().nullable().optional(),
   scenarioPrompt: z.string().trim().optional(),
   scenarioGuidance: z.string().trim().optional(),

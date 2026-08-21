@@ -39,11 +39,15 @@ export function experienceBandLabel(band: string): string {
 export function youtubeEmbedUrl(url: string): string | null {
   try {
     const u = new URL(url);
-    if (u.hostname === "youtu.be") return `https://www.youtube.com/embed/${u.pathname.slice(1)}`;
+    // rel=0 disables related-videos recommendations from other channels.
+    // modestbranding=1 hides YouTube logo from controls.
+    // fs=0 disables fullscreen mode and removes "Watch on YouTube" button.
+    const params = "?rel=0&modestbranding=1&fs=0";
+    if (u.hostname === "youtu.be") return `https://www.youtube.com/embed/${u.pathname.slice(1)}${params}`;
     if (u.hostname.endsWith("youtube.com")) {
       if (u.pathname === "/watch") {
         const id = u.searchParams.get("v");
-        return id ? `https://www.youtube.com/embed/${id}` : null;
+        return id ? `https://www.youtube.com/embed/${id}${params}` : null;
       }
       if (u.pathname.startsWith("/embed/")) return url;
     }
