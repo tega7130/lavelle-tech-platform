@@ -29,8 +29,17 @@ export default async function AdminWebsitePage({ searchParams }: { searchParams:
   const archivedLive = listings.filter((l) => l.isPublished && l.isArchived);
 
   return (
-    <div className="max-w-[1400px]">
-      <div className="flex items-start justify-between gap-4 flex-wrap mb-[var(--space-5)]">
+    // h-full + flex-col: this page's own root fills main's box exactly
+    // (main is itself height-bounded — see admin-shell.tsx's `flex h-screen`
+    // root). The header/banner above are flex-none (their natural height);
+    // the grid below is flex-1 min-h-0, so it gets exactly whatever's left
+    // — computed by the browser, not a guessed px offset that breaks the
+    // moment the banner above it shows or hides. Only that grid row (not
+    // this whole page, not main) is allowed to have real content overflow,
+    // and even there it's each COLUMN that scrolls internally (below), not
+    // the row itself.
+    <div className="max-w-[1400px] h-full flex flex-col">
+      <div className="flex-none flex items-start justify-between gap-4 flex-wrap mb-[var(--space-5)]">
         <div>
           <div className="text-[10px] tracking-[0.1em] uppercase font-semibold text-accent">Public site</div>
           <div className="font-heading font-semibold text-[17px] mt-[2px]">Programme listings</div>
@@ -44,7 +53,7 @@ export default async function AdminWebsitePage({ searchParams }: { searchParams:
       </div>
 
       {archivedLive.length > 0 && (
-        <div className="flex items-start gap-3 px-5 py-4 rounded-md bg-[#fff7e6] border border-[#f0d9a8] mb-[var(--space-5)]">
+        <div className="flex-none flex items-start gap-3 px-5 py-4 rounded-md bg-[#fff7e6] border border-[#f0d9a8] mb-[var(--space-5)]">
           <span className="flex-none w-[26px] h-[26px] rounded-full bg-[#fdf0d2] text-[#a16207] flex items-center justify-center text-[14px] font-bold">!</span>
           <div className="flex-1 min-w-0">
             <div className="font-heading font-semibold text-[13.5px] text-[#7a4d06]">
@@ -68,7 +77,7 @@ export default async function AdminWebsitePage({ searchParams }: { searchParams:
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-[var(--space-5)]">
+      <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] lg:grid-rows-[minmax(0,1fr)] gap-[var(--space-5)] lg:flex-1 lg:min-h-0">
         <div className="border border-divider rounded-md p-[var(--space-3)] lg:h-full lg:overflow-y-auto">
           <div className="flex justify-between items-baseline gap-3 px-2 pb-3">
             <div className="text-[10px] tracking-[0.1em] uppercase font-semibold text-accent">Created programmes</div>
