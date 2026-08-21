@@ -46,10 +46,10 @@ function step2Copy(statusId: string) {
       f1Label: "Year of call to the Bar",
       f1Hint: "2016",
       f1Key: "yearOfCall" as const,
-      f2Label: "Supreme Court Number (SCN)",
-      f2Hint: "SCN123456",
-      f2Note: "As it appears on your call-to-bar certificate.",
-      f2Key: "scnNumber" as const,
+      f2Label: null,
+      f2Hint: null,
+      f2Note: null,
+      f2Key: null,
     };
   }
   if (statusId === "graduate" || statusId === "student") {
