@@ -68,14 +68,7 @@ export default async function AdminWebsitePage({ searchParams }: { searchParams:
         </div>
       )}
 
-      {/* Both columns pinned to the same height and independently
-          scrollable — neither the programme rail (every programme ever
-          created, can run long) nor the editor (short for a programme with
-          little content yet) can leave a slab of dead space beside the
-          other. Bounding only the rail isn't enough: a short editor next
-          to a merely-tall-not-viewport-filling rail reproduces the same
-          gap on the other side. */}
-      <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-[var(--space-5)] lg:h-[calc(100vh-140px)]">
+      <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-[var(--space-5)]">
         <div className="border border-divider rounded-md p-[var(--space-3)] lg:h-full lg:overflow-y-auto">
           <div className="flex justify-between items-baseline gap-3 px-2 pb-3">
             <div className="text-[10px] tracking-[0.1em] uppercase font-semibold text-accent">Created programmes</div>
