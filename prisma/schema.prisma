@@ -136,6 +136,25 @@ model EmailVerificationToken {
   @@index([candidateId, consumedAt])
 }
 
+// Registration's email-ownership step, before any Candidate row exists —
+// keyed by email (not candidateId) for exactly that reason. A verified,
+// unexpired row here is what lets registerCandidate skip the old
+// magic-link flow and set emailVerifiedAt at creation time.
+model EmailOtpChallenge {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+
+  email String @db.Citext
+
+  // Store the hash, send/log the plaintext — same rule as EmailVerificationToken.
+  codeHash   String
+  expiresAt  DateTime
+  attempts   Int       @default(0)
+  verifiedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([email, verifiedAt])
+}
+
 enum NotificationCategory {
   ACCOUNT
   CREDENTIAL

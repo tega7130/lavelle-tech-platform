@@ -62,6 +62,20 @@ export const resendVerificationSchema = z.object({
   email: z.string().trim().min(1, EMAIL_MESSAGE).regex(EMAIL_RE, EMAIL_MESSAGE),
 });
 
+// Registration's two-step email-ownership check, ahead of the account
+// itself existing (see EmailOtpChallenge).
+export const requestOtpSchema = z.object({
+  email: z.string().trim().min(1, EMAIL_MESSAGE).regex(EMAIL_RE, EMAIL_MESSAGE),
+});
+
+export const verifyOtpSchema = z.object({
+  email: z.string().trim().min(1, EMAIL_MESSAGE).regex(EMAIL_RE, EMAIL_MESSAGE),
+  code: z
+    .string()
+    .trim()
+    .regex(/^\d{6}$/, "Enter the 6-digit code"),
+});
+
 // Profile modal — every field optional, Skip is always allowed (Handoff 01
 // rule: "Profile completion is entirely optional").
 export const updateProfileSchema = z

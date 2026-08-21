@@ -8,6 +8,8 @@ import { hashPassword, verifyPassword } from "@/lib/password";
 import {
   registerSchema,
   signInSchema,
+  requestOtpSchema,
+  verifyOtpSchema,
   updateProfileSchema,
   updateContactDetailsSchema,
   fieldErrors,
@@ -26,6 +28,7 @@ import {
   logVerificationEmail,
   invalidateOutstandingTokens,
 } from "@/lib/verification-token";
+import { createOtpChallenge, logOtpEmail, verifyOtpChallenge, consumeVerifiedOtp } from "@/lib/email-otp";
 import { recordAuditEvent } from "@/lib/audit";
 import { p2002Target } from "@/lib/prisma-errors";
 import type { FormActionState } from "@/lib/action-state";
@@ -37,11 +40,84 @@ function formToObject(formData: FormData): Record<string, string> {
 }
 
 /**
- * Registration creates candidate + profile row + session + verification
- * token in one transaction (Handoff 01 README). A duplicate email returns
- * a field-level error, never a stack trace; the applicant-number sequence
+ * Registration's first step: prove ownership of the email before asking
+ * for anything else. No Candidate row exists yet, so a duplicate check
+ * happens here too — otherwise someone could OTP-verify an email that's
+ * already registered and only discover the conflict at the password step.
+ */
+export async function requestRegistrationOtp(
+  _prev: FormActionState,
+  formData: FormData
+): Promise<FormActionState> {
+  const raw = formToObject(formData);
+  const ip = await getClientIp();
+
+  try {
+    await enforceRateLimit("requestOtp", { ip, email: raw.email }, { limit: 5, windowSeconds: 15 * 60 });
+  } catch (e) {
+    if (e instanceof RateLimitError) return { values: raw, message: e.message };
+    throw e;
+  }
+
+  const parsed = requestOtpSchema.safeParse(raw);
+  if (!parsed.success) return { errors: fieldErrors(parsed.error), values: raw };
+  const email = parsed.data.email;
+
+  const existing = await prisma.candidate.findUnique({ where: { email }, select: { id: true } });
+  if (existing) return { errors: { email: "An account with this email already exists" }, values: raw };
+
+  const code = await createOtpChallenge(email);
+  logOtpEmail(email, code);
+
+  // No email provider is wired up in this slice (same honest dev stand-in
+  // as the rest of the auth flow) — the code rides along in the response
+  // so registration is testable end to end without a mail server.
+  const devCode = process.env.NODE_ENV !== "production" ? code : undefined;
+  return { ok: true, data: { otpSent: true, ...(devCode ? { devCode } : {}) } };
+}
+
+/** Registration's second step: check the code against the outstanding challenge for that email. */
+export async function verifyRegistrationOtp(
+  _prev: FormActionState,
+  formData: FormData
+): Promise<FormActionState> {
+  const raw = formToObject(formData);
+  const ip = await getClientIp();
+
+  try {
+    await enforceRateLimit("verifyOtp", { ip, email: raw.email }, { limit: 8, windowSeconds: 15 * 60 });
+  } catch (e) {
+    if (e instanceof RateLimitError) return { values: raw, message: e.message };
+    throw e;
+  }
+
+  const parsed = verifyOtpSchema.safeParse(raw);
+  if (!parsed.success) return { errors: fieldErrors(parsed.error), values: raw };
+  const { email, code } = parsed.data;
+
+  const result = await verifyOtpChallenge(email, code);
+  if (result === "ok") return { ok: true, data: { verified: true } };
+
+  const messages: Record<string, string> = {
+    invalid: "That code is incorrect.",
+    expired: "That code has expired. Request a new one.",
+    too_many_attempts: "Too many incorrect attempts. Request a new code.",
+    not_found: "Request a code first.",
+  };
+  return { errors: { code: messages[result] }, values: raw };
+}
+
+/**
+ * Registration creates candidate + profile row + session in one
+ * transaction (Handoff 01 README). A duplicate email returns a
+ * field-level error, never a stack trace; the applicant-number sequence
  * is generated inside the transaction with retry-on-conflict as the final
  * arbiter, per the same README.
+ *
+ * Email ownership is proven by OTP before this ever runs (requestRegistrationOtp
+ * / verifyRegistrationOtp above) — the old magic-link path stays in place
+ * for accounts that predate this, but a fresh registration never sees it:
+ * emailVerifiedAt is set at creation, not earned later.
  */
 export async function registerCandidate(
   _prev: FormActionState,
@@ -61,6 +137,11 @@ export async function registerCandidate(
   if (!parsed.success) return { errors: fieldErrors(parsed.error), values: raw };
   const data = parsed.data;
 
+  const emailVerified = await consumeVerifiedOtp(data.email);
+  if (!emailVerified) {
+    return { message: "Please verify your email address first.", values: raw };
+  }
+
   const passwordHash = await hashPassword(data.password);
   const userAgent = await getUserAgent();
 
@@ -78,6 +159,7 @@ export async function registerCandidate(
             firstName: data.firstName,
             lastName: data.lastName,
             email: data.email,
+            emailVerifiedAt: new Date(),
             phoneCountryCode: data.phoneCountryCode || "+234",
             phone: data.phone || null,
             passwordHash,
@@ -87,7 +169,6 @@ export async function registerCandidate(
         });
         await tx.candidateProfile.create({ data: { candidateId: candidate.id } });
 
-        const verificationToken = await createVerificationTokenRecord(tx, candidate.id);
         const sessionToken = await createSessionRecord(tx, candidate.id, {
           userAgent,
           ipAddress: ip,
@@ -101,13 +182,11 @@ export async function registerCandidate(
           ipAddress: ip,
         });
 
-        return { candidate, verificationToken, sessionToken };
+        return { candidate, sessionToken };
       });
 
       await setSessionCookie(result.sessionToken, true);
-      logVerificationEmail(result.candidate.email, result.verificationToken);
-
-      return { ok: true, data: { applicantNumber: result.candidate.applicantNumber } };
+      redirect("/portal/dashboard");
     } catch (e) {
       if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
         const target = p2002Target(e);
