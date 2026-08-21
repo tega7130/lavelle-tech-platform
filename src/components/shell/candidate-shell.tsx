@@ -26,6 +26,8 @@ import {
   BellIcon,
 } from "@/components/icons";
 import { LogoMark } from "@/components/ui/logo-mark";
+import { Button } from "@/components/ui/button";
+import { Dialog } from "@/components/ui/dialog";
 
 export interface CandidateShellNavItem {
   key: string;
@@ -124,6 +126,7 @@ export function CandidateShell({
   const active = items.find((item) => pathname?.startsWith(item.href));
   const resolvedCrumb = crumb ?? { section: "Candidate Portal", title: active?.label ?? "" };
 
+  const [signOutOpen, setSignOutOpen] = React.useState(false);
   const [inboxOpen, setInboxOpen] = React.useState(false);
   const [inbox, setInbox] = React.useState(initialNotifications ?? { unreadCount: 0, items: [] });
   const inboxRef = React.useRef<HTMLDivElement>(null);
@@ -209,7 +212,7 @@ export function CandidateShell({
             </div>
           </Link>
           <button
-            onClick={onSignOut}
+            onClick={() => setSignOutOpen(true)}
             aria-label="Sign out"
             title="Sign out"
             className="flex-none w-[30px] h-[30px] rounded-md border border-divider bg-bg text-neutral-600 flex items-center justify-center hover:bg-neutral-100 hover:text-text cursor-pointer"
@@ -218,6 +221,24 @@ export function CandidateShell({
           </button>
         </div>
       </aside>
+
+      <Dialog
+        open={signOutOpen}
+        onClose={() => setSignOutOpen(false)}
+        title="Sign out?"
+        actions={
+          <>
+            <Button variant="secondary" onClick={() => setSignOutOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="danger" onClick={onSignOut}>
+              Sign out
+            </Button>
+          </>
+        }
+      >
+        You will need to sign in again to access your dashboard, programmes and deadlines.
+      </Dialog>
 
       <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
         <header className="flex-none flex items-center justify-between px-[var(--space-6)] py-[var(--space-4)] border-b border-divider">
