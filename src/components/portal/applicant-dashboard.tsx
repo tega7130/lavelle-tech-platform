@@ -173,14 +173,17 @@ export function ApplicantDashboard({ candidate }: { candidate: CurrentCandidate 
   }
 
   const professionalDone = checklist.professional || stage === "done";
+  // Email verification happens during registration itself now (an OTP step
+  // before the account exists), so it's not a checklist item any more —
+  // checklist.email is still read below, just to drive a standalone banner
+  // for the pre-OTP accounts that predate this and never verified.
   const finalDoneCount =
     (checklist.account ? 1 : 0) +
     (professionalDone ? 1 : 0) +
     (checklist.photo ? 1 : 0) +
-    (checklist.email ? 1 : 0) +
     (checklist.handbook ? 1 : 0);
-  const allDone = finalDoneCount === 5;
-  const pct = Math.round((finalDoneCount / 5) * 100);
+  const allDone = finalDoneCount === 4;
+  const pct = Math.round((finalDoneCount / 4) * 100);
 
   const CHECKLIST_ITEMS = [
     { key: "account", label: "Account created", meta: "Name, email and password", done: true, action: null },
@@ -197,13 +200,6 @@ export function ApplicantDashboard({ candidate }: { candidate: CurrentCandidate 
       meta: "Used to generate your Candidate ID card",
       done: checklist.photo,
       action: checklist.photo ? null : { label: "Upload", href: "/portal/profile", onClick: undefined },
-    },
-    {
-      key: "email",
-      label: "Email verification",
-      meta: "Confirm your email address",
-      done: checklist.email,
-      action: checklist.email ? null : { label: "Resend", onClick: handleResend, href: undefined },
     },
     {
       key: "handbook",
@@ -255,6 +251,27 @@ export function ApplicantDashboard({ candidate }: { candidate: CurrentCandidate 
         </div>
       </div>
 
+      {/* Accounts registered before the OTP flow may still be unverified.
+          Not part of the checklist above (email is proven at registration
+          now) and not gated on allDone — an otherwise-complete old account
+          shouldn't lose its only path to resend. */}
+      {!checklist.email && (
+        <div className="flex items-center gap-4 rounded-md border border-[#f3c4bf] bg-[#fdecec] px-4 py-3">
+          <div className="min-w-0 flex-1">
+            <div className="font-heading text-[13.5px] font-semibold text-[#912019]">Your email isn&rsquo;t verified</div>
+            <div className="text-[12.5px] text-[#912019]/80 text-pretty">
+              {resendMessage ?? "Confirm your address so we can reach you about your application."}
+            </div>
+          </div>
+          <button
+            onClick={handleResend}
+            className="flex-none font-heading text-[13px] font-semibold text-[#912019]"
+          >
+            Resend →
+          </button>
+        </div>
+      )}
+
       {showNudge && !allDone && (
         <div className="flex items-center gap-4 rounded-md border border-accent-200 bg-accent-100 px-4 py-3">
           <span className="flex h-[30px] w-[30px] flex-none items-center justify-center rounded-full border border-accent-200 bg-bg">
@@ -292,7 +309,7 @@ export function ApplicantDashboard({ candidate }: { candidate: CurrentCandidate 
         <div className="rounded-md border border-divider bg-bg p-5 px-6">
           <div className="flex items-baseline justify-between gap-4">
             <h3 className="m-0">Complete your profile</h3>
-            <div className="text-xs text-neutral-600">{finalDoneCount} of 5 complete</div>
+            <div className="text-xs text-neutral-600">{finalDoneCount} of 4 complete</div>
           </div>
           <div className="mt-3 h-[7px] overflow-hidden rounded-full bg-neutral-200">
             <div className="h-full rounded-full bg-accent transition-[width] duration-300" style={{ width: `${pct}%` }} />
@@ -334,7 +351,6 @@ export function ApplicantDashboard({ candidate }: { candidate: CurrentCandidate 
               </div>
             ))}
           </div>
-          {resendMessage && <div className="mt-3 text-xs text-neutral-600">{resendMessage}</div>}
           <div className="mt-3 text-[11.5px] text-neutral-600">
             A complete profile is required before a Candidate ID card can be issued.
           </div>
