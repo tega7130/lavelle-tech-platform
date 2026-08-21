@@ -45,7 +45,7 @@ function draftLocalStorageKey(enrolmentId: string, lectureId: string) {
 
 export function LecturePlayer({ enrolmentId, data }: { enrolmentId: string; data: PlayerData }) {
   const router = useRouter();
-  const { lecture, module: mod, steps, quiz, resumePosition, nextLectureId, isLastLectureInProgramme, modules } = data;
+  const { lecture, module: mod, steps, quiz, quizAttempt, resumePosition, nextLectureId, isLastLectureInProgramme, modules } = data;
 
   const firstIncomplete = steps.findIndex((s) => !data.stepsCompleted.includes(s));
   const [stepIndex, setStepIndex] = React.useState(firstIncomplete === -1 ? steps.length - 1 : firstIncomplete);
@@ -123,22 +123,48 @@ export function LecturePlayer({ enrolmentId, data }: { enrolmentId: string; data
     modules.reduce((n, m) => n + m.lectures.length, 0)
   );
 
+  const moduleIndex = modules.findIndex((m) => m.id === mod.id) + 1;
+  // nextLectureId already flattens across module boundaries (see
+  // getLecturePlayer) — comparing its module to the current one is how we
+  // tell "advance within this module" apart from "advance to the next
+  // module" for the bottom-nav CTA label below.
+  const nextLectureModule = nextLectureId ? modules.find((m) => m.lectures.some((l) => l.id === nextLectureId)) : null;
+  const nextLectureCrossesModule = !!nextLectureModule && nextLectureModule.id !== mod.id;
+
   const draftingComplete = completed.has("drafting");
   const isCurrentStepBlocking =
     (activeStep === "drafting" && !draftingComplete) || (activeStep === "scenario" && !completed.has("scenario"));
 
   // ── Programme completion ──
+  // A module quiz gates progression on being PASSED, not merely submitted —
+  // "quiz" is only ever added to `completed` (below, via markStepComplete)
+  // when the attempt passes, so a failed/un-taken quiz blocks "Next module"
+  // and "Complete Programme" until the candidate passes it.
+  const [quizPassed, setQuizPassed] = React.useState(quizAttempt?.passed === true);
   // Gated on every authored step of THIS lecture being done, not merely
   // stepIndex reaching the last page — reaching the quiz page doesn't mean
-  // the quiz was submitted (QuizPlayer marks "quiz" complete on submit).
+  // the quiz was submitted (QuizPlayer marks "quiz" complete on a PASS only).
   const lectureFullyComplete = steps.every((s) => completed.has(s));
-  // A quiz that was already completed in an earlier session (data.stepsCompleted)
+  // A quiz that was already passed in an earlier session (data.stepsCompleted)
   // stays "complete" while the candidate retakes it — quizResultVisible tracks
   // whether the CURRENT attempt has a result on screen, so the finishing CTA
   // doesn't appear mid-retake, before "Submit quiz" is clicked (rule from
   // candidate report: button must not show while the quiz form is still up).
   const [quizResultVisible, setQuizResultVisible] = React.useState(completed.has("quiz"));
-  const readyToFinish = lectureFullyComplete && (!steps.includes("quiz") || quizResultVisible);
+  const readyToFinish = lectureFullyComplete && (!steps.includes("quiz") || (quizResultVisible && quizPassed));
+  // Every module that carries a quiz must have its LAST lecture's "quiz" step
+  // passed before the programme can be marked complete — checking only the
+  // current lecture isn't enough, since a candidate could reach the final
+  // lecture while an earlier module's quiz was never passed. The current
+  // module reads from live local state (quizPassed) rather than the
+  // server-fetched `modules` snapshot, which can briefly lag one refresh
+  // behind right after a submit.
+  const allModuleQuizzesPassed = modules.every((m) => {
+    const lastLecture = m.lectures[m.lectures.length - 1];
+    if (!lastLecture || !lastLecture.steps.includes("quiz")) return true;
+    if (lastLecture.id === lecture.id) return quizPassed;
+    return lastLecture.stepsCompleted.includes("quiz");
+  });
   const [completingProgramme, setCompletingProgramme] = React.useState(false);
   const [completeError, setCompleteError] = React.useState<string | null>(null);
   const [completionModal, setCompletionModal] = React.useState<{ certificateNumber: string | null } | null>(null);
@@ -207,10 +233,26 @@ export function LecturePlayer({ enrolmentId, data }: { enrolmentId: string; data
 
       {/* Content */}
       <main className="flex flex-col p-[var(--space-6)] max-w-[720px] mx-auto w-full">
-        <div className="text-[11px] text-neutral-500">
-          Week {mod.weekNumber} &middot; {mod.title}
+        <div className="flex items-center justify-between">
+          <span className="text-[11px] text-neutral-500">
+            Week {mod.weekNumber} &middot; {mod.title}
+          </span>
+          <span className="text-[11px] text-neutral-500 font-semibold">
+            Module {moduleIndex} of {modules.length}
+          </span>
         </div>
-        <h1 className="font-heading text-2xl m-0 mt-1">{lecture.title}</h1>
+        <div className="flex items-center gap-1 mt-1.5">
+          {modules.map((m) => (
+            <div
+              key={m.id}
+              className={`h-1.5 flex-1 rounded-full ${
+                m.percent === 100 ? "bg-accent-2" : m.id === mod.id ? "bg-accent" : "bg-neutral-200"
+              }`}
+              title={m.title}
+            />
+          ))}
+        </div>
+        <h1 className="font-heading text-2xl m-0 mt-3">{lecture.title}</h1>
 
         {/* Step progression */}
         <div className="flex items-center gap-1.5 mt-[var(--space-5)] mb-[var(--space-5)]">
@@ -377,8 +419,9 @@ export function LecturePlayer({ enrolmentId, data }: { enrolmentId: string; data
             enrolmentId={enrolmentId}
             quizId={quiz.quizId}
             onAttemptStart={() => setQuizResultVisible(false)}
-            onCompleted={() => {
-              markStepComplete("quiz");
+            onCompleted={(passed) => {
+              setQuizPassed(passed);
+              if (passed) markStepComplete("quiz");
               setQuizResultVisible(true);
             }}
           />
@@ -398,21 +441,17 @@ export function LecturePlayer({ enrolmentId, data }: { enrolmentId: string; data
                 Next
               </Button>
             ) : isLastLectureInProgramme ? (
-              readyToFinish ? (
+              readyToFinish && allModuleQuizzesPassed ? (
                 <Button onClick={handleCompleteProgramme} disabled={completingProgramme}>
                   {completingProgramme ? "Completing…" : "Complete Programme"}
                 </Button>
               ) : null
-            ) : readyToFinish && steps.includes("quiz") ? (
-              // Last lecture of a non-final module — the quiz result stays
-              // on screen until the candidate chooses to move on, rather
-              // than jumping straight into the next module's first lecture.
-              <Link href={`/portal/programme?programme=${data.programme.code}`} className="inline-flex">
-                <Button>Back to programme →</Button>
-              </Link>
             ) : readyToFinish && nextLectureId ? (
+              // The quiz result (if any) stays on screen until the candidate
+              // clicks through — this doesn't auto-advance, it just points
+              // at wherever nextLectureId actually is, in or out of module.
               <Link href={`/learn/${enrolmentId}/${nextLectureId}`} className="inline-flex">
-                <Button>Complete Lecture →</Button>
+                <Button>{nextLectureCrossesModule ? "Next module →" : "Complete Lecture →"}</Button>
               </Link>
             ) : readyToFinish ? (
               <LockIcon width={14} height={14} className="text-neutral-400" />

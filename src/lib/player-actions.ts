@@ -278,12 +278,11 @@ export async function submitQuizAttempt(
     }),
   ]);
 
-  // Submitting the quiz (not passing it) is what completes the "quiz"
-  // step — a fail is a real, visible result but the LMS is formative
-  // here, not gating; nothing in the README makes lecture completion
-  // conditional on a pass.
+  // Only a PASSING attempt completes the "quiz" step — a fail leaves the
+  // lecture (and module) incomplete so the candidate cannot advance to
+  // the next module, or complete the programme, until they pass.
   const lastLecture = attempt.quiz.module.lectures[attempt.quiz.module.lectures.length - 1];
-  if (lastLecture) await completeStep(candidateId, attempt.enrolmentId, lastLecture.id, "quiz");
+  if (lastLecture && passed) await completeStep(candidateId, attempt.enrolmentId, lastLecture.id, "quiz");
 
   return { scorePercent, passed, passMarkPercent: attempt.quiz.passMarkPercent, results };
 }

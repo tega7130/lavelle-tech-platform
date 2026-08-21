@@ -24,7 +24,7 @@ export function QuizPlayer({
 }: {
   enrolmentId: string;
   quizId: string;
-  onCompleted?: () => void;
+  onCompleted?: (passed: boolean) => void;
   onAttemptStart?: () => void;
 }) {
   const [attempt, setAttempt] = React.useState<QuizAttemptData | null>(null);
@@ -54,7 +54,7 @@ export function QuizPlayer({
       const payload = attempt.questions.map((q) => ({ questionId: q.id, selectedOptionId: answers[q.id] ?? null }));
       const data = await submitQuizAttemptAction(attempt.attemptId, payload);
       setResult(data);
-      onCompleted?.();
+      onCompleted?.(data.passed);
     } finally {
       setBusy(false);
     }
