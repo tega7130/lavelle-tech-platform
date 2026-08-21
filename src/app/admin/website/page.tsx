@@ -95,7 +95,16 @@ export default async function AdminWebsitePage({ searchParams }: { searchParams:
           <WebsiteListingRail listings={listings} selected={selected} />
         </div>
 
-        <div className="lg:max-h-full lg:overflow-y-auto">
+        {/* key={selected}: forces a fresh DOM node per programme, so this
+            box's native scrollTop can't carry over from whatever position
+            it was left at on the previous programme. Without this, React
+            reuses the same node across a ?programme= switch — confirmed by
+            direct measurement: scrolling ELR-201's editor to its bottom
+            (990px) then switching to a shorter listing left it at 962px,
+            the new content's own max, not 0. The browser clamps that so it
+            never overscrolls, but landing mid-scroll into a just-opened
+            programme's editor is still wrong on its own. */}
+        <div key={selected} className="lg:max-h-full lg:overflow-y-auto">
           <WebsiteListingEditor listing={listing} />
         </div>
       </div>
