@@ -29,17 +29,12 @@ export default async function AdminWebsitePage({ searchParams }: { searchParams:
   const archivedLive = listings.filter((l) => l.isPublished && l.isArchived);
 
   return (
-    // h-full + flex-col: this page's own root fills main's box exactly
-    // (main is itself height-bounded — see admin-shell.tsx's `flex h-screen`
-    // root). The header/banner above are flex-none (their natural height);
-    // the grid below is flex-1 min-h-0, so it gets exactly whatever's left
-    // — computed by the browser, not a guessed px offset that breaks the
-    // moment the banner above it shows or hides. Only that grid row (not
-    // this whole page, not main) is allowed to have real content overflow,
-    // and even there it's each COLUMN that scrolls internally (below), not
-    // the row itself.
-    <div className="max-w-[1400px] h-full flex flex-col">
-      <div className="flex-none flex items-start justify-between gap-4 flex-wrap mb-[var(--space-5)]">
+    // Natural content flow throughout — no forced heights on this page or
+    // its children. `main` (admin-shell.tsx) is the one and only scroll
+    // container; the rail and editor below both grow with their content
+    // and are never independently scrollable.
+    <div className="max-w-[1400px]">
+      <div className="flex items-start justify-between gap-4 flex-wrap mb-[var(--space-5)]">
         <div>
           <div className="text-[10px] tracking-[0.1em] uppercase font-semibold text-accent">Public site</div>
           <div className="font-heading font-semibold text-[17px] mt-[2px]">Programme listings</div>
@@ -53,7 +48,7 @@ export default async function AdminWebsitePage({ searchParams }: { searchParams:
       </div>
 
       {archivedLive.length > 0 && (
-        <div className="flex-none flex items-start gap-3 px-5 py-4 rounded-md bg-[#fff7e6] border border-[#f0d9a8] mb-[var(--space-5)]">
+        <div className="flex items-start gap-3 px-5 py-4 rounded-md bg-[#fff7e6] border border-[#f0d9a8] mb-[var(--space-5)]">
           <span className="flex-none w-[26px] h-[26px] rounded-full bg-[#fdf0d2] text-[#a16207] flex items-center justify-center text-[14px] font-bold">!</span>
           <div className="flex-1 min-w-0">
             <div className="font-heading font-semibold text-[13.5px] text-[#7a4d06]">
@@ -77,17 +72,8 @@ export default async function AdminWebsitePage({ searchParams }: { searchParams:
         </div>
       )}
 
-      {/* lg:items-start: a column sizes to its own content, not stretched
-          to fill the row — a short draft's editor (barely any fields
-          filled in) shouldn't leave a slab of visible dead space inside
-          its own card just because the rail next to it is taller.
-          lg:max-h-full + overflow-y-auto still caps each column at the
-          row's available height (computed by the flex-1/min-h-0 grid
-          above, not a guessed offset) and scrolls internally past that —
-          so a genuinely long list still scrolls in place rather than
-          pushing the row (and so `main`) taller. */}
-      <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] lg:grid-rows-[minmax(0,1fr)] lg:items-start gap-[var(--space-5)] lg:flex-1 lg:min-h-0">
-        <div className="border border-divider rounded-md p-[var(--space-3)] lg:max-h-full lg:overflow-y-auto">
+      <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-[var(--space-5)] items-start">
+        <div className="border border-divider rounded-md p-[var(--space-3)]">
           <div className="flex justify-between items-baseline gap-3 px-2 pb-3">
             <div className="text-[10px] tracking-[0.1em] uppercase font-semibold text-accent">Created programmes</div>
             <span className="text-neutral-500 text-[11.5px]">{listings.filter((l) => l.isPublished).length} live</span>
@@ -95,16 +81,13 @@ export default async function AdminWebsitePage({ searchParams }: { searchParams:
           <WebsiteListingRail listings={listings} selected={selected} />
         </div>
 
-        {/* key={selected}: forces a fresh DOM node per programme, so this
-            box's native scrollTop can't carry over from whatever position
-            it was left at on the previous programme. Without this, React
-            reuses the same node across a ?programme= switch — confirmed by
-            direct measurement: scrolling ELR-201's editor to its bottom
-            (990px) then switching to a shorter listing left it at 962px,
-            the new content's own max, not 0. The browser clamps that so it
-            never overscrolls, but landing mid-scroll into a just-opened
-            programme's editor is still wrong on its own. */}
-        <div key={selected} className="lg:max-h-full lg:overflow-y-auto">
+        {/* key={selected}: this is not a height/scroll constraint — it's
+            unrelated to the card sizing above. It forces a fresh DOM node
+            per programme so that if this box is ever scrolled (e.g. the
+            page itself, on a long editor, with the user mid-scroll through
+            it) that scroll position doesn't carry over to a just-selected,
+            unrelated programme. */}
+        <div key={selected}>
           <WebsiteListingEditor listing={listing} />
         </div>
       </div>
