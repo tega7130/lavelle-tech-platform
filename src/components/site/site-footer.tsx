@@ -5,10 +5,10 @@ const FOOTER_COLS = [
   {
     heading: "Programmes",
     links: [
-      { label: "Energy Law & Regulation", href: "/#programmes" },
-      { label: "Tax Law & Compliance", href: "/#programmes" },
-      { label: "Maritime & Admiralty", href: "/#programmes" },
-      { label: "All specializations", href: "/#programmes" },
+      { label: "Energy Law & Regulation", href: "/programmes/ELR-201" },
+      { label: "Tax Law & Compliance", href: "/programmes/TLC-201" },
+      { label: "Maritime & Admiralty", href: "/programmes/MAL-201" },
+      { label: "All specializations", href: "/programmes" },
     ],
   },
   {

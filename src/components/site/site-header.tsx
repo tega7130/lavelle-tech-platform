@@ -5,7 +5,7 @@ import { cn } from "@/lib/cn";
 
 const NAV_LINKS = [
   { label: "The ladder", href: "/#ladder" },
-  { label: "Programmes", href: "/#programmes" },
+  { label: "Programmes", href: "/programmes" },
   { label: "How it works", href: "/#how" },
   { label: "Reviews", href: "/#reviews" },
   { label: "FAQ", href: "/#faq" },
@@ -65,7 +65,7 @@ export function SiteCompactHeader() {
           </div>
         </Link>
         <div className="flex items-center gap-3 flex-none">
-          <Link href="/#programmes" className={buttonClassName("secondary", cn(GHOST_ON_DARK, "h-10 px-4 text-[13px]"))}>
+          <Link href="/programmes" className={buttonClassName("secondary", cn(GHOST_ON_DARK, "h-10 px-4 text-[13px]"))}>
             All specializations
           </Link>
           <Link href="/register" className={cn(buttonClassName("primary"), "h-10 px-[18px] text-[13px] rounded-[9px]")}>

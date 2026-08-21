@@ -65,6 +65,19 @@ function step2Copy(statusId: string) {
       f2Key: "graduationYear" as const,
     };
   }
+  if (statusId === "other") {
+    return {
+      heading: "Tell us more",
+      sub: "Describe your professional status in your own words.",
+      f1Label: "Your professional status",
+      f1Hint: "e.g. Retired judge, career break, industry consultant",
+      f1Key: "roleTitle" as const,
+      f2Label: null,
+      f2Hint: null,
+      f2Note: null,
+      f2Key: null,
+    };
+  }
   return {
     heading: "Your role",
     sub: "We record your role so programme recommendations stay relevant.",
@@ -139,7 +152,7 @@ export function ApplicantDashboard({ candidate }: { candidate: CurrentCandidate 
     if (statusId) fd.set("professionalStatus", STATUSES.find((s) => s.id === statusId)!.value);
     const copy = step2Copy(statusId ?? "other");
     if (f1) fd.set(copy.f1Key, f1);
-    if (f2) fd.set(copy.f2Key, f2);
+    if (f2 && copy.f2Key) fd.set(copy.f2Key, f2);
     if (band) fd.set("experienceBand", BANDS.find((b) => b.id === band)!.value);
     if (place) fd.set("placeOfPractice", place);
     fd.set("complete", "true");
@@ -408,7 +421,7 @@ export function ApplicantDashboard({ candidate }: { candidate: CurrentCandidate 
 
             {stage === "form" && (
               <>
-                <div className="border-b border-dashed border-neutral-300 px-[30px] pt-[18px] pb-3.5">
+                <div className="border-b border-dashed border-neutral-300 pl-[30px] pr-12 pt-[18px] pb-3.5">
                   <div className="flex items-baseline justify-between gap-3">
                     <div className="text-[9.5px] tracking-[0.14em] text-accent-700 uppercase">Step {step} of 3</div>
                     <div className="text-[11px] text-neutral-600">
@@ -488,18 +501,20 @@ export function ApplicantDashboard({ candidate }: { candidate: CurrentCandidate 
                                 className="h-11 w-full rounded-md border border-neutral-300 bg-bg px-3 text-sm"
                               />
                             </div>
-                            <div>
-                              <label className="mb-1.5 block text-xs font-medium text-neutral-700">
-                                {copy.f2Label}
-                              </label>
-                              <input
-                                placeholder={copy.f2Hint}
-                                value={f2}
-                                onChange={(e) => setF2(e.target.value)}
-                                className="h-11 w-full rounded-md border border-neutral-300 bg-bg px-3 text-sm"
-                              />
-                              <div className="mt-1.5 text-[11.5px] text-neutral-600">{copy.f2Note}</div>
-                            </div>
+                            {copy.f2Key && (
+                              <div>
+                                <label className="mb-1.5 block text-xs font-medium text-neutral-700">
+                                  {copy.f2Label}
+                                </label>
+                                <input
+                                  placeholder={copy.f2Hint ?? undefined}
+                                  value={f2}
+                                  onChange={(e) => setF2(e.target.value)}
+                                  className="h-11 w-full rounded-md border border-neutral-300 bg-bg px-3 text-sm"
+                                />
+                                <div className="mt-1.5 text-[11.5px] text-neutral-600">{copy.f2Note}</div>
+                              </div>
+                            )}
                           </div>
                         </>
                       );

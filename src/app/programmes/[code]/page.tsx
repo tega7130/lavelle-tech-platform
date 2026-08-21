@@ -26,7 +26,7 @@ export default async function ProgrammeDetailPage({ params }: { params: Promise<
 
       <div className="py-11 pb-[88px]">
         <div className="mx-auto max-w-[1200px] px-10">
-          <Link href="/#programmes" className="text-[12.5px] text-neutral-600 font-medium no-underline hover:text-accent">
+          <Link href="/programmes" className="text-[12.5px] text-neutral-600 font-medium no-underline hover:text-accent">
             &larr; All specializations
           </Link>
 
@@ -144,7 +144,7 @@ export default async function ProgrammeDetailPage({ params }: { params: Promise<
                     <div className="px-4 py-3 rounded-[9px] bg-neutral-100 border border-divider text-[12.5px] text-neutral-700 leading-relaxed text-center">
                       This programme is not currently open for enrolment.
                     </div>
-                    <Link href="/#programmes" className={cn(buttonClassName("secondary"), "w-full h-11 mt-[10px] text-[13.5px]")}>
+                    <Link href="/programmes" className={cn(buttonClassName("secondary"), "w-full h-11 mt-[10px] text-[13.5px]")}>
                       Browse open specializations
                     </Link>
                   </>

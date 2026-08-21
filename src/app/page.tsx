@@ -79,7 +79,7 @@ export default async function HomePage() {
               </p>
 
               <div className="flex gap-[13px] mt-[34px] flex-wrap">
-                <Link href="#programmes" className={cn(buttonClassName("primary"), "h-[50px] px-6 rounded-[9px] text-[14.5px]")}>
+                <Link href="/programmes" className={cn(buttonClassName("primary"), "h-[50px] px-6 rounded-[9px] text-[14.5px]")}>
                   Start your specialisation
                 </Link>
                 <Link
@@ -205,29 +205,36 @@ export default async function HomePage() {
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-[18px] mt-11">
-              {listings.map((p) => (
-                <Link
-                  key={p.code}
-                  href={`/programmes/${p.code}`}
-                  className="group block bg-bg border border-divider rounded-[14px] p-[26px] no-underline text-text transition hover:-translate-y-1 hover:shadow-[0_18px_40px_rgba(19,26,46,0.1)] hover:border-accent-200"
-                >
-                  <div className="flex items-center justify-between gap-[14px]">
-                    <span className={cn("px-[11px] py-1 rounded-full text-[10px] font-semibold tracking-[0.05em] uppercase", p.tier === "FOUNDATION" ? "bg-neutral-100 text-neutral-700" : "bg-accent-100 text-accent-700")}>
-                      {p.tierLabel}
-                    </span>
-                    <span className="text-neutral-400 text-[17px] font-semibold transition group-hover:translate-x-1 group-hover:text-accent">&rarr;</span>
-                  </div>
-                  <h3 className="font-heading font-semibold text-[19px] leading-[1.28] mt-5">{p.title}</h3>
-                  <p className="text-[13px] leading-[1.62] text-neutral-600 mt-[9px] min-h-[63px]">{p.blurb}</p>
-                  <div className="flex gap-5 mt-5 pt-4 border-t border-dashed border-neutral-300 text-[11.5px] text-neutral-600">
-                    <span>{p.weeks}</span>
-                    <span>{p.credits}</span>
-                    <span className="ml-auto font-semibold text-accent">View programme</span>
-                  </div>
+            <>
+              <div className="flex gap-[18px] mt-11 overflow-x-auto snap-x snap-mandatory pb-3 -mx-10 px-10">
+                {listings.map((p) => (
+                  <Link
+                    key={p.code}
+                    href={`/programmes/${p.code}`}
+                    className="group block flex-none w-[300px] snap-start bg-bg border border-divider rounded-[14px] p-[26px] no-underline text-text transition hover:-translate-y-1 hover:shadow-[0_18px_40px_rgba(19,26,46,0.1)] hover:border-accent-200"
+                  >
+                    <div className="flex items-center justify-between gap-[14px]">
+                      <span className={cn("px-[11px] py-1 rounded-full text-[10px] font-semibold tracking-[0.05em] uppercase", p.tier === "FOUNDATION" ? "bg-neutral-100 text-neutral-700" : "bg-accent-100 text-accent-700")}>
+                        {p.tierLabel}
+                      </span>
+                      <span className="text-neutral-400 text-[17px] font-semibold transition group-hover:translate-x-1 group-hover:text-accent">&rarr;</span>
+                    </div>
+                    <h3 className="font-heading font-semibold text-[19px] leading-[1.28] mt-5">{p.title}</h3>
+                    <p className="text-[13px] leading-[1.62] text-neutral-600 mt-[9px] min-h-[63px]">{p.blurb}</p>
+                    <div className="flex gap-5 mt-5 pt-4 border-t border-dashed border-neutral-300 text-[11.5px] text-neutral-600">
+                      <span>{p.weeks}</span>
+                      <span>{p.credits}</span>
+                      <span className="ml-auto font-semibold text-accent">View programme</span>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+              <div className="flex justify-center mt-8">
+                <Link href="/programmes" className={cn(buttonClassName("secondary"), "h-11 px-6 text-[13.5px]")}>
+                  View all programmes &rarr;
                 </Link>
-              ))}
-            </div>
+              </div>
+            </>
           )}
         </div>
       </div>
