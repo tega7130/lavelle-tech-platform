@@ -1,10 +1,18 @@
-import { describe, it, expect, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import crypto from "node:crypto";
 import { testPrisma } from "./db";
 import { resolveGradeBand, computeFinalMark } from "@/lib/grading";
 import { recomputeProgrammeResult } from "@/lib/programme-result";
 import { returnMark, claimForMarking, AlreadyClaimedError } from "@/lib/marking-actions";
 import { listMarkingQueueQuery, openMarkableQuery } from "@/lib/marking-queries";
+
+// Sweep stray staff rows from earlier runs — the "two markers" test below
+// used to leak staffA every run (its cleanup() call omitted staffId),
+// same class of bug as tests/staff-access.test.ts's leaked candidates.
+beforeAll(async () => {
+  const stray = await testPrisma.staff.findMany({ where: { email: { startsWith: "marking-test-" } }, select: { id: true } });
+  if (stray.length > 0) await testPrisma.staff.deleteMany({ where: { id: { in: stray.map((s) => s.id) } } });
+});
 
 async function seedStaffAndCategory() {
   const staff = await testPrisma.staff.create({
@@ -224,7 +232,7 @@ describe("claimForMarking — row-locked, two markers cannot claim the same item
     expect(finalMark.state).toBe("IN_REVIEW");
     expect([staffA.id, staffB.id]).toContain(finalMark.markedByStaffId);
 
-    await cleanup({ candidateIds: [candidate.id], programmeId: programme.id, categoryId: category.id, intakeIds: [intake.id] });
+    await cleanup({ candidateIds: [candidate.id], programmeId: programme.id, categoryId: category.id, staffId: staffA.id, intakeIds: [intake.id] });
     await testPrisma.staff.delete({ where: { id: staffB.id } });
   });
 });
