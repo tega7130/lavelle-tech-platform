@@ -77,8 +77,17 @@ export default async function AdminWebsitePage({ searchParams }: { searchParams:
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] lg:grid-rows-[minmax(0,1fr)] gap-[var(--space-5)] lg:flex-1 lg:min-h-0">
-        <div className="border border-divider rounded-md p-[var(--space-3)] lg:h-full lg:overflow-y-auto">
+      {/* lg:items-start: a column sizes to its own content, not stretched
+          to fill the row — a short draft's editor (barely any fields
+          filled in) shouldn't leave a slab of visible dead space inside
+          its own card just because the rail next to it is taller.
+          lg:max-h-full + overflow-y-auto still caps each column at the
+          row's available height (computed by the flex-1/min-h-0 grid
+          above, not a guessed offset) and scrolls internally past that —
+          so a genuinely long list still scrolls in place rather than
+          pushing the row (and so `main`) taller. */}
+      <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] lg:grid-rows-[minmax(0,1fr)] lg:items-start gap-[var(--space-5)] lg:flex-1 lg:min-h-0">
+        <div className="border border-divider rounded-md p-[var(--space-3)] lg:max-h-full lg:overflow-y-auto">
           <div className="flex justify-between items-baseline gap-3 px-2 pb-3">
             <div className="text-[10px] tracking-[0.1em] uppercase font-semibold text-accent">Created programmes</div>
             <span className="text-neutral-500 text-[11.5px]">{listings.filter((l) => l.isPublished).length} live</span>
@@ -86,7 +95,7 @@ export default async function AdminWebsitePage({ searchParams }: { searchParams:
           <WebsiteListingRail listings={listings} selected={selected} />
         </div>
 
-        <div className="lg:h-full lg:overflow-y-auto">
+        <div className="lg:max-h-full lg:overflow-y-auto">
           <WebsiteListingEditor listing={listing} />
         </div>
       </div>
