@@ -68,12 +68,15 @@ export default async function AdminWebsitePage({ searchParams }: { searchParams:
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-[var(--space-5)] items-start">
-        {/* programme list — sticky and independently scrollable so a long
-            list (every programme ever created, not just published ones)
-            doesn't dwarf the editor column next to it and leave a slab of
-            dead space once the shorter column's content ends. */}
-        <div className="border border-divider rounded-md p-[var(--space-3)] lg:sticky lg:top-0 lg:max-h-[calc(100vh-140px)] lg:overflow-y-auto">
+      {/* Both columns pinned to the same height and independently
+          scrollable — neither the programme rail (every programme ever
+          created, can run long) nor the editor (short for a programme with
+          little content yet) can leave a slab of dead space beside the
+          other. Bounding only the rail isn't enough: a short editor next
+          to a merely-tall-not-viewport-filling rail reproduces the same
+          gap on the other side. */}
+      <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-[var(--space-5)] lg:h-[calc(100vh-140px)]">
+        <div className="border border-divider rounded-md p-[var(--space-3)] lg:h-full lg:overflow-y-auto">
           <div className="flex justify-between items-baseline gap-3 px-2 pb-3">
             <div className="text-[10px] tracking-[0.1em] uppercase font-semibold text-accent">Created programmes</div>
             <span className="text-neutral-500 text-[11.5px]">{listings.filter((l) => l.isPublished).length} live</span>
@@ -81,7 +84,9 @@ export default async function AdminWebsitePage({ searchParams }: { searchParams:
           <WebsiteListingRail listings={listings} selected={selected} />
         </div>
 
-        <WebsiteListingEditor listing={listing} />
+        <div className="lg:h-full lg:overflow-y-auto">
+          <WebsiteListingEditor listing={listing} />
+        </div>
       </div>
     </div>
   );
