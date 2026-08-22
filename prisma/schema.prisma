@@ -499,6 +499,7 @@ model Programme {
   listing              ProgrammeListing?
   reviews              Review[]
   enquiries            ContactEnquiry[]
+  guestCheckouts       GuestCheckout[]
 
   @@index([status, tier])
   @@index([categoryId])
@@ -782,8 +783,9 @@ model Intake {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  cohorts    Cohort[]
-  enrolments Enrolment[]
+  cohorts        Cohort[]
+  enrolments     Enrolment[]
+  guestCheckouts GuestCheckout[]
 
   @@unique([month, year])
 }
@@ -1215,9 +1217,14 @@ enum OfflinePaymentMode {
 }
 
 model Payment {
-  id          String    @id @default(uuid())
-  candidateId String    @db.Uuid
-  candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  id          String     @id @default(uuid())
+  // Null only for a guest checkout (candidate applied for a programme and
+  // paid before an account existed) whose payment hasn't confirmed yet —
+  // confirmPayment's guest branch creates the Candidate and backfills this
+  // the moment the webhook fires. Every other payment has a candidate from
+  // the start, same as before this column became nullable.
+  candidateId String?    @db.Uuid
+  candidate   Candidate? @relation(fields: [candidateId], references: [id], onDelete: Cascade)
 
   purpose          PaymentPurpose
   enrolmentId      String? // null for an examination fee
@@ -1227,6 +1234,10 @@ model Payment {
   // attached to it, mirroring the fact that a registration can exist
   // (briefly) before payment. This is the reverse back-relation only.
   examRegistration ExamRegistration?
+  // Present only for a guest checkout — holds the applicant's details
+  // (name/email/password) until confirmPayment turns them into a real
+  // Candidate. Reverse back-relation only; the FK lives on GuestCheckout.
+  guestCheckout    GuestCheckout?
 
   // Kobo. A snapshot of the fee at the time of payment — never read the
   // live programme fee when displaying a historic payment (rule 7).
@@ -1270,6 +1281,56 @@ model Payment {
   @@index([candidateId, createdAt(sort: Desc)])
   // Drives the "pending over 48 hours" alert.
   @@index([status, initiatedAt])
+}
+
+enum GuestCheckoutStatus {
+  PENDING
+  CONSUMED
+}
+
+// The "Apply for this programme" checkout-first flow: a visitor fills in
+// name/email/password and pays before any Candidate row exists. This row
+// holds those details — email already proven via the same OTP challenge
+// registration uses — until confirmPayment's guest branch turns it into a
+// real Candidate + Enrolment on the SUCCESS webhook, exactly the same
+// moment payment would otherwise just activate an existing enrolment. If
+// payment never confirms, this row (and its PENDING/FAILED Payment) simply
+// sits unconsumed — no account is ever created, unlike a normal /register
+// abandonment which does leave a real Candidate row behind.
+model GuestCheckout {
+  id String @id @default(uuid())
+
+  programmeId String
+  programme   Programme @relation(fields: [programmeId], references: [id])
+  intakeId    String
+  intake      Intake    @relation(fields: [intakeId], references: [id])
+
+  firstName    String @db.VarChar(80)
+  lastName     String @db.VarChar(80)
+  email        String @db.Citext
+  passwordHash String
+
+  // Proven via the same email-OTP challenge as registration before the
+  // "proceed to payment" step is ever reachable — never taken on trust.
+  emailVerifiedAt DateTime
+  acceptedTermsAt DateTime
+  marketingOptIn  Boolean  @default(false)
+
+  // A second, unguessable secret alongside the Payment's own
+  // internalReference (which is only a 5-digit suffix — not safe to expose
+  // payment status against for someone with no session). The guest return
+  // page requires both together.
+  checkoutToken String @unique
+
+  paymentId String  @unique
+  payment   Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  status     GuestCheckoutStatus @default(PENDING)
+  consumedAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([email])
 }
 
 // Idempotency for provider callbacks — without this table a retried

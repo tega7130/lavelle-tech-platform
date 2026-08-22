@@ -24,7 +24,10 @@ function SignInForm() {
   const expired = searchParams.get("expired") === "1";
   const nextPath = searchParams.get("next");
   const [state, formAction, pending] = useActionState(signInCandidate, emptyActionState);
-  const [values, setValues] = React.useState({ email: "", password: "", remember: true });
+  // Prefilled after a guest checkout ("Apply for this programme") confirms
+  // payment — the candidate already knows the password they just set,
+  // this just saves retyping the email they were shown on that page.
+  const [values, setValues] = React.useState({ email: searchParams.get("email") ?? "", password: "", remember: true });
   const [errors, setErrors] = React.useState<Record<string, string>>({});
   // Adjust during render rather than in an effect — see the same pattern
   // (and its rationale) in the register page.

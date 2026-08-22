@@ -171,13 +171,13 @@ export default async function ProgrammeDetailPage({ params }: { params: Promise<
                   </>
                 ) : (
                   <>
-                    <Link href="/register" className={cn(buttonClassName("primary"), "w-full mt-5 rounded-[9px]")}>
+                    <Link href={`/checkout/${detail.code}`} className={cn(buttonClassName("primary"), "w-full mt-5 rounded-[9px]")}>
                       Apply for this programme
                     </Link>
                     <Link href="/contact" className={buttonClassName("secondary", "w-full h-11 mt-[10px] text-[13.5px]")}>
                       Speak to a representative
                     </Link>
-                    <div className="text-[11px] text-neutral-700 text-center mt-[14px]">Registration is free · you pay only when you enrol</div>
+                    <div className="text-[11px] text-neutral-700 text-center mt-[14px]">Secure checkout · your account is created once payment is confirmed</div>
                   </>
                 )}
               </div>

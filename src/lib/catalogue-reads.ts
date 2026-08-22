@@ -120,6 +120,39 @@ export async function getPaymentStatus(internalReference: string) {
   return payment;
 }
 
+/**
+ * The guest-checkout counterpart to getPaymentStatus — polled by the
+ * unauthenticated return page for someone who paid via "Apply for this
+ * programme" before any account existed. There is no session to scope
+ * ownership by, so both the reference AND the checkoutToken (a random
+ * secret, not the 5-digit-suffix reference alone) must match, or this
+ * returns null exactly as if the payment didn't exist.
+ */
+export async function getGuestCheckoutStatus(internalReference: string, checkoutToken: string) {
+  const payment = await prisma.payment.findUnique({
+    where: { internalReference },
+    select: {
+      id: true,
+      status: true,
+      confirmedAt: true,
+      failedAt: true,
+      failureReason: true,
+      enrolment: { select: { programme: { select: { code: true, title: true } } } },
+      // The programme is also reachable straight off GuestCheckout (set at
+      // checkout, before any Enrolment exists) — needed for a "try again"
+      // link on a FAILED payment, where enrolment is still null because
+      // confirmPayment's guest branch never ran.
+      guestCheckout: { select: { checkoutToken: true, email: true, programme: { select: { code: true, title: true } } } },
+    },
+  });
+  if (!payment || !payment.guestCheckout || payment.guestCheckout.checkoutToken !== checkoutToken) return null;
+  return {
+    ...payment,
+    email: payment.guestCheckout.email,
+    programme: payment.enrolment?.programme ?? payment.guestCheckout.programme,
+  };
+}
+
 /** The enrolled dashboard's data — candidate number, cohort placement and ID card. */
 export async function getEnrolledSummary(candidateId: string) {
   const enrolments = await prisma.enrolment.findMany({

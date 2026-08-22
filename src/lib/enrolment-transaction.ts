@@ -1,9 +1,10 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
-import { PaymentStatus, EnrolmentStatus, NotificationCategory, type OfflinePaymentMode } from "@/generated/prisma/client";
+import { Prisma, PaymentStatus, EnrolmentStatus, GuestCheckoutStatus, NotificationCategory, type OfflinePaymentMode } from "@/generated/prisma/client";
 import { recordAuditEvent } from "@/lib/audit";
 import { formatNaira } from "@/lib/format";
 import { generateDeadlinesForEnrolment } from "@/lib/deadline-generation";
+import { p2002Target } from "@/lib/prisma-errors";
 
 export interface OfflinePaymentFields {
   amountMinor: number; // the actual amount received — never silently truncated to the fee (rule 7)
@@ -51,7 +52,7 @@ export async function confirmPayment(paymentId: string, opts: ConfirmPaymentOpti
     // until the first transaction commits, then sees SUCCESS and returns
     // immediately without reapplying anything.
     const lockedRows = await tx.$queryRaw<
-      { id: string; status: PaymentStatus; enrolmentId: string | null; candidateId: string; amountMinor: number }[]
+      { id: string; status: PaymentStatus; enrolmentId: string | null; candidateId: string | null; amountMinor: number }[]
     >`SELECT id, status, "enrolmentId", "candidateId", "amountMinor" FROM "Payment" WHERE id = ${paymentId} FOR UPDATE`;
     const locked = lockedRows[0];
     if (!locked) throw new Error(`Payment ${paymentId} not found`);
@@ -65,6 +66,66 @@ export async function confirmPayment(paymentId: string, opts: ConfirmPaymentOpti
         cohortAssigned: false,
         cohortUnavailable: false,
       };
+    }
+
+    // Step 1b — a guest checkout ("Apply for this programme", paid before
+    // any account existed) has no candidate yet: the Payment row was
+    // created with candidateId null and a linked GuestCheckout holding the
+    // applicant's details. This is the ONLY place a guest checkout ever
+    // turns into a real Candidate — resolve it here, then fall through
+    // into the exact same steps 3-8 every other confirmation takes, using
+    // the freshly created ids in place of candidateId/enrolmentId.
+    let candidateId = locked.candidateId;
+    let enrolmentIdForGuest: string | null = null;
+    if (!candidateId) {
+      const guestCheckout = await tx.guestCheckout.findUnique({ where: { paymentId } });
+      if (!guestCheckout) throw new Error(`Payment ${paymentId} has no candidate and no linked guest checkout`);
+
+      const rows = await tx.$queryRaw<{ next_applicant_number: string }[]>`SELECT next_applicant_number()`;
+      const applicantNumber = rows[0]!.next_applicant_number;
+
+      let candidate;
+      try {
+        candidate = await tx.candidate.create({
+          data: {
+            applicantNumber,
+            firstName: guestCheckout.firstName,
+            lastName: guestCheckout.lastName,
+            email: guestCheckout.email,
+            emailVerifiedAt: guestCheckout.emailVerifiedAt,
+            passwordHash: guestCheckout.passwordHash,
+            acceptedTermsAt: guestCheckout.acceptedTermsAt,
+            marketingOptIn: guestCheckout.marketingOptIn,
+          },
+        });
+        await tx.candidateProfile.create({ data: { candidateId: candidate.id } });
+      } catch (e) {
+        // Rare race: the email was registered through a different path
+        // (e.g. /register) in the gap between OTP verification and this
+        // webhook firing. Money has already been taken, so the correct
+        // resolution is to attach this enrolment to that existing
+        // account, never to fail the confirmation outright.
+        if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002" && p2002Target(e).includes("email")) {
+          candidate = await tx.candidate.findUniqueOrThrow({ where: { email: guestCheckout.email } });
+        } else {
+          throw e;
+        }
+      }
+
+      const enrolment = await tx.enrolment.create({
+        data: {
+          candidateId: candidate.id,
+          programmeId: guestCheckout.programmeId,
+          intakeId: guestCheckout.intakeId,
+          status: EnrolmentStatus.PENDING_PAYMENT,
+        },
+      });
+
+      await tx.payment.update({ where: { id: paymentId }, data: { candidateId: candidate.id, enrolmentId: enrolment.id } });
+      await tx.guestCheckout.update({ where: { id: guestCheckout.id }, data: { status: GuestCheckoutStatus.CONSUMED, consumedAt: new Date() } });
+
+      candidateId = candidate.id;
+      enrolmentIdForGuest = enrolment.id;
     }
 
     // Step 2
@@ -96,21 +157,21 @@ export async function confirmPayment(paymentId: string, opts: ConfirmPaymentOpti
     // Step 3 — lock the candidate row; assign a number only if null (a
     // second programme does not issue a second one).
     const candidateRows = await tx.$queryRaw<{ id: string; candidateNumber: string | null }[]>`
-      SELECT id, "candidateNumber" FROM "Candidate" WHERE id = ${locked.candidateId}::uuid FOR UPDATE
+      SELECT id, "candidateNumber" FROM "Candidate" WHERE id = ${candidateId}::uuid FOR UPDATE
     `;
     const candidateRow = candidateRows[0];
-    if (!candidateRow) throw new Error(`Candidate ${locked.candidateId} not found`);
+    if (!candidateRow) throw new Error(`Candidate ${candidateId} not found`);
     let candidateNumber = candidateRow.candidateNumber;
     const candidateNumberAssigned = !candidateNumber;
     if (!candidateNumber) {
       const numRows = await tx.$queryRaw<{ next_candidate_number: string }[]>`SELECT next_candidate_number()`;
       candidateNumber = numRows[0]!.next_candidate_number;
-      await tx.candidate.update({ where: { id: locked.candidateId }, data: { candidateNumber } });
+      await tx.candidate.update({ where: { id: candidateId }, data: { candidateNumber } });
     }
 
     let cohortAssigned = false;
     let cohortUnavailable = false;
-    const enrolmentId = locked.enrolmentId;
+    const enrolmentId = enrolmentIdForGuest ?? locked.enrolmentId;
 
     // Steps 4-6 only touch Enrolment/Cohort/IdCard for a programme-fee
     // payment (enrolmentId set). An examination-fee payment has no
@@ -177,12 +238,12 @@ export async function confirmPayment(paymentId: string, opts: ConfirmPaymentOpti
       }
 
       // Step 6
-      const activeCard = await tx.idCard.findFirst({ where: { candidateId: locked.candidateId, retiredAt: null } });
+      const activeCard = await tx.idCard.findFirst({ where: { candidateId, retiredAt: null } });
       if (!activeCard) {
         const programme = await tx.programme.findUniqueOrThrow({ where: { id: enrolment.programmeId } });
         await tx.idCard.create({
           data: {
-            candidateId: locked.candidateId,
+            candidateId,
             cardNumber: candidateNumber,
             tier: programme.tier,
             issuedAt: new Date(),
@@ -197,7 +258,7 @@ export async function confirmPayment(paymentId: string, opts: ConfirmPaymentOpti
       // Step 7
       await tx.notification.create({
         data: {
-          candidateId: locked.candidateId,
+          candidateId,
           category: NotificationCategory.FINANCE,
           title: "Payment confirmed",
           body: `Your payment of ${formatNaira(confirmedAmountMinor)} has been confirmed.`,
@@ -205,7 +266,7 @@ export async function confirmPayment(paymentId: string, opts: ConfirmPaymentOpti
       });
       await tx.notification.create({
         data: {
-          candidateId: locked.candidateId,
+          candidateId,
           category: NotificationCategory.PROGRAMME,
           title: "You're enrolled",
           body: `Your enrolment is now active. Your candidate number is ${candidateNumber}.`,

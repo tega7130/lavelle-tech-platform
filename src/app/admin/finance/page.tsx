@@ -17,7 +17,11 @@ export default async function FinancePage() {
     return {
       id: p.id,
       internalReference: p.internalReference,
-      candidateName: `${p.candidate.firstName} ${p.candidate.lastName}`,
+      candidateName: p.candidate
+        ? `${p.candidate.firstName} ${p.candidate.lastName}`
+        : p.guestCheckout
+          ? `${p.guestCheckout.firstName} ${p.guestCheckout.lastName} (guest checkout, pending)`
+          : "—",
       programmeName: p.enrolment?.programme.title ?? "—",
       channel: p.offlineMode ? p.offlineMode.replace(/_/g, " ").toLowerCase() : p.provider,
       amountMinor: p.amountMinor,

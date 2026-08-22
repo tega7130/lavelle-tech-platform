@@ -29,6 +29,10 @@ export async function listLedger(params: ListLedgerParams = {}) {
     },
     include: {
       candidate: { select: { id: true, firstName: true, lastName: true, applicantNumber: true, candidateNumber: true } },
+      // Present only while a guest checkout ("Apply for this programme")
+      // is still PENDING — candidate is null until confirmPayment resolves
+      // it, so this is the only source for a name in the meantime.
+      guestCheckout: { select: { firstName: true, lastName: true } },
       enrolment: { include: { programme: { select: { title: true, code: true } } } },
       receiptAsset: { select: { id: true, originalFilename: true, storageKey: true } },
       confirmedByStaff: { select: { name: true } },

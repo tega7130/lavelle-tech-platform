@@ -47,6 +47,31 @@ export const registerSchema = z
 
 export type RegisterInput = z.infer<typeof registerSchema>;
 
+// "Apply for this programme" checkout-first flow — deliberately smaller
+// than registerSchema (no phone) since the whole point is a minimal form:
+// name (for the certificate), email + password (for the account created
+// on payment success). Terms acceptance is still mandatory — Candidate.
+// acceptedTermsAt is NOT NULL and this is the only place that sets it for
+// a guest checkout.
+export const guestCheckoutSchema = z
+  .object({
+    firstName: z.string().trim().min(1, "Required").max(80, "Required"),
+    lastName: z.string().trim().min(1, "Required").max(80, "Required"),
+    email: z.string().trim().min(1, EMAIL_MESSAGE).regex(EMAIL_RE, EMAIL_MESSAGE),
+    password: z.string().min(8, "Use at least 8 characters"),
+    confirmPassword: z.string(),
+    terms: checkboxBoolean.refine((v) => v === true, "You must accept the Terms of Use to continue"),
+    marketingOptIn: checkboxBoolean,
+    programmeId: z.string().trim().min(1),
+  })
+  .superRefine((data, ctx) => {
+    if (data.confirmPassword !== data.password) {
+      ctx.addIssue({ code: "custom", path: ["confirmPassword"], message: "Passwords do not match" });
+    }
+  });
+
+export type GuestCheckoutInput = z.infer<typeof guestCheckoutSchema>;
+
 export const signInSchema = z.object({
   email: z.string().trim().min(1, EMAIL_MESSAGE).regex(EMAIL_RE, EMAIL_MESSAGE),
   password: z.string().min(1, "Required"),

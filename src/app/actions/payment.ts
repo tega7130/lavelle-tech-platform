@@ -8,16 +8,25 @@ import { getCurrentCandidate } from "@/lib/candidate-session";
 import { getClientIp } from "@/lib/request-info";
 import { recordAuditEvent } from "@/lib/audit";
 import { createProviderCheckout, generateInternalReference } from "@/lib/payment-provider";
-import { LiveEnrolmentExistsError, PaymentNotPendingError, assertProgrammeOpenForEnrolment } from "@/lib/payment-errors";
+import { LiveEnrolmentExistsError, PaymentNotPendingError, ProgrammeNotOpenError, assertProgrammeOpenForEnrolment } from "@/lib/payment-errors";
 import { applyOfflineRecording } from "@/lib/offline-recording";
 import { offlinePaymentInputSchema, recordOfflinePaymentSchema, fieldErrors } from "@/lib/validation/payment";
-import { getPaymentStatus } from "@/lib/catalogue-reads";
+import { guestCheckoutSchema } from "@/lib/validation/candidate";
+import { getPaymentStatus, getGuestCheckoutStatus } from "@/lib/catalogue-reads";
 import { p2002Target } from "@/lib/prisma-errors";
+import { hashPassword } from "@/lib/password";
+import { consumeVerifiedOtp } from "@/lib/email-otp";
+import crypto from "node:crypto";
 import type { FormActionState } from "@/lib/action-state";
 
 /** Thin Server Action wrapper so the checkout return page's client-side poll can call the server function (rule 6 — this, not the redirect URL, is the authority). */
 export async function pollPaymentStatus(internalReference: string) {
   return getPaymentStatus(internalReference);
+}
+
+/** Same, for the unauthenticated guest-checkout return page — scoped by checkoutToken instead of a session. */
+export async function pollGuestCheckoutStatus(internalReference: string, checkoutToken: string) {
+  return getGuestCheckoutStatus(internalReference, checkoutToken);
 }
 
 // Keeps empty strings (unlike programme.ts's formToObject, which filters
@@ -137,6 +146,91 @@ export async function initiatePayment(programmeId: string) {
 
   revalidatePath("/portal/catalogue");
   return { internalReference: payment.internalReference, checkoutUrl: checkout.checkoutUrl };
+}
+
+/**
+ * "Apply for this programme" checkout-first flow — no candidate exists
+ * yet. Creates a Payment (candidateId null) and a linked GuestCheckout
+ * holding the applicant's details; confirmPayment's guest branch turns
+ * this into a real Candidate + Enrolment the moment the webhook confirms
+ * success (never before — an abandoned payment leaves no account behind).
+ * Email ownership is proven by the same OTP challenge registration uses,
+ * consumed here exactly as registerCandidate consumes it.
+ */
+export async function initiateGuestCheckout(_prev: FormActionState, formData: FormData): Promise<FormActionState> {
+  const raw: Record<string, string> = {};
+  for (const [k, v] of formData.entries()) if (typeof v === "string") raw[k] = v;
+
+  const parsed = guestCheckoutSchema.safeParse(raw);
+  if (!parsed.success) return { errors: fieldErrors(parsed.error), values: raw };
+  const data = parsed.data;
+
+  const emailVerified = await consumeVerifiedOtp(data.email);
+  if (!emailVerified) return { message: "Please verify your email address first.", values: raw };
+
+  const existingCandidate = await prisma.candidate.findUnique({ where: { email: data.email }, select: { id: true } });
+  if (existingCandidate) {
+    return { errors: { email: "An account with this email already exists" }, values: raw };
+  }
+
+  const programme = await prisma.programme.findUniqueOrThrow({ where: { id: data.programmeId } });
+  try {
+    assertProgrammeOpenForEnrolment(programme);
+  } catch (e) {
+    if (e instanceof ProgrammeNotOpenError) return { message: e.message, values: raw };
+    throw e;
+  }
+  const intake = await pickOpenIntake();
+
+  const passwordHash = await hashPassword(data.password);
+  const checkoutToken = crypto.randomBytes(24).toString("hex");
+
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const internalReference = generateInternalReference();
+    try {
+      const payment = await prisma.$transaction(async (tx) => {
+        const payment = await tx.payment.create({
+          data: {
+            purpose: PaymentPurpose.PROGRAMME_FEE,
+            amountMinor: programme.feeMinor,
+            provider: "paystack",
+            internalReference,
+            status: PaymentStatus.PENDING,
+          },
+        });
+        await tx.guestCheckout.create({
+          data: {
+            programmeId: programme.id,
+            intakeId: intake.id,
+            firstName: data.firstName,
+            lastName: data.lastName,
+            email: data.email,
+            passwordHash,
+            emailVerifiedAt: new Date(),
+            acceptedTermsAt: new Date(),
+            marketingOptIn: data.marketingOptIn,
+            checkoutToken,
+            paymentId: payment.id,
+          },
+        });
+        return payment;
+      });
+
+      const checkout = createProviderCheckout({
+        provider: payment.provider,
+        internalReference: payment.internalReference,
+        amountMinor: payment.amountMinor,
+        candidateEmail: data.email,
+      });
+      return { ok: true, data: { checkoutUrl: checkout.checkoutUrl } };
+    } catch (e) {
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002" && p2002Target(e).includes("internalReference") && attempt < 2) {
+        continue; // reference collision — regenerate and retry
+      }
+      throw e;
+    }
+  }
+  return { values: raw, message: "Could not generate a unique payment reference. Try again." };
 }
 
 /** Finance ledger / candidate record entry point — a pending payment already exists. Irreversible; requires confirm-payments. */

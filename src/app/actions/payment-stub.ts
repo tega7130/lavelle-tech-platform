@@ -29,9 +29,20 @@ async function deliverWebhook(provider: string, event: "charge.success" | "charg
   });
 }
 
-/** EXAMINATION_FEE payments return to their own exam-flavoured status page, not the enrolment one — same reference, different copy. */
+/**
+ * EXAMINATION_FEE payments return to their own exam-flavoured status page,
+ * not the enrolment one. A guest checkout ("Apply for this programme",
+ * paid before any account existed) has no session to reach a /portal
+ * page with, so it returns to a public page instead, carrying the
+ * GuestCheckout's own secret token — never taken from the incoming
+ * redirect, always looked up fresh off the payment row (rule 6).
+ */
 async function returnPathFor(reference: string) {
-  const payment = await prisma.payment.findUnique({ where: { internalReference: reference }, select: { purpose: true } });
+  const payment = await prisma.payment.findUnique({
+    where: { internalReference: reference },
+    select: { purpose: true, guestCheckout: { select: { checkoutToken: true } } },
+  });
+  if (payment?.guestCheckout) return `/checkout/return/${reference}?token=${payment.guestCheckout.checkoutToken}`;
   return payment?.purpose === "EXAMINATION_FEE" ? `/portal/exams/checkout/${reference}` : `/portal/checkout/${reference}`;
 }
 
