@@ -23,8 +23,6 @@ export default async function CataloguePage({
 
   return (
     <div className="max-w-[1180px]">
-      <h1 className="font-heading text-2xl mb-[var(--space-4)]">Programmes</h1>
-
       <div className="flex gap-2 flex-wrap mb-[var(--space-6)]">
         {TIERS.map((t) => (
           <Link

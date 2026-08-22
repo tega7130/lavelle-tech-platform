@@ -53,9 +53,7 @@ export function AssessmentResults({ results, scale }: { results: Results; scale:
 
   return (
     <div className="max-w-[1000px]">
-      <h1 className="font-heading text-2xl m-0 mb-[var(--space-5)]">Assessment and grades</h1>
-
-      <h3>Results by programme</h3>
+      <h3 className="mt-0">Results by programme</h3>
       <div className="flex flex-col gap-[var(--space-3)]">
         {results.map((r) => {
           const isOpen = open.has(r.enrolmentId);

@@ -172,12 +172,9 @@ export function ProfilePage({
 
   return (
     <div className="max-w-[1120px] flex flex-col gap-[var(--space-6)]">
-      <div>
-        <h1 className="mb-1">Profile &amp; ID</h1>
-        <p className="text-neutral-600 text-[13.5px]">
-          Your photo, contact details and Candidate ID card in one place.
-        </p>
-      </div>
+      <p className="text-neutral-600 text-[13.5px] m-0">
+        Your photo, contact details and Candidate ID card in one place.
+      </p>
 
       <div className="grid grid-cols-[1fr_360px] gap-[var(--space-6)] items-start max-[900px]:grid-cols-1">
         <div>

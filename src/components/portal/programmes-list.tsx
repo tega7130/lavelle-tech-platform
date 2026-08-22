@@ -29,7 +29,6 @@ export function ProgrammesList({ programmes }: { programmes: Programmes }) {
 
   return (
     <div className="max-w-[900px]">
-      <h1 className="font-heading text-2xl m-0 mb-1">Your programmes</h1>
       <p className="text-neutral-600 text-[13px] mb-[var(--space-5)]">
         Everything you have enrolled in, in progress or completed. Open a programme to see its overview, modules and
         assessments.

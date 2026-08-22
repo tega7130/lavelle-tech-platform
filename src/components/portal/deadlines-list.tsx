@@ -42,7 +42,6 @@ export function DeadlinesList({ deadlines }: { deadlines: Deadlines }) {
 
   return (
     <div className="max-w-[860px]">
-      <h1 className="font-heading text-2xl m-0 mb-[var(--space-5)]">Deadlines</h1>
       <div className="border border-divider rounded-md overflow-hidden">
         {deadlines.map((d) => {
           const style = STATE_STYLE[d.state];
