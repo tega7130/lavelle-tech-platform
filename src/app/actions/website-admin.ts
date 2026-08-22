@@ -18,12 +18,20 @@ function revalidateSite(code?: string) {
   if (code) revalidatePath(`/programmes/${code}`);
 }
 
+// Slice 12: the editor moved to its own route (/admin/website/[id]) —
+// revalidate both it and the list so a save/publish/unpublish is reflected
+// whichever screen a staff member returns to.
+function revalidateAdmin(programmeId: string) {
+  revalidatePath("/admin/website");
+  revalidatePath(`/admin/website/${programmeId}`);
+}
+
 export async function upsertListingAction(programmeId: string, input: UpsertListingInput) {
   await requireStaffPermission(Permission.MANAGE_PROGRAMMES);
   const listing = await upsertListingLib(programmeId, input);
   const programme = await prisma.programme.findUnique({ where: { id: programmeId }, select: { code: true } });
   revalidateSite(programme?.code);
-  revalidatePath("/admin/website");
+  revalidateAdmin(programmeId);
   return listing;
 }
 
@@ -32,7 +40,7 @@ export async function publishListingAction(programmeId: string) {
   await publishListingLib(programmeId, staff.id);
   const programme = await prisma.programme.findUnique({ where: { id: programmeId }, select: { code: true } });
   revalidateSite(programme?.code);
-  revalidatePath("/admin/website");
+  revalidateAdmin(programmeId);
 }
 
 export async function unpublishListingAction(programmeId: string, reason: string) {
@@ -42,7 +50,7 @@ export async function unpublishListingAction(programmeId: string, reason: string
   await unpublishListingLib(programmeId, trimmed, staff.id);
   const programme = await prisma.programme.findUnique({ where: { id: programmeId }, select: { code: true } });
   revalidateSite(programme?.code);
-  revalidatePath("/admin/website");
+  revalidateAdmin(programmeId);
 }
 
 export async function reorderListingsAction(orderedProgrammeIds: string[]) {

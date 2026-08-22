@@ -10,7 +10,7 @@ import type { listListings } from "@/lib/website-admin";
 type Listing = Awaited<ReturnType<typeof listListings>>[number];
 
 /** Up/down controls only reorder published listings (README: orderIndex governs the public grid) — draft rows have nothing to reorder against. */
-export function WebsiteListingRail({ listings, selected }: { listings: Listing[]; selected: string }) {
+export function WebsiteListingRail({ listings }: { listings: Listing[] }) {
   const router = useRouter();
   const [pending, setPending] = React.useState(false);
   const published = listings.filter((l) => l.isPublished).sort((a, b) => a.orderIndex - b.orderIndex);
@@ -35,11 +35,8 @@ export function WebsiteListingRail({ listings, selected }: { listings: Listing[]
       {listings.map((p) => {
         const publishedIndex = p.isPublished ? published.findIndex((l) => l.programmeId === p.programmeId) : -1;
         return (
-          <div
-            key={p.programmeId}
-            className={cn("flex items-start gap-[7px] rounded-md", p.programmeId === selected ? "bg-accent-100" : "hover:bg-neutral-100")}
-          >
-            <Link href={`/admin/website?programme=${p.programmeId}`} className="flex-1 min-w-0 flex items-start gap-[11px] px-3 py-[11px] no-underline text-text">
+          <div key={p.programmeId} className="flex items-start gap-[7px] rounded-md hover:bg-neutral-100">
+            <Link href={`/admin/website/${p.programmeId}`} className="flex-1 min-w-0 flex items-start gap-[11px] px-3 py-[11px] no-underline text-text">
               <span className={cn("w-2 h-2 flex-none mt-[6px] rounded-full", p.isPublished ? "bg-[#15803d]" : "bg-neutral-400")} />
               <div className="flex-1 min-w-0">
                 <div className="text-[13px] font-medium leading-[1.35]">{p.title}</div>

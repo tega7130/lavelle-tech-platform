@@ -1,10 +1,11 @@
-import { listListings, getListingForEditor } from "@/lib/website-admin";
-import { WebsiteListingEditor } from "@/components/admin/website-listing-editor";
+import { listListings } from "@/lib/website-admin";
 import { WebsiteListingRail } from "@/components/admin/website-listing-rail";
 import { buttonClassName } from "@/components/ui/button";
 
-export default async function AdminWebsitePage({ searchParams }: { searchParams: Promise<{ programme?: string }> }) {
-  const { programme: selectedId } = await searchParams;
+// Slice 12: list screen and editor are two distinct routes now — this page
+// is list-only. Selecting a programme navigates to /admin/website/[id]
+// (WebsiteListingRail's links) instead of opening a side-by-side panel.
+export default async function AdminWebsitePage() {
   const listings = await listListings();
 
   if (listings.length === 0) {
@@ -21,18 +22,12 @@ export default async function AdminWebsitePage({ searchParams }: { searchParams:
     );
   }
 
-  const selected = selectedId ?? listings[0]!.programmeId;
-  const listing = await getListingForEditor(selected);
   // Slice 11 Part C: archiving a programme never unpublishes its listing
   // (README C1) — this is the derived warning that tells a human when a
   // live listing needs a decision, computed fresh on every render.
   const archivedLive = listings.filter((l) => l.isPublished && l.isArchived);
 
   return (
-    // Natural content flow throughout — no forced heights on this page or
-    // its children. `main` (admin-shell.tsx) is the one and only scroll
-    // container; the rail and editor below both grow with their content
-    // and are never independently scrollable.
     <div className="max-w-[1400px]">
       <div className="flex items-start justify-between gap-4 flex-wrap mb-[var(--space-5)]">
         <div>
@@ -61,7 +56,7 @@ export default async function AdminWebsitePage({ searchParams }: { searchParams:
               {archivedLive.map((l) => (
                 <a
                   key={l.programmeId}
-                  href={`/admin/website?programme=${l.programmeId}`}
+                  href={`/admin/website/${l.programmeId}?tab=content`}
                   className={buttonClassName("secondary", "h-[32px] px-3 text-[12px]")}
                 >
                   Review {l.title}
@@ -72,24 +67,12 @@ export default async function AdminWebsitePage({ searchParams }: { searchParams:
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-[var(--space-5)] items-start">
-        <div className="border border-divider rounded-md p-[var(--space-3)]">
-          <div className="flex justify-between items-baseline gap-3 px-2 pb-3">
-            <div className="text-[10px] tracking-[0.1em] uppercase font-semibold text-accent">Created programmes</div>
-            <span className="text-neutral-500 text-[11.5px]">{listings.filter((l) => l.isPublished).length} live</span>
-          </div>
-          <WebsiteListingRail listings={listings} selected={selected} />
+      <div className="border border-divider rounded-md p-[var(--space-3)]">
+        <div className="flex justify-between items-baseline gap-3 px-2 pb-3">
+          <div className="text-[10px] tracking-[0.1em] uppercase font-semibold text-accent">Created programmes</div>
+          <span className="text-neutral-500 text-[11.5px]">{listings.filter((l) => l.isPublished).length} live</span>
         </div>
-
-        {/* key={selected}: this is not a height/scroll constraint — it's
-            unrelated to the card sizing above. It forces a fresh DOM node
-            per programme so that if this box is ever scrolled (e.g. the
-            page itself, on a long editor, with the user mid-scroll through
-            it) that scroll position doesn't carry over to a just-selected,
-            unrelated programme. */}
-        <div key={selected}>
-          <WebsiteListingEditor listing={listing} />
-        </div>
+        <WebsiteListingRail listings={listings} />
       </div>
     </div>
   );
