@@ -293,7 +293,7 @@ export default async function HomePage() {
       </div>
 
       {/* FACULTY */}
-      <div id="faculty" className="py-[104px]">
+      <div id="faculty" className="py-[104px] hidden">
         <div className="mx-auto max-w-[1200px] px-10">
           <div className="max-w-[620px]">
             <div className="text-[11px] tracking-[0.18em] uppercase font-semibold text-accent">Faculty</div>
