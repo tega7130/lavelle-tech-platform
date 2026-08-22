@@ -149,7 +149,7 @@ export default async function HomePage() {
             <div className="text-[11px] tracking-[0.18em] uppercase font-semibold text-accent">The credentialing ladder</div>
             <h2 className="font-heading font-semibold text-[40px] leading-[1.14] mt-4 tracking-[-0.022em]">A title you earn, not a certificate you collect.</h2>
             <p className="text-[15.5px] leading-[1.7] text-neutral-600 mt-[18px]">
-              Anyone can sit through a seminar. Lavelle candidates draft, are marked by practising seniors, and sit a proctored paper before a single credential is issued. That is why the letters after your name carry weight, and why you climb one tier at a time.
+              At Lavelle, candidates are challenged to put their knowledge into practice, sharpen their work through feedback from practising legal professionals, and demonstrate their competence through rigorous assessment. Each level takes you further, building deeper expertise, stronger credibility, and a professional distinction earned through demonstrated capability.
             </p>
           </div>
 
