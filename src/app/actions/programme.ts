@@ -268,6 +268,7 @@ export async function duplicateProgramme(id: string) {
     where: { id },
     include: {
       assessmentWeightings: true,
+      listing: true,
       modules: {
         orderBy: { orderIndex: "asc" },
         include: {
@@ -311,6 +312,33 @@ export async function duplicateProgramme(id: string) {
         weightPercent: w.weightPercent,
       })),
     });
+
+    // Carry over the source's website listing copy, if any was authored —
+    // otherwise the duplicate lands on the website editor with
+    // useDefaults reset to true and an empty outcomes/includes, silently
+    // dropping content the source programme already had. The copy always
+    // starts unpublished regardless of the source's publish state
+    // (publishedAt/publishedByStaffId/unpublishedAt/isPublished all left
+    // at their schema defaults), consistent with the programme itself
+    // always starting DRAFT.
+    if (source.listing) {
+      await tx.programmeListing.create({
+        data: {
+          programmeId: newProgramme.id,
+          useDefaults: source.listing.useDefaults,
+          headline: source.listing.headline,
+          summary: source.listing.summary,
+          outcomes: source.listing.outcomes ?? undefined,
+          includes: source.listing.includes ?? undefined,
+          assessmentNote: source.listing.assessmentNote,
+          paymentNote: source.listing.paymentNote,
+          heroAssetId: source.listing.heroAssetId,
+          useCoverVideo: source.listing.useCoverVideo,
+          videoUrl: source.listing.videoUrl,
+          videoAssetId: source.listing.videoAssetId,
+        },
+      });
+    }
 
     for (const mod of source.modules) {
       const newModule = await tx.module.create({
