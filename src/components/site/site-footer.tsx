@@ -3,21 +3,21 @@ import { LogoMark } from "@/components/ui/logo-mark";
 
 const FOOTER_COLS = [
   {
-    heading: "Programmes",
+    heading: "Ladder",
     links: [
-      { label: "Energy Law & Regulation", href: "/programmes/ELR-201" },
-      { label: "Tax Law & Compliance", href: "/programmes/TLC-201" },
-      { label: "Maritime & Admiralty", href: "/programmes/MAL-201" },
-      { label: "All specializations", href: "/programmes" },
+      { label: "Foundation", href: "/#ladder" },
+      { label: "Specialist", href: "/#ladder" },
+      { label: "Advanced Practitioner", href: "/#ladder" },
+      { label: "The credentialing ladder", href: "/#ladder" },
     ],
   },
   {
     heading: "The Institute",
     links: [
-      { label: "The credentialing ladder", href: "/#ladder" },
       { label: "How it works", href: "/#how" },
       { label: "Faculty", href: "/#faculty" },
-      { label: "Intake dates", href: "/#" },
+      { label: "Specializations", href: "/#programmes" },
+      { label: "Public verification", href: "/verify" },
     ],
   },
   {

@@ -65,11 +65,6 @@ export default async function HomePage() {
         <div className="relative z-[2] mx-auto max-w-[1200px] px-10 pt-[70px] pb-24">
           <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.08fr)_minmax(0,0.92fr)] gap-[72px] items-center">
             <div>
-              <div className="inline-flex items-center gap-[9px] py-[6px] pl-2 pr-[14px] rounded-full bg-accent-2/[0.12] border border-accent-2/[0.34]">
-                <span className="px-2 py-[2px] rounded-full bg-accent-2 text-[#08234a] text-[9.5px] font-bold tracking-[0.08em] uppercase">Now open</span>
-                <span className="text-[12px] font-medium text-accent-2-300">September 2026 intake · closes 31 August</span>
-              </div>
-
               <h1 className="font-heading font-semibold text-[58px] leading-[1.05] text-white mt-[26px] max-w-[16ch] tracking-[-0.022em]">
                 Lavelle transforms lawyers into recognised specialists
               </h1>
@@ -94,7 +89,6 @@ export default async function HomePage() {
                 {[
                   ["1,240+", "Practitioners credentialed since 2023"],
                   ["11", "Specializations across three tiers"],
-                  ["3", "Intakes a year: January, April, September"],
                 ].map(([value, label]) => (
                   <div key={label}>
                     <div className="font-heading font-bold text-[30px] leading-none text-accent-2">{value}</div>

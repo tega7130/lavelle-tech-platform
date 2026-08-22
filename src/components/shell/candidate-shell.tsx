@@ -251,11 +251,6 @@ export function CandidateShell({
             <h2 className="mt-[2px] mb-0">{resolvedCrumb.title}</h2>
           </div>
           <div className="flex items-center gap-[var(--space-3)]">
-            {candidate.cohort && (
-              <span className="inline-flex items-center rounded-full text-[11px] font-medium px-[10px] py-[3px] border border-accent-300 text-accent-700 bg-bg">
-                {candidate.cohort}
-              </span>
-            )}
             <div className="relative" ref={inboxRef}>
               <button
                 onClick={toggleInbox}
