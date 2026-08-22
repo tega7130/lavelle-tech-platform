@@ -27,9 +27,15 @@ export function ScrollProgressDots({
     function handleScroll() {
       const div = container as HTMLDivElement;
       const scrollLeft = div.scrollLeft;
-      const itemsPerPage = Math.max(1, Math.floor(div.clientWidth / (itemWidth + gap)));
-      const pageWidth = itemsPerPage * (itemWidth + gap);
-      const pageIndex = Math.round(scrollLeft / pageWidth);
+      const maxScroll = div.scrollWidth - div.clientWidth;
+
+      if (maxScroll <= 0) {
+        setActiveIndex(0);
+        return;
+      }
+
+      const scrollPercent = scrollLeft / maxScroll;
+      const pageIndex = Math.floor(scrollPercent * dotCount);
       setActiveIndex(Math.min(pageIndex, dotCount - 1));
     }
 
