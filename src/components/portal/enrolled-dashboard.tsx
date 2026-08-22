@@ -140,28 +140,30 @@ export function EnrolledDashboard({
 
           <div>
             <h3 className="m-0 mb-3">Upcoming deadlines</h3>
-            {deadlines.length === 0 ? (
+            {deadlines.filter((d) => d.kind !== "LECTURE_RELEASE").length === 0 ? (
               <Card elev="sm" className="text-center py-8">
                 <div className="text-[13px] text-neutral-600">Nothing is due right now.</div>
               </Card>
             ) : (
               <div className="border border-divider rounded-md overflow-hidden">
-                {deadlines.map((d) => (
-                  <div
-                    key={d.id}
-                    className="flex items-center justify-between gap-3 px-[var(--space-4)] py-[var(--space-3)] border-b border-dashed border-neutral-300 last:border-b-0"
-                  >
-                    <div className="min-w-0">
-                      <div className="text-[13px]">{d.title}</div>
-                      <div className="text-neutral-500 text-[11.5px] mt-0.5">
-                        Due {d.dueAt.toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" })}
+                {deadlines
+                  .filter((d) => d.kind !== "LECTURE_RELEASE")
+                  .map((d) => (
+                    <div
+                      key={d.id}
+                      className="flex items-center justify-between gap-3 px-[var(--space-4)] py-[var(--space-3)] border-b border-dashed border-neutral-300 last:border-b-0"
+                    >
+                      <div className="min-w-0">
+                        <div className="text-[13px]">{d.title}</div>
+                        <div className="text-neutral-500 text-[11.5px] mt-0.5">
+                          Due {d.dueAt.toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" })}
+                        </div>
                       </div>
+                      <Tag variant={d.state === "OVERDUE" ? "danger" : d.state === "DUE_SOON" ? "warning" : "neutral"}>
+                        {d.state === "DUE_SOON" ? "Due soon" : d.state === "OVERDUE" ? "Overdue" : "Upcoming"}
+                      </Tag>
                     </div>
-                    <Tag variant={d.state === "OVERDUE" ? "danger" : d.state === "DUE_SOON" ? "warning" : "neutral"}>
-                      {d.state === "DUE_SOON" ? "Due soon" : d.state === "OVERDUE" ? "Overdue" : "Upcoming"}
-                    </Tag>
-                  </div>
-                ))}
+                  ))}
               </div>
             )}
             <Link href="/portal/deadlines" className="text-xs font-medium text-accent inline-block mt-2">

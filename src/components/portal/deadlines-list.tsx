@@ -64,7 +64,7 @@ export function DeadlinesList({ deadlines }: { deadlines: Deadlines }) {
                   {d.extendedReason ? ` · ${d.extendedReason}` : ""}
                 </div>
               </div>
-              <Tag variant={style.tag}>{style.label}</Tag>
+              {d.kind !== "LECTURE_RELEASE" && <Tag variant={style.tag}>{style.label}</Tag>}
               {d.kind !== "EXAMINATION" && (
                 <Link
                   href={`/portal/programme?programme=${d.programmeCode}`}
