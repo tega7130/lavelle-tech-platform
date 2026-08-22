@@ -17,7 +17,7 @@ export async function completeStepAction(enrolmentId: string, lectureId: string,
   const candidateId = await requireCandidateId();
   const parsedStep = stepSchema.parse(step);
   const result = await playerActions.completeStep(candidateId, enrolmentId, lectureId, parsedStep);
-  revalidatePath(`/portal/learn/${enrolmentId}/${lectureId}`);
+  revalidatePath(`/learn/${enrolmentId}/${lectureId}`);
   revalidatePath("/portal/programme");
   return result;
 }
@@ -25,7 +25,7 @@ export async function completeStepAction(enrolmentId: string, lectureId: string,
 export async function submitDraftingAction(enrolmentId: string, lectureId: string) {
   const candidateId = await requireCandidateId();
   const result = await playerActions.submitDrafting(candidateId, enrolmentId, lectureId);
-  revalidatePath(`/portal/learn/${enrolmentId}/${lectureId}`);
+  revalidatePath(`/learn/${enrolmentId}/${lectureId}`);
   revalidatePath("/portal/deadlines");
   return result;
 }

@@ -152,18 +152,24 @@ export function LecturePlayer({ enrolmentId, data }: { enrolmentId: string; data
   // candidate report: button must not show while the quiz form is still up).
   const [quizResultVisible, setQuizResultVisible] = React.useState(completed.has("quiz"));
   const readyToFinish = lectureFullyComplete && (!steps.includes("quiz") || (quizResultVisible && quizPassed));
-  // Every module that carries a quiz must have its LAST lecture's "quiz" step
-  // passed before the programme can be marked complete — checking only the
-  // current lecture isn't enough, since a candidate could reach the final
-  // lecture while an earlier module's quiz was never passed. The current
-  // module reads from live local state (quizPassed) rather than the
-  // server-fetched `modules` snapshot, which can briefly lag one refresh
-  // behind right after a submit.
+  // Every module that carries a quiz must have that quiz passed before the
+  // programme can be marked complete — checking only the current lecture
+  // isn't enough, since a candidate could reach the final lecture while an
+  // earlier module's quiz was never passed. Other modules read
+  // `m.quizPassed`, which is derived server-side from QuizAttempt.passed
+  // (keyed by quizId), NOT from a lecture's stepsCompleted — that flag is
+  // recorded against whichever lecture was the module's last PUBLISHED one
+  // at attempt time, and staff unpublishing/reordering lectures afterwards
+  // shifts which lecture is "last" without moving the flag, which used to
+  // make a real pass silently invisible here. The current module still
+  // reads from live local state (quizPassed) rather than the server-fetched
+  // `modules` snapshot, which can briefly lag one refresh behind right
+  // after a submit.
   const allModuleQuizzesPassed = modules.every((m) => {
     const lastLecture = m.lectures[m.lectures.length - 1];
     if (!lastLecture || !lastLecture.steps.includes("quiz")) return true;
-    if (lastLecture.id === lecture.id) return quizPassed;
-    return lastLecture.stepsCompleted.includes("quiz");
+    if (m.id === mod.id) return quizPassed;
+    return m.quizPassed;
   });
   const [completingProgramme, setCompletingProgramme] = React.useState(false);
   const [completeError, setCompleteError] = React.useState<string | null>(null);

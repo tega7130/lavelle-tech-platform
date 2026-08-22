@@ -39,7 +39,7 @@ async function loadOwnedEnrolment(candidateId: string, enrolmentId: string) {
  * icon is this, not an authoring gap.
  */
 async function loadModuleTree(enrolmentId: string, programmeId: string) {
-  const [modules, progressRows, releaseDeadlines] = await Promise.all([
+  const [modules, progressRows, releaseDeadlines, quizAttempts] = await Promise.all([
     prisma.module.findMany({
       where: { programmeId },
       orderBy: { orderIndex: "asc" },
@@ -55,10 +55,19 @@ async function loadModuleTree(enrolmentId: string, programmeId: string) {
     }),
     prisma.lectureProgress.findMany({ where: { enrolmentId } }),
     prisma.deadline.findMany({ where: { enrolmentId, kind: "LECTURE_RELEASE" } }),
+    // Whether a module's quiz has been passed is read from here, never
+    // from a lecture's stepsCompleted — that flag is recorded against
+    // whichever lecture was the module's last PUBLISHED one at attempt
+    // time, and an admin unpublishing/reordering lectures afterwards
+    // shifts which lecture is "last" without moving the flag, silently
+    // orphaning a real pass. QuizAttempt is keyed by quizId, which never
+    // changes, so it stays correct across any later content edit.
+    prisma.quizAttempt.findMany({ where: { enrolmentId, passed: true }, select: { quizId: true } }),
   ]);
 
   const progressByLecture = new Map(progressRows.map((p) => [p.lectureId, p]));
   const releaseByModule = new Map(releaseDeadlines.map((d) => [d.moduleId, d]));
+  const passedQuizIds = new Set(quizAttempts.map((a) => a.quizId));
   const now = new Date();
 
   let totalLectures = 0;
@@ -106,6 +115,10 @@ async function loadModuleTree(enrolmentId: string, programmeId: string) {
       releaseAt: release?.dueAt ?? null,
       percent: computePercent(moduleCompleted, mod.lectures.length),
       lectures,
+      // Authoritative per-module quiz-pass state — see the comment on the
+      // quizAttempt query above for why this is never derived from a
+      // lecture's stepsCompleted.
+      quizPassed: moduleHasQuiz && passedQuizIds.has(mod.quiz!.id),
     };
   });
 
