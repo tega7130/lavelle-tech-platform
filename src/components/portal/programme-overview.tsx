@@ -18,8 +18,6 @@ const TABS = [
   { key: "modules", label: "Modules" },
 ] as const;
 
-const ASSESSMENT_LABEL: Record<string, string> = { QUIZ: "Module quizzes", DRAFTING: "Drafting exercises", EXAMINATION: "Certifying examination" };
-
 export function ProgrammeOverview({ overview }: { overview: Overview }) {
   const { enrolment, programme, modules, programmePercent, upNext } = overview;
   const [tab, setTab] = React.useState<(typeof TABS)[number]["key"]>("overview");
@@ -111,23 +109,6 @@ export function ProgrammeOverview({ overview }: { overview: Overview }) {
               <div className="text-neutral-500 text-xs">Delivery</div>
               <div>{programme.deliveryLabel}</div>
             </div>
-          </div>
-        </Card>
-      )}
-
-      {tab === "overview" && programme.assessmentWeightings.length > 0 && (
-        <Card elev="sm">
-          <CardKicker>How you&apos;ll be graded</CardKicker>
-          <div className="flex flex-col gap-2 mt-2">
-            {programme.assessmentWeightings
-              .slice()
-              .sort((a, b) => b.weightPercent - a.weightPercent)
-              .map((w) => (
-                <div key={w.kind} className="flex justify-between gap-4 pb-2 border-b border-dashed border-neutral-300 last:border-b-0 last:pb-0">
-                  <span className="text-[13px] text-neutral-700">{ASSESSMENT_LABEL[w.kind] ?? w.kind}</span>
-                  <span className="font-heading font-semibold text-[13px]">{w.weightPercent}%</span>
-                </div>
-              ))}
           </div>
         </Card>
       )}
