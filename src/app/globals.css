@@ -286,4 +286,8 @@
     background: var(--color-neutral-800);
     border-radius: 8px;
   }
+
+  .scrollbar-hidden::-webkit-scrollbar {
+    display: none;
+  }
 }
