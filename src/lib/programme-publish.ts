@@ -22,8 +22,10 @@ export function computePublishFailures(programme: PublishCheckInput): string[] {
   }
 
   const totalWeight = programme.assessmentWeightings.reduce((a, w) => a + w.weightPercent, 0);
-  if (programme.assessmentWeightings.length < 3 || totalWeight !== 100) {
-    failures.push(`Assessment weights total ${totalWeight}% — they must total exactly 100%.`);
+  if (programme.assessmentWeightings.length === 0) {
+    failures.push("Add at least one assessment type (Quiz, Drafting, or Exam) with a weight percentage.");
+  } else if (totalWeight !== 100) {
+    failures.push(`Adjust weights to total exactly 100% (currently ${totalWeight}%).`);
   }
 
   if (programme.feeMinor <= 0) failures.push("Set a fee greater than zero.");

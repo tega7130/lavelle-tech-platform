@@ -23,7 +23,7 @@ export class LectureLockedError extends Error {
 async function loadOwnedEnrolment(candidateId: string, enrolmentId: string) {
   const enrolment = await prisma.enrolment.findUnique({
     where: { id: enrolmentId },
-    include: { programme: { include: { exam: { select: { id: true } } } } },
+    include: { programme: { include: { exam: { select: { id: true } }, assessmentWeightings: true } } },
   });
   if (!enrolment || enrolment.candidateId !== candidateId) throw new NotYourEnrolmentError();
   return enrolment;

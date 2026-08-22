@@ -28,7 +28,7 @@ describe("programme ACTIVE publish checks (rule 2) — the specific failures, no
     const failures = computePublishFailures({ modules: [], assessmentWeightings: [], feeMinor: 0 });
     expect(failures).toHaveLength(3);
     expect(failures.some((f) => f.includes("at least one module"))).toBe(true);
-    expect(failures.some((f) => f.includes("100%"))).toBe(true);
+    expect(failures.some((f) => f.includes("assessment type"))).toBe(true);
     expect(failures.some((f) => f.includes("fee"))).toBe(true);
   });
 
@@ -65,6 +65,36 @@ describe("programme ACTIVE publish checks (rule 2) — the specific failures, no
       feeMinor: 0,
     });
     expect(failures).toEqual(["Set a fee greater than zero."]);
+  });
+
+  // Rule 2 was relaxed from "at least 3 assessment types" to "at least 1" —
+  // a standalone exam (Exam 100%, no quiz/drafting) or a course without a
+  // certifying exam (Quiz + Drafting only) must both be publishable.
+  it("passes a single assessment type totalling 100%", () => {
+    const failures = computePublishFailures({
+      modules: [{ title: "Week 1", lectures: [{}] }],
+      assessmentWeightings: [{ weightPercent: 100 }],
+      feeMinor: 45_000_000,
+    });
+    expect(failures).toEqual([]);
+  });
+
+  it("passes two assessment types totalling 100%", () => {
+    const failures = computePublishFailures({
+      modules: [{ title: "Week 1", lectures: [{}] }],
+      assessmentWeightings: [{ weightPercent: 40 }, { weightPercent: 60 }],
+      feeMinor: 45_000_000,
+    });
+    expect(failures).toEqual([]);
+  });
+
+  it("refuses one assessment type that doesn't total 100%", () => {
+    const failures = computePublishFailures({
+      modules: [{ title: "Week 1", lectures: [{}] }],
+      assessmentWeightings: [{ weightPercent: 50 }],
+      feeMinor: 45_000_000,
+    });
+    expect(failures).toEqual(["Adjust weights to total exactly 100% (currently 50%)."]);
   });
 });
 

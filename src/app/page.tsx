@@ -119,7 +119,7 @@ export default async function HomePage() {
               </div>
               <div className="absolute -left-7 bottom-11 w-[250px] p-[17px] rounded-[13px] bg-white/97 shadow-[0_22px_48px_rgba(0,0,0,0.34)] backdrop-blur">
                 <div className="flex items-center gap-[9px]">
-                  <span className="w-[26px] h-[26px] flex-none rounded-full bg-accent-2 text-[#08234a] flex items-center justify-center text-[12px] font-bold">✓</span>
+                  <span className="w-[26px] h-[26px] flex-none rounded-full bg-accent text-accent-900 flex items-center justify-center text-[12px] font-bold">✓</span>
                   <div className="font-heading font-semibold text-[12.5px] text-[#131a2e]">Credential verified</div>
                 </div>
                 <div className="text-[11px] text-neutral-600 leading-[1.5] mt-[9px]">

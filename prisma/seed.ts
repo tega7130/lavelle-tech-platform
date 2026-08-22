@@ -841,14 +841,20 @@ async function main() {
           data: { moduleId: mod.id, orderIndex: 0, title: "Introduction", mediaKind: LectureMediaKind.SLIDES },
         });
       }
+      // These three have no certifying Exam record (only ELR-201 does) —
+      // weight just Quiz + Drafting, the two assessments they actually have.
+      // Clear any stale EXAMINATION row from an earlier seed run so a
+      // re-seed doesn't leave weights totalling more than 100%.
+      await prisma.assessmentWeighting.deleteMany({
+        where: { programmeId: programmes[p.code]!.id, kind: AssessmentKind.EXAMINATION },
+      });
       for (const [kind, weightPercent] of [
-        [AssessmentKind.QUIZ, 20],
-        [AssessmentKind.DRAFTING, 40],
-        [AssessmentKind.EXAMINATION, 40],
+        [AssessmentKind.QUIZ, 40],
+        [AssessmentKind.DRAFTING, 60],
       ] as const) {
         await prisma.assessmentWeighting.upsert({
           where: { programmeId_kind: { programmeId: programmes[p.code]!.id, kind } },
-          update: {},
+          update: { weightPercent },
           create: { programmeId: programmes[p.code]!.id, kind, weightPercent },
         });
       }

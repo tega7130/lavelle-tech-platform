@@ -286,7 +286,12 @@ export function ProgrammeContentEditor({ programme }: { programme: ProgrammeData
           <div className="mt-1 flex items-center gap-2 text-[12.5px] text-neutral-600">
             <Tag variant={programme.status === "ACTIVE" ? "success" : "neutral"}>{statusLabel(programme.status)}</Tag>
             <span>{formatNaira(programme.feeMinor)}</span>
-            <span>· Weights {totalWeight}%</span>
+            <span>
+              · Weights {totalWeight}%
+              {programme.assessmentWeightings.length === 0 && " (add at least one)"}
+              {programme.assessmentWeightings.length > 0 && totalWeight !== 100 && ` (need 100%)`}
+              {totalWeight === 100 && " ✓"}
+            </span>
           </div>
         </div>
         <div className="flex items-center gap-2">

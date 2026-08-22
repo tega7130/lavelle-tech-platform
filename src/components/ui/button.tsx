@@ -7,10 +7,9 @@ const base =
   "inline-flex items-center justify-center gap-2 whitespace-nowrap font-heading font-semibold text-sm leading-tight rounded-md border border-transparent px-[var(--space-4)] py-[9px] transition-colors disabled:opacity-45 disabled:cursor-not-allowed disabled:pointer-events-none cursor-pointer";
 
 const variants: Record<ButtonVariant, string> = {
-  // The gold-on-blue primary is the single most identifying brand element —
-  // never render a primary action as blue-on-blue or blue text.
+  // White-on-blue primary — never render a primary action as blue-on-blue.
   primary:
-    "bg-accent border-accent text-accent-2 hover:bg-accent-600 hover:border-accent-600 active:bg-accent-700 active:border-accent-700",
+    "bg-accent border-accent text-white hover:bg-accent-600 hover:border-accent-600 active:bg-accent-700 active:border-accent-700",
   secondary:
     "bg-bg border-neutral-300 text-text hover:bg-neutral-100 active:bg-neutral-200",
   ghost: "text-accent px-[var(--space-2)] hover:bg-accent-100 active:bg-accent-200",
