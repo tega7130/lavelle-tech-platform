@@ -49,3 +49,7 @@ next-env.d.ts
 
 # Sentry Config File
 .env.sentry-build-plugin
+
+# this project runs on Postgres exclusively — stray local sqlite files
+# (e.g. from a misdirected prisma command) are never real data
+*.db
