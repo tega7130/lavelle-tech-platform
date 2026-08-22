@@ -608,6 +608,7 @@ model Lecture {
   draftingSubmissions DraftingSubmission[]
   deadlines           Deadline[]
   rubrics             MarkRubric[]
+  notes               LectureNote[]
 
   @@index([moduleId, orderIndex])
 }
@@ -864,6 +865,7 @@ model Enrolment {
   examRegistrations   ExamRegistration[]
   certificates        Certificate[]
   reviews             Review[]
+  notes               LectureNote[]
 
   // Partial unique index — a candidate cannot hold two live enrolments in
   // the same programme, but may re-enrol after withdrawing. Prisma cannot
@@ -952,6 +954,26 @@ model DraftingSubmission {
   mark Mark?
 
   @@unique([enrolmentId, lectureId, attemptNumber])
+}
+
+// A private, free-form note per (enrolment, lecture) — not a step, never
+// gates progression. body is a small constrained markup string produced
+// by the rich text editor's DOM serializer (never raw HTML — see
+// src/lib/rich-text.ts), so it is always safe to render directly.
+model LectureNote {
+  id          String    @id @default(uuid())
+  enrolmentId String
+  enrolment   Enrolment @relation(fields: [enrolmentId], references: [id], onDelete: Cascade)
+  lectureId   String
+  lecture     Lecture   @relation(fields: [lectureId], references: [id], onDelete: Cascade)
+
+  body String @default("")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([enrolmentId, lectureId])
+  @@index([enrolmentId, updatedAt(sort: Desc)])
 }
 
 model QuizAttempt {

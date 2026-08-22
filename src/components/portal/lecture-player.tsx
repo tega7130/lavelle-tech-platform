@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/field";
 import { Dialog } from "@/components/ui/dialog";
 import { LectureStateDot } from "@/components/portal/lecture-state-dot";
 import { QuizPlayer } from "@/components/portal/quiz-player";
+import { LectureNotesPanel } from "@/components/portal/lecture-notes-panel";
 import { ChevronLeftIcon, LockIcon } from "@/components/icons";
 import { computePercent } from "@/lib/progress";
 import { youtubeEmbedUrl } from "@/lib/format";
@@ -394,6 +395,7 @@ export function LecturePlayer({ enrolmentId, data }: { enrolmentId: string; data
                 </div>
               </div>
             )}
+            <LectureNotesPanel enrolmentId={enrolmentId} lectureId={lecture.id} initialBody={data.lectureNote?.body ?? ""} />
           </div>
         )}
 

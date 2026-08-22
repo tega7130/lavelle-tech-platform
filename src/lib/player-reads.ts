@@ -186,11 +186,15 @@ export async function getLecturePlayer(candidateId: string, enrolmentId: string,
     narrationUrl: s.narrationAsset ? getSignedAssetUrl(s.narrationAsset.storageKey) : null,
   }));
 
-  const [progress, draftingSubmission] = await Promise.all([
+  const [progress, draftingSubmission, lectureNote] = await Promise.all([
     prisma.lectureProgress.findUnique({ where: { enrolmentId_lectureId: { enrolmentId, lectureId } } }),
     lecture.draftingPrompt
       ? prisma.draftingSubmission.findFirst({ where: { enrolmentId, lectureId }, orderBy: { attemptNumber: "desc" } })
       : Promise.resolve(null),
+    // Unconditional, unlike draftingSubmission — every lecture has a
+    // content step, so a note is always fetchable regardless of what
+    // else the lecture is authored with.
+    prisma.lectureNote.findUnique({ where: { enrolmentId_lectureId: { enrolmentId, lectureId } } }),
   ]);
 
   // Quiz metadata only — question count and pass mark, never the
@@ -233,6 +237,7 @@ export async function getLecturePlayer(candidateId: string, enrolmentId: string,
     stepsCompleted: currentLecture.stepsCompleted,
     resumePosition: { slideIndex: progress?.slideIndex ?? 0, mediaPositionSeconds: progress?.mediaPositionSeconds ?? 0 },
     draftingSubmission,
+    lectureNote,
     quiz,
     quizAttempt,
     prevLectureId,

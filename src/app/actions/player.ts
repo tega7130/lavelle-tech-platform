@@ -53,3 +53,10 @@ export async function completeProgrammeAction(enrolmentId: string) {
   revalidatePath("/portal/credentials");
   return result;
 }
+
+export async function deleteNoteAction(enrolmentId: string, lectureId: string) {
+  const candidateId = await requireCandidateId();
+  await playerActions.deleteLectureNote(candidateId, enrolmentId, lectureId);
+  revalidatePath(`/learn/${enrolmentId}/${lectureId}`);
+  revalidatePath("/portal/notes");
+}

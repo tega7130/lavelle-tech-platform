@@ -59,6 +59,26 @@ export async function savePosition(
   });
 }
 
+/**
+ * Notes never gate progression and aren't a step — just a free-form
+ * per-lecture scratchpad. body is always the rich text editor's
+ * serialized markup (never raw HTML), so this never needs to sanitize
+ * anything on the way in.
+ */
+export async function saveLectureNote(candidateId: string, enrolmentId: string, lectureId: string, body: string) {
+  await assertOwnedEnrolment(candidateId, enrolmentId);
+  return prisma.lectureNote.upsert({
+    where: { enrolmentId_lectureId: { enrolmentId, lectureId } },
+    create: { enrolmentId, lectureId, body },
+    update: { body },
+  });
+}
+
+export async function deleteLectureNote(candidateId: string, enrolmentId: string, lectureId: string) {
+  await assertOwnedEnrolment(candidateId, enrolmentId);
+  await prisma.lectureNote.deleteMany({ where: { enrolmentId, lectureId } });
+}
+
 async function computeStepsForLecture(lectureId: string): Promise<LectureStep[]> {
   const lecture = await prisma.lecture.findUniqueOrThrow({
     where: { id: lectureId },

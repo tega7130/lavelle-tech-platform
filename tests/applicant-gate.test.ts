@@ -65,6 +65,8 @@ describe("layer 1 — isGatedPortalPath() (proxy.ts's route-gating decision)", (
   });
 
   it("the gated set is exactly what's marked gated in the nav config — no drift", () => {
-    expect(GATED_PORTAL_HREFS.sort()).toEqual(["/portal/programme", "/portal/deadlines", "/portal/assessment", "/portal/ai"].sort());
+    expect(GATED_PORTAL_HREFS.sort()).toEqual(
+      ["/portal/programme", "/portal/deadlines", "/portal/assessment", "/portal/notes", "/portal/ai"].sort()
+    );
   });
 });

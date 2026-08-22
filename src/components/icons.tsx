@@ -54,6 +54,13 @@ export const DeadlinesIcon = (p: IconProps) => (
   </Svg>
 );
 
+export const NotesIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M12.5 2.5 15.5 5.5 6 15H3v-3z" />
+    <path d="M10.5 4.5 13.5 7.5" />
+  </Svg>
+);
+
 export const AssessmentIcon = (p: IconProps) => (
   <Svg {...p}>
     <path d="M3 15V8" />

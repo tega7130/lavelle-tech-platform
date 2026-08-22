@@ -23,6 +23,7 @@ export const CANDIDATE_NAV_ITEMS: CandidateNavItemMeta[] = [
   { key: "catalogue", label: "Catalogue", href: "/portal/catalogue" },
   { key: "deadlines", label: "Deadlines", href: "/portal/deadlines", gated: true },
   { key: "assessment", label: "Assessment", href: "/portal/assessment", gated: true },
+  { key: "notes", label: "Notes", href: "/portal/notes", gated: true },
   // Deliberately NOT gated, unlike Handoff 00's original blanket list —
   // Slice 06 rule 14 makes exam-only registration (no enrolment at all) a
   // first-class, non-shameful pathway, so an applicant who never enrols
