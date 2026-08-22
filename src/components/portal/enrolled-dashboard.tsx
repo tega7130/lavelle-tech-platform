@@ -7,6 +7,7 @@ import { tierLabel } from "@/lib/format";
 import type { CurrentCandidate } from "@/lib/candidate-session";
 import type { getDashboardSummary } from "@/lib/dashboard-reads";
 import type { getCandidateCohortStatus } from "@/lib/profile-reads";
+import { ProfileCompletionPrompt } from "@/components/portal/profile-completion-prompt";
 
 type Summary = Awaited<ReturnType<typeof getDashboardSummary>>;
 type CohortStatus = Awaited<ReturnType<typeof getCandidateCohortStatus>>;
@@ -54,6 +55,8 @@ export function EnrolledDashboard({
           <div className="text-[11px] text-neutral-500 mt-1">On purpose &middot; Lavelle Institute</div>
         </div>
       </div>
+
+      <ProfileCompletionPrompt candidate={candidate} />
 
       {upcomingExam && (
         <Card elev="md" stripe="blue" className="p-[var(--space-5)]">
