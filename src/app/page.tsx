@@ -446,39 +446,6 @@ export default async function HomePage() {
         </div>
       </div>
 
-      {/* FINAL CTA */}
-      <div className="py-[104px]">
-        <div className="mx-auto max-w-[1200px] px-10">
-          <div className="relative overflow-hidden rounded-[20px] bg-[linear-gradient(158deg,#0c356f,#08234a)] px-14 py-16 text-center">
-            <div className="pointer-events-none absolute -top-40 -right-[100px] w-[460px] h-[460px] rounded-full bg-[radial-gradient(circle,rgba(255,198,41,0.16),rgba(255,198,41,0)_70%)]" />
-            <div className="relative">
-              <div className="text-[11px] tracking-[0.18em] uppercase font-semibold text-accent-2">September 2026 intake</div>
-              <h2 className="font-heading font-semibold text-[42px] leading-[1.12] text-white mt-4 max-w-[22ch] mx-auto tracking-[-0.022em]">
-                Registration closes 31 August.
-              </h2>
-              <p className="text-[15.5px] leading-[1.7] text-white/72 max-w-[52ch] mx-auto mt-[18px]">
-                Create your account today, browse the catalogue at your own pace, and enrol when the right programme is in front of you.
-              </p>
-              <div className="flex gap-[13px] justify-center mt-[34px] flex-wrap">
-                <Link href="/register" className={cn(buttonClassName("primary"), "h-[50px] px-6 rounded-[9px] text-[14.5px]")}>
-                  Create your account
-                </Link>
-                <Link
-                  href="#programmes"
-                  className={buttonClassName("secondary", "bg-transparent border-white/28 text-white hover:bg-white/[0.09] hover:text-white h-[50px] px-6 rounded-[9px] text-[14.5px]")}
-                >
-                  See the catalogue
-                </Link>
-              </div>
-              <div className="flex gap-7 justify-center mt-[34px] flex-wrap text-[11.5px] text-white/50">
-                <span>Registration is free</span>
-                <span>Pay per programme</span>
-                <span>Credentials verifiable for life</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
 
       {/* CONTACT */}
       <div id="contact" className="py-24 bg-neutral-100 border-t border-divider">
