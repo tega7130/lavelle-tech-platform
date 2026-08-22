@@ -8,7 +8,6 @@ const FOOTER_COLS = [
       { label: "Foundation", href: "/#ladder" },
       { label: "Specialist", href: "/#ladder" },
       { label: "Advanced Practitioner", href: "/#ladder" },
-      { label: "The credentialing ladder", href: "/#ladder" },
     ],
   },
   {

@@ -122,22 +122,6 @@ export default async function ProgrammeDetailPage({ params }: { params: Promise<
                 ))}
               </div>
 
-              {detail.assessment.length > 0 && (
-                <>
-                  <h3 className="font-heading font-semibold text-[21px] mt-11">How you are assessed</h3>
-                  <div className="flex flex-col gap-[11px] mt-4">
-                    {detail.assessment.map((a) => (
-                      <div key={a.item} className="flex justify-between gap-5 pb-[11px] border-b border-dashed border-neutral-300">
-                        <div className="min-w-0">
-                          <div className="text-[13.5px] font-medium">{a.item}</div>
-                          <div className="text-[12px] text-neutral-600 mt-[3px]">{a.detail}</div>
-                        </div>
-                        <div className="flex-none font-heading font-semibold text-[14px]">{a.weight}</div>
-                      </div>
-                    ))}
-                  </div>
-                </>
-              )}
             </div>
 
             {/* fee panel */}
