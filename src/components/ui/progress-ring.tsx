@@ -30,7 +30,11 @@ export function ProgressRing({
         className="rounded-full bg-bg flex flex-col items-center justify-center"
         style={{ width: size - thickness * 2, height: size - thickness * 2 }}
       >
-        <div className="font-heading font-bold text-lg leading-none">{label ?? `${clamped}%`}</div>
+        {/* Explicit color, not inherited — this circle's bg-bg is light even
+            when the ring sits on a dark hero (programme-overview.tsx) whose
+            ancestor sets text-white, which otherwise renders this invisibly
+            (white-on-white). */}
+        <div className="font-heading font-bold text-lg leading-none text-text">{label ?? `${clamped}%`}</div>
         {sublabel && <div className="text-[10px] text-neutral-500 mt-0.5">{sublabel}</div>}
       </div>
     </div>
