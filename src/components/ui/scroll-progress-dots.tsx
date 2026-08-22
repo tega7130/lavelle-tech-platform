@@ -8,6 +8,7 @@ export interface ScrollProgressDotsProps {
   itemCount: number;
   itemWidth: number;
   gap: number;
+  dotCount?: number;
 }
 
 export function ScrollProgressDots({
@@ -15,6 +16,7 @@ export function ScrollProgressDots({
   itemCount,
   itemWidth,
   gap,
+  dotCount = 3,
 }: ScrollProgressDotsProps) {
   const [activeIndex, setActiveIndex] = React.useState(0);
 
@@ -23,18 +25,21 @@ export function ScrollProgressDots({
     if (!container) return;
 
     function handleScroll() {
-      const scrollLeft = (container as HTMLDivElement).scrollLeft;
-      const index = Math.round(scrollLeft / (itemWidth + gap));
-      setActiveIndex(Math.min(index, itemCount - 1));
+      const div = container as HTMLDivElement;
+      const scrollLeft = div.scrollLeft;
+      const itemsPerPage = Math.max(1, Math.floor(div.clientWidth / (itemWidth + gap)));
+      const pageWidth = itemsPerPage * (itemWidth + gap);
+      const pageIndex = Math.round(scrollLeft / pageWidth);
+      setActiveIndex(Math.min(pageIndex, dotCount - 1));
     }
 
     container.addEventListener("scroll", handleScroll);
     return () => container.removeEventListener("scroll", handleScroll);
-  }, [containerRef, itemWidth, gap, itemCount]);
+  }, [containerRef, itemWidth, gap, dotCount]);
 
   return (
     <div className="flex justify-center gap-2 mt-6">
-      {Array.from({ length: itemCount }).map((_, i) => (
+      {Array.from({ length: dotCount }).map((_, i) => (
         <div
           key={i}
           className={cn(
