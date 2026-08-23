@@ -61,6 +61,15 @@ export const NotesIcon = (p: IconProps) => (
   </Svg>
 );
 
+export const BlogIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <rect x="2.5" y="2.5" width="13" height="13" rx="1.5" />
+    <line x1="5.5" y1="6" x2="12.5" y2="6" />
+    <line x1="5.5" y1="9" x2="12.5" y2="9" />
+    <line x1="5.5" y1="12" x2="9.5" y2="12" />
+  </Svg>
+);
+
 export const AssessmentIcon = (p: IconProps) => (
   <Svg {...p}>
     <path d="M3 15V8" />

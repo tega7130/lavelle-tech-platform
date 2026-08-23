@@ -14,16 +14,17 @@ const bodySchema = z.object({
   // Which permission gates this upload — programme media (Slice 02,
   // default, preserves every existing caller unchanged), a finance
   // receipt (Slice 03: offline-payment recording), certificate template
-  // artwork (Slice 07), or a candidate's own profile photo (candidate-
-  // gated, not staff-gated — the only purpose below with no staff
-  // permission at all).
-  purpose: z.enum(["programme", "finance", "certificate", "candidate_photo"]).default("programme"),
+  // artwork (Slice 07), a blog post hero image, or a candidate's own
+  // profile photo (candidate-gated, not staff-gated — the only purpose
+  // below with no staff permission at all).
+  purpose: z.enum(["programme", "finance", "certificate", "blog", "candidate_photo"]).default("programme"),
 });
 
 const PERMISSION_BY_PURPOSE = {
   programme: Permission.MANAGE_PROGRAMMES,
   finance: Permission.CONFIRM_PAYMENTS,
   certificate: Permission.ISSUE_CERTIFICATES,
+  blog: Permission.MANAGE_BLOG,
 } as const;
 
 /**

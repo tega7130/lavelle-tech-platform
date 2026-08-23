@@ -60,6 +60,7 @@ export const ADMIN_NAV: AdminNavGroup[] = [
     label: "Marketing",
     items: [
       { key: "website", label: "Website", href: "/admin/website" },
+      { key: "blog", label: "Blog", href: "/admin/blog" },
       { key: "reviews", label: "Reviews", href: "/admin/reviews" },
     ],
   },

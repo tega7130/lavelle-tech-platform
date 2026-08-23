@@ -1742,6 +1742,64 @@ async function main() {
     await prisma.programme.update({ where: { id: programmes["MAL-201"]!.id }, data: { status: "ARCHIVED" } });
   }
 
+  // Blog: two published posts (newest first on /blog and /portal/blog) and
+  // one draft, so both the admin list and the publish/unpublish states
+  // have something to show right after seeding.
+  const existingBlogPosts = await prisma.blogPost.count();
+  if (existingBlogPosts === 0) {
+    await prisma.blogPost.create({
+      data: {
+        slug: "why-specialisation-beats-generalism",
+        title: "Why specialisation beats generalism in Nigerian legal practice",
+        excerpt: "A generalist can advise on anything passably. A specialist is who the generalist calls when the matter actually matters.",
+        tags: ["Careers", "Insights"],
+        authorName: "The Lavelle Institute",
+        isPublished: true,
+        publishedAt: new Date("2026-07-14T09:00:00Z"),
+        publishedByStaffId: superAdmin.id,
+        createdByStaffId: superAdmin.id,
+        body:
+          "For most of a young lawyer's career, the pressure runs toward breadth. Take every brief, learn every area, say yes to everything — it feels like the safe way to build a practice.\n\n" +
+          "The market disagrees. Clients with a real problem — a cross-border financing, a regulatory investigation, a contested estate — do not want the lawyer who knows a little about everything. They want the lawyer who has done **this exact thing** many times before.\n\n" +
+          "What specialisation actually buys you:\n\n" +
+          "- Pattern recognition a generalist never develops\n- A referral network of other specialists, not competitors\n- Pricing power — depth is worth paying for, breadth is a commodity\n\n" +
+          "None of this means abandoning a broad legal education. It means choosing, deliberately, where your depth will live.",
+      },
+    });
+
+    await prisma.blogPost.create({
+      data: {
+        slug: "how-our-examinations-are-marked",
+        title: "How our certifying examinations are marked",
+        excerpt: "Objective questions are marked by machine. Written answers are marked by two humans who have never met the candidate.",
+        tags: ["Assessment"],
+        authorName: "Kemi Balogun",
+        isPublished: true,
+        publishedAt: new Date("2026-08-02T09:00:00Z"),
+        publishedByStaffId: superAdmin.id,
+        createdByStaffId: superAdmin.id,
+        body:
+          "A credential is only worth as much as the process behind it, so we are deliberately transparent about ours.\n\n" +
+          "Every sitting has two parts:\n\n" +
+          "1. Objective questions, marked automatically the moment you submit\n2. Written questions, marked by a member of faculty against a fixed rubric\n\n" +
+          "_No marker ever sees a candidate's name_ — sittings are graded by identifier only. A grade below the pass threshold is automatically checked by a second, independent marker before it is released. This is not a courtesy; it is how we can stand behind every certificate we issue.",
+      },
+    });
+
+    await prisma.blogPost.create({
+      data: {
+        slug: "september-2026-intake-announcement",
+        title: "Announcing the September 2026 intake",
+        excerpt: "Draft — not yet published.",
+        tags: ["News"],
+        authorName: "The Lavelle Institute",
+        isPublished: false,
+        createdByStaffId: superAdmin.id,
+        body: "Details of the September 2026 intake go here once confirmed.",
+      },
+    });
+  }
+
   console.log(`Seeded. Demo password for every account: ${DEMO_PASSWORD}`);
   console.log(
     "Candidate login: c.okonji@chambers.ng (enrolled, LVL/2026/00291) · i.danjuma@example.com (applicant, incomplete profile) · n.adeleke@example.com (applicant, profile complete, ready to enrol)"
