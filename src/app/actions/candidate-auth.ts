@@ -10,6 +10,9 @@ import {
   signInSchema,
   requestOtpSchema,
   verifyOtpSchema,
+  requestPasswordResetOtpSchema,
+  verifyPasswordResetOtpSchema,
+  resetPasswordSchema,
   updateProfileSchema,
   updateContactDetailsSchema,
   fieldErrors,
@@ -21,6 +24,7 @@ import {
   setSessionCookie,
   createCandidateSession,
   destroyCandidateSession,
+  revokeAllSessions,
   getCurrentCandidate,
 } from "@/lib/candidate-session";
 import {
@@ -29,6 +33,12 @@ import {
   invalidateOutstandingTokens,
 } from "@/lib/verification-token";
 import { createOtpChallenge, logOtpEmail, verifyOtpChallenge, consumeVerifiedOtp } from "@/lib/email-otp";
+import {
+  createPasswordResetOtpChallenge,
+  logPasswordResetOtpEmail,
+  verifyPasswordResetOtpChallenge,
+  consumeVerifiedPasswordResetOtp,
+} from "@/lib/password-reset-otp";
 import { recordAuditEvent } from "@/lib/audit";
 import { p2002Target } from "@/lib/prisma-errors";
 import type { FormActionState } from "@/lib/action-state";
@@ -279,6 +289,136 @@ export async function resendVerification(): Promise<FormActionState> {
   const token = await createVerificationTokenRecord(prisma, candidate.id);
   logVerificationEmail(candidate.email, token);
   return { ok: true };
+}
+
+/**
+ * Forgot-password step 1: prove ownership of the account's email via OTP
+ * before allowing a new password. Silent on an unknown email or a
+ * non-ACTIVE account — same "never reveal whether the address exists"
+ * rule as requestStaffPasswordResetCore, just expressed as a generic
+ * FormActionState success instead of a bare return.
+ */
+export async function requestPasswordResetOtp(
+  _prev: FormActionState,
+  formData: FormData
+): Promise<FormActionState> {
+  const raw = formToObject(formData);
+  const ip = await getClientIp();
+
+  try {
+    await enforceRateLimit(
+      "requestPasswordResetOtp",
+      { ip, email: raw.email },
+      { limit: 3, windowSeconds: 60 * 60 }
+    );
+  } catch {
+    // Same silent, generic outcome as any other case — a lockout must not
+    // reveal whether the address exists either.
+    return { ok: true, data: { otpSent: true } };
+  }
+
+  const parsed = requestPasswordResetOtpSchema.safeParse(raw);
+  if (!parsed.success) return { errors: fieldErrors(parsed.error), values: raw };
+  const email = parsed.data.email;
+
+  const candidate = await prisma.candidate.findUnique({ where: { email } });
+  if (candidate && candidate.accountStatus === "ACTIVE") {
+    const code = await createPasswordResetOtpChallenge(candidate.id);
+    logPasswordResetOtpEmail(email, code);
+    const devCode = process.env.NODE_ENV !== "production" ? code : undefined;
+    return { ok: true, data: { otpSent: true, ...(devCode ? { devCode } : {}) } };
+  }
+
+  return { ok: true, data: { otpSent: true } };
+}
+
+/** Forgot-password step 2: check the code against the outstanding challenge for that email. */
+export async function verifyPasswordResetOtp(
+  _prev: FormActionState,
+  formData: FormData
+): Promise<FormActionState> {
+  const raw = formToObject(formData);
+  const ip = await getClientIp();
+
+  try {
+    await enforceRateLimit("verifyPasswordResetOtp", { ip, email: raw.email }, { limit: 8, windowSeconds: 15 * 60 });
+  } catch (e) {
+    if (e instanceof RateLimitError) return { values: raw, message: e.message };
+    throw e;
+  }
+
+  const parsed = verifyPasswordResetOtpSchema.safeParse(raw);
+  if (!parsed.success) return { errors: fieldErrors(parsed.error), values: raw };
+  const { email, code } = parsed.data;
+
+  const messages: Record<string, string> = {
+    invalid: "That code is incorrect.",
+    expired: "That code has expired. Request a new one.",
+    too_many_attempts: "Too many incorrect attempts. Request a new code.",
+    not_found: "Request a code first.",
+  };
+
+  // Same address unknown either way — resolving to a candidate row here,
+  // not before the rate limit above, keeps that check indistinguishable
+  // from an "invalid code" reply.
+  const candidate = await prisma.candidate.findUnique({ where: { email } });
+  if (!candidate) return { errors: { code: messages.not_found }, values: raw };
+
+  const result = await verifyPasswordResetOtpChallenge(candidate.id, code);
+  if (result === "ok") return { ok: true, data: { verified: true } };
+
+  return { errors: { code: messages[result] }, values: raw };
+}
+
+/**
+ * Forgot-password step 3: sets the new password once the OTP has been
+ * verified, revokes every existing session for the account (a reset must
+ * end every live sign-in, not just the browser doing the resetting), then
+ * signs the candidate back in on this device — the same auto-login shape
+ * as registerCandidate's post-registration session.
+ */
+export async function resetPasswordWithOtp(
+  _prev: FormActionState,
+  formData: FormData
+): Promise<FormActionState> {
+  const raw = formToObject(formData);
+  const ip = await getClientIp();
+
+  try {
+    await enforceRateLimit("resetPasswordWithOtp", { ip, email: raw.email }, { limit: 5, windowSeconds: 60 * 60 });
+  } catch (e) {
+    if (e instanceof RateLimitError) return { values: raw, message: e.message };
+    throw e;
+  }
+
+  const parsed = resetPasswordSchema.safeParse(raw);
+  if (!parsed.success) return { errors: fieldErrors(parsed.error), values: raw };
+  const data = parsed.data;
+
+  const candidate = await prisma.candidate.findUnique({ where: { email: data.email } });
+  if (!candidate) return { message: "Please verify your email address first.", values: raw };
+
+  const otpVerified = await consumeVerifiedPasswordResetOtp(candidate.id);
+  if (!otpVerified) return { message: "Please verify your email address first.", values: raw };
+
+  const passwordHash = await hashPassword(data.password);
+  const userAgent = await getUserAgent();
+
+  await prisma.candidate.update({ where: { id: candidate.id }, data: { passwordHash } });
+  await revokeAllSessions(candidate.id); // ends every session, including any still open elsewhere
+
+  const sessionToken = await createSessionRecord(prisma, candidate.id, { userAgent, ipAddress: ip });
+  await setSessionCookie(sessionToken, true);
+
+  await recordAuditEvent(prisma, {
+    subjectType: "candidate",
+    subjectId: candidate.id,
+    action: "candidate.password_reset.completed",
+    description: "Reset password via OTP",
+    ipAddress: ip,
+  });
+
+  redirect("/portal/dashboard");
 }
 
 /**

@@ -101,6 +101,34 @@ export const verifyOtpSchema = z.object({
     .regex(/^\d{6}$/, "Enter the 6-digit code"),
 });
 
+// Forgot-password's two-step OTP check, same shape as requestOtpSchema/
+// verifyOtpSchema above but against an existing account (PasswordResetOtpChallenge).
+export const requestPasswordResetOtpSchema = z.object({
+  email: z.string().trim().min(1, EMAIL_MESSAGE).regex(EMAIL_RE, EMAIL_MESSAGE),
+});
+
+export const verifyPasswordResetOtpSchema = z.object({
+  email: z.string().trim().min(1, EMAIL_MESSAGE).regex(EMAIL_RE, EMAIL_MESSAGE),
+  code: z
+    .string()
+    .trim()
+    .regex(/^\d{6}$/, "Enter the 6-digit code"),
+});
+
+export const resetPasswordSchema = z
+  .object({
+    email: z.string().trim().min(1, EMAIL_MESSAGE).regex(EMAIL_RE, EMAIL_MESSAGE),
+    password: z.string().min(8, "Use at least 8 characters"),
+    confirmPassword: z.string(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.confirmPassword !== data.password) {
+      ctx.addIssue({ code: "custom", path: ["confirmPassword"], message: "Passwords do not match" });
+    }
+  });
+
+export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
+
 // Profile modal — every field optional, Skip is always allowed (Handoff 01
 // rule: "Profile completion is entirely optional").
 export const updateProfileSchema = z

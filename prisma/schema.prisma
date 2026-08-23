@@ -63,8 +63,8 @@ model Candidate {
   email           String    @unique @db.Citext
   emailVerifiedAt DateTime?
 
-  phoneCountryCode String  @default("+234") @db.VarChar(6)
-  phone            String? @db.VarChar(24)
+  phoneCountryCode String    @default("+234") @db.VarChar(6)
+  phone            String?   @db.VarChar(24)
 
   passwordHash String
 
@@ -81,9 +81,10 @@ model Candidate {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  profile                 CandidateProfile?
-  emailVerificationTokens EmailVerificationToken[]
-  notifications           Notification[]
+  profile                    CandidateProfile?
+  emailVerificationTokens    EmailVerificationToken[]
+  passwordResetOtpChallenges PasswordResetOtpChallenge[]
+  notifications              Notification[]
   sessions                Session[]
   enrolments              Enrolment[]
   payments                Payment[]
@@ -153,6 +154,25 @@ model EmailOtpChallenge {
   createdAt  DateTime  @default(now())
 
   @@index([email, verifiedAt])
+}
+
+// Forgot-password step for a candidate account that already exists —
+// keyed by candidateId (not email, unlike EmailOtpChallenge) because the
+// account is real by the time this is created; the request/verify Server
+// Actions still take the submitted email and resolve it to a candidate
+// themselves, so the account's existence is never revealed either way.
+model PasswordResetOtpChallenge {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  candidateId String    @db.Uuid
+  candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  codeHash   String
+  expiresAt  DateTime
+  attempts   Int       @default(0)
+  verifiedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([candidateId, verifiedAt])
 }
 
 enum NotificationCategory {

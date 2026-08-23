@@ -139,9 +139,9 @@ function SignInForm() {
                   <Label htmlFor="password" className="mb-0">
                     Password
                   </Label>
-                  <a href="#" onClick={(e) => e.preventDefault()} className="mb-1.5 text-[11.5px]">
+                  <Link href="/forgot-password" className="mb-1.5 text-[11.5px]">
                     Forgot password?
-                  </a>
+                  </Link>
                 </div>
                 <PasswordInput
                   id="password"
