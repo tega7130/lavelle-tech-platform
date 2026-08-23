@@ -4,11 +4,11 @@ import * as React from "react";
 import { cn } from "@/lib/cn";
 import { serializeEditableDom, markupToEditableHtml } from "@/lib/rich-text";
 
-const TOOLBAR_ITEMS: { command: string; label: string; glyph: string }[] = [
-  { command: "bold", label: "Bold", glyph: "B" },
-  { command: "italic", label: "Italic", glyph: "I" },
-  { command: "insertUnorderedList", label: "Bullet list", glyph: "•" },
-  { command: "insertOrderedList", label: "Numbered list", glyph: "1." },
+const TOOLBAR_ITEMS: { command: string; label: string; glyph: string; glyphClassName?: string }[] = [
+  { command: "bold", label: "Bold", glyph: "B", glyphClassName: "font-bold" },
+  { command: "italic", label: "Italic", glyph: "I", glyphClassName: "italic" },
+  { command: "insertUnorderedList", label: "Bullets", glyph: "•" },
+  { command: "insertOrderedList", label: "Numbered", glyph: "1." },
 ];
 
 export interface RichTextEditorProps {
@@ -77,17 +77,22 @@ export function RichTextEditor({ value, onChange, placeholder, className, minHei
   return (
     <div className={cn("rounded-md border border-neutral-300 bg-bg", className)}>
       <div className="flex items-center gap-1 border-b border-neutral-200 px-2 py-1.5">
-        {TOOLBAR_ITEMS.map((item) => (
-          <button
-            key={item.command}
-            type="button"
-            title={item.label}
-            aria-label={item.label}
-            onMouseDown={runCommand(item.command)}
-            className="flex h-7 w-7 items-center justify-center rounded text-[13px] font-semibold text-neutral-700 hover:bg-neutral-100 active:bg-neutral-200"
-          >
-            {item.glyph}
-          </button>
+        {TOOLBAR_ITEMS.map((item, i) => (
+          <React.Fragment key={item.command}>
+            {i === 2 && <div className="mx-1 h-4 w-px bg-neutral-200" />}
+            <button
+              type="button"
+              title={item.label}
+              aria-label={item.label}
+              onMouseDown={runCommand(item.command)}
+              className="flex h-7 items-center gap-1.5 rounded px-2 text-[12px] text-neutral-700 hover:bg-neutral-100 active:bg-neutral-200"
+            >
+              <span aria-hidden="true" className={cn("text-[13px] font-semibold", item.glyphClassName)}>
+                {item.glyph}
+              </span>
+              <span>{item.label}</span>
+            </button>
+          </React.Fragment>
         ))}
       </div>
       <div className="relative">
