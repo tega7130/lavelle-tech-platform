@@ -33,8 +33,7 @@ const STEPS = [
   { n: "01", title: "Your journey starts here", body: "Register for free to explore Lavelle’s programmes, discover your area of specialisation, and decide which path is right for you.", note: null },
   { n: "02", title: "Choose a specialization and tier", body: "Explore our programmes, discover where your ambitions fit, and choose the area of expertise you want to build.", note: null },
   { n: "03", title: "Enrol in a Programme", body: "Choose a programme that fits your goals and complete your enrolment. Once you're enrolled, you'll get access to your learning materials and receive your Candidate ID card.", note: null },
-  { n: "04", title: "Learn, practise and be assessed", body: "Recorded lectures with narration, applied scenarios, drafting exercises marked by faculty, and a quiz at the close of every module.", note: null },
-  { n: "05", title: "Sit the certifying examination", body: "A proctored paper of objective and written questions. Pass it and your certificate is issued, verifiable publicly the same day.", note: "Certificates carry a Lavelle pathway mark" },
+  { n: "04", title: "Sit the certifying examination", body: "A proctored paper of objective and written questions. Pass it and your certificate is issued, verifiable publicly the same day.", note: "Certificates carry a Lavelle pathway mark" },
 ] as const;
 
 const FACULTY = [
