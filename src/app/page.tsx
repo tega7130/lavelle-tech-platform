@@ -13,19 +13,19 @@ const TIERS = [
     seal: "F", step: "Step one", name: "Foundation",
     border: "border-neutral-300", stripe: "bg-neutral-300", sealBg: "bg-neutral-100", sealColor: "text-neutral-600",
     blurb: "Grounding in a practice area for graduates, new wigs and non-lawyers in regulated industries.",
-    facts: [["Length", "8 weeks"], ["Credits", "12"], ["Entry", "Open"]],
+    facts: [["Length", "8 weeks"], ["Entry", "Open"]],
   },
   {
     seal: "S", step: "Step two", name: "Specialist",
     border: "border-accent-200", stripe: "bg-gradient-to-r from-accent to-accent-400", sealBg: "bg-accent", sealColor: "text-accent-2",
     blurb: "Applied practice at depth: drafting, transactions and regulatory judgement, marked by faculty.",
-    facts: [["Length", "12 weeks"], ["Credits", "24"], ["Entry", "Called to the Bar"]],
+    facts: [["Length", "12 weeks"], ["Entry", "Called to the Bar"]],
   },
   {
     seal: "A", step: "Step three", name: "Advanced Practitioner",
     border: "border-accent-2-300", stripe: "bg-gradient-to-r from-accent-2 to-accent-2-400", sealBg: "bg-accent-2", sealColor: "text-[#08234a]",
     blurb: "Strategy and complex matters at the senior tier, and the route onto the Lavelle faculty register.",
-    facts: [["Length", "16 weeks"], ["Credits", "36"], ["Entry", "Specialist credential"]],
+    facts: [["Length", "16 weeks"], ["Entry", "Specialist credential"]],
   },
 ] as const;
 
