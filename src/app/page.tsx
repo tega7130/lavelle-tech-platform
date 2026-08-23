@@ -6,7 +6,7 @@ import { ContactForm } from "@/components/site/contact-form";
 import { ProgrammeCarousel } from "@/components/site/programme-carousel";
 import { buttonClassName } from "@/components/ui/button";
 import { cn } from "@/lib/cn";
-import { getPublishedListings, getPublishedReviews, getPublishedFaqs } from "@/lib/website-reads";
+import { getPublishedListings, getPublishedFaqs } from "@/lib/website-reads";
 
 const TIERS = [
   {
@@ -45,14 +45,8 @@ const FACULTY = [
 
 const FIRMS = ["Aluko & Oyebode", "Templars", "Banwo & Ighodalo", "Sterling Bank", "NNPC Ltd", "Olaniwun Ajayi"];
 
-function initials(name: string) {
-  return name.split(" ").map((p) => p[0]).slice(0, 2).join("");
-}
-
 export default async function HomePage() {
-  const [listings, reviews, faqs] = await Promise.all([getPublishedListings(), getPublishedReviews(), getPublishedFaqs()]);
-  const avgRating = reviews.length > 0 ? (reviews.reduce((s, r) => s + r.rating, 0) / reviews.length).toFixed(1) : "5.0";
-  const featuredQuote = reviews[0];
+  const [listings, faqs] = await Promise.all([getPublishedListings(), getPublishedFaqs()]);
 
   return (
     <div id="top" className="bg-bg">
