@@ -11,7 +11,6 @@ type Listing = {
   tier: "FOUNDATION" | "SPECIALIST" | "ADVANCED_PRACTITIONER";
   tierLabel: string;
   weeks: string;
-  credits: string;
   fee: string;
 };
 
@@ -88,7 +87,6 @@ export function ProgrammeCatalogue({ listings }: { listings: Listing[] }) {
               <p className="text-[13px] leading-[1.62] text-neutral-600 mt-[9px] min-h-[63px]">{p.blurb}</p>
               <div className="flex gap-5 mt-5 pt-4 border-t border-dashed border-neutral-300 text-[11.5px] text-neutral-600">
                 <span>{p.weeks}</span>
-                <span>{p.credits}</span>
                 <span className="ml-auto font-semibold text-accent">View programme</span>
               </div>
             </Link>

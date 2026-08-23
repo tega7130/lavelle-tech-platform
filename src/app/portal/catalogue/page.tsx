@@ -53,7 +53,7 @@ export default async function CataloguePage({
               <CardTitle className="mt-1.5">{p.title}</CardTitle>
               <CardBody>{p.summary}</CardBody>
               <CardMeta>
-                {p.weeks} weeks &middot; {p.credits} credits
+                {p.weeks} weeks
               </CardMeta>
               <div className="border-t border-dashed border-neutral-300 my-2" />
               <div className="flex items-center justify-between">

@@ -12,7 +12,6 @@ interface CarouselListing {
   title: string;
   blurb: string;
   weeks: string;
-  credits: string;
 }
 
 export function ProgrammeCarousel({ listings }: { listings: CarouselListing[] }) {
@@ -54,7 +53,6 @@ export function ProgrammeCarousel({ listings }: { listings: CarouselListing[] })
             </p>
             <div className="flex gap-5 mt-5 pt-4 border-t border-dashed border-neutral-300 text-[11.5px] text-neutral-600">
               <span>{p.weeks}</span>
-              <span>{p.credits}</span>
               <span className="ml-auto font-semibold text-accent">View programme</span>
             </div>
           </Link>

@@ -40,10 +40,6 @@ export function ProgrammeOverview({ overview }: { overview: Overview }) {
                   <div className="text-white/45 text-[10px] uppercase tracking-[0.08em]">Cohort</div>
                   <div className="text-white mt-0.5">{enrolment.cohortId ? "Placed" : "Placement pending"}</div>
                 </div>
-                <div>
-                  <div className="text-white/45 text-[10px] uppercase tracking-[0.08em]">Credits</div>
-                  <div className="text-white mt-0.5">{programme.credits}</div>
-                </div>
               </div>
               {isComplete ? (
                 <div className="mt-[var(--space-5)] inline-flex items-center gap-2 bg-white/10 rounded-md px-4 py-2.5 text-[13px]">

@@ -82,10 +82,6 @@ export function Credentials({ data }: { data: PageData }) {
               <div className="text-neutral-500 text-[10px] tracking-[0.05em] uppercase mt-0.5">Certificates awarded</div>
             </div>
             <div className="rounded-md bg-bg border border-divider px-4 py-2.5 text-center min-w-[92px]">
-              <div className="font-heading font-bold text-xl">{totalCreditsEarned}</div>
-              <div className="text-neutral-500 text-[10px] tracking-[0.05em] uppercase mt-0.5">Practice credits earned</div>
-            </div>
-            <div className="rounded-md bg-bg border border-divider px-4 py-2.5 text-center min-w-[92px]">
               <div className="font-heading font-bold text-xl">{milestonesEarned}</div>
               <div className="text-neutral-500 text-[10px] tracking-[0.05em] uppercase mt-0.5">Milestones earned</div>
             </div>
@@ -166,7 +162,7 @@ export function Credentials({ data }: { data: PageData }) {
                   <Tag variant={STATUS_TAG[c.status]}>{STATUS_LABEL[c.status]}</Tag>
                 </div>
 
-                <div className="grid grid-cols-3 gap-2 mt-4 pt-4 border-t border-dashed border-neutral-300">
+                <div className="grid grid-cols-2 gap-2 mt-4 pt-4 border-t border-dashed border-neutral-300">
                   <div>
                     <div className="text-neutral-500 text-[9px] tracking-[0.1em] uppercase">Grade</div>
                     <div className="text-[12.5px] font-medium mt-0.5">{BAND_LABEL[c.band]}</div>
@@ -174,10 +170,6 @@ export function Credentials({ data }: { data: PageData }) {
                   <div>
                     <div className="text-neutral-500 text-[9px] tracking-[0.1em] uppercase">Issued</div>
                     <div className="text-[12.5px] font-medium mt-0.5">{fmtDate(c.issuedAt)}</div>
-                  </div>
-                  <div>
-                    <div className="text-neutral-500 text-[9px] tracking-[0.1em] uppercase">Credits</div>
-                    <div className="text-[12.5px] font-medium mt-0.5">{c.credits ?? "—"}</div>
                   </div>
                 </div>
 

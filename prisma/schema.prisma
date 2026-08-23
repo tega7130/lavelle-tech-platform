@@ -453,7 +453,6 @@ model Programme {
 
   weeks            Int // 8 Foundation · 12 Specialist · 16 Advanced — stored, never derived from tier
   weeklyHoursLabel String // free text range, e.g. "6–8 hrs / week" — a label, not a number
-  credits          Int // Lavelle credits — never "CPD points"
 
   feeMinor Int // naira KOBO, integer minor units — ₦450,000 is 45000000. Never a float.
   currency String @default("NGN")

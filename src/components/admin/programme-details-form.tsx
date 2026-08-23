@@ -42,7 +42,6 @@ export interface ProgrammeDetailsFormProps {
     summary: string;
     weeks: number;
     weeklyHoursLabel: string;
-    credits: number;
     feeNaira: number;
     deliveryLabel: string;
     prerequisiteTier: string | null;
@@ -90,7 +89,6 @@ export function ProgrammeDetailsForm({
   const [title, setTitle] = React.useState(initialValues?.title ?? "");
   const [code, setCode] = React.useState(initialValues?.code ?? "");
   const [weeks, setWeeks] = React.useState(initialValues?.weeks != null ? String(initialValues.weeks) : "");
-  const [credits, setCredits] = React.useState(initialValues?.credits != null ? String(initialValues.credits) : "");
   const [weeklyHoursLabel, setWeeklyHoursLabel] = React.useState(initialValues?.weeklyHoursLabel ?? "");
   const [feeNaira, setFeeNaira] = React.useState(initialValues?.feeNaira != null ? String(initialValues.feeNaira) : "");
   const [summary, setSummary] = React.useState(initialValues?.summary ?? "");
@@ -186,11 +184,6 @@ export function ProgrammeDetailsForm({
           <Label htmlFor="weeks">Weeks</Label>
           <Input id="weeks" name="weeks" type="number" min={1} value={weeks} onChange={(e) => setWeeks(e.target.value)} invalid={!!errors.weeks} />
           <FieldError>{errors.weeks}</FieldError>
-        </div>
-        <div>
-          <Label htmlFor="credits">Credits</Label>
-          <Input id="credits" name="credits" type="number" min={1} value={credits} onChange={(e) => setCredits(e.target.value)} invalid={!!errors.credits} />
-          <FieldError>{errors.credits}</FieldError>
         </div>
       </div>
 

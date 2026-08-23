@@ -253,7 +253,6 @@ export function WebsiteListingEditor({ listing: programme, initialTab }: { listi
                   {[
                     ["Length", `${programme.weeks} weeks`],
                     ["Commitment", programme.weeklyHoursLabel],
-                    ["Credits", String(programme.credits)],
                     ["Delivery", programme.deliveryLabel],
                   ].map(([label, value]) => (
                     <div key={label} className="px-3 py-[10px] rounded-md bg-neutral-100 border border-divider">
