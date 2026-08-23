@@ -16,6 +16,7 @@ const FOOTER_COLS = [
       { label: "How it works", href: "/#how" },
       { label: "Faculty", href: "/#faculty" },
       { label: "Specializations", href: "/#programmes" },
+      { label: "Blog", href: "/blog" },
       { label: "Public verification", href: "/verify" },
     ],
   },

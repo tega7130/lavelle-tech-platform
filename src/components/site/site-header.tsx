@@ -4,12 +4,9 @@ import { LogoMark } from "@/components/ui/logo-mark";
 import { cn } from "@/lib/cn";
 
 const NAV_LINKS = [
-  { label: "The ladder", href: "/#ladder" },
   { label: "Programmes", href: "/programmes" },
   { label: "How it works", href: "/#how" },
-  { label: "Reviews", href: "/#reviews" },
   { label: "FAQ", href: "/#faq" },
-  { label: "Verify", href: "/verify" },
 ];
 
 // A transparent, white-bordered skin for the dark hero — the shared
@@ -30,21 +27,25 @@ export function SiteHeroHeader() {
           </div>
         </div>
 
-        <nav className="hidden md:flex items-center gap-[30px]">
-          {NAV_LINKS.map((l) => (
-            <Link key={l.label} href={l.href} className="text-[13.5px] font-medium text-white/72 hover:text-white no-underline">
-              {l.label}
-            </Link>
-          ))}
-        </nav>
+        <div className="flex items-center gap-8">
+          <nav className="hidden md:flex items-center gap-[26px]">
+            {NAV_LINKS.map((l) => (
+              <Link key={l.label} href={l.href} className="text-[13.5px] font-medium text-white/72 hover:text-white no-underline">
+                {l.label}
+              </Link>
+            ))}
+          </nav>
 
-        <div className="flex items-center gap-3 flex-none">
-          <Link href="/sign-in" className={buttonClassName("secondary", GHOST_ON_DARK)}>
-            Sign in
-          </Link>
-          <Link href="/register" className={cn(buttonClassName("primary"), "h-[42px] px-[19px] text-[13.5px] rounded-[9px]")}>
-            Apply now
-          </Link>
+          <div className="hidden md:block h-5 w-px bg-white/16" />
+
+          <div className="flex items-center gap-3 flex-none">
+            <Link href="/sign-in" className={buttonClassName("secondary", GHOST_ON_DARK)}>
+              Sign in
+            </Link>
+            <Link href="/register" className={cn(buttonClassName("primary"), "h-[42px] px-[19px] text-[13.5px] rounded-[9px]")}>
+              Apply now
+            </Link>
+          </div>
         </div>
       </div>
       <div className="h-px bg-gradient-to-r from-transparent via-white/14 to-transparent" />
