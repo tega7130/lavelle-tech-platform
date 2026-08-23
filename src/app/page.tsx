@@ -322,7 +322,6 @@ export default async function HomePage() {
             <div className="lg:sticky lg:top-10">
               <div className="text-[11px] tracking-[0.18em] uppercase font-semibold text-accent">Questions</div>
               <h2 className="font-heading font-semibold text-[40px] leading-[1.14] mt-4 tracking-[-0.022em]">Straight answers.</h2>
-              <p className="text-[15px] leading-[1.7] text-neutral-600 mt-[18px] max-w-[38ch]">If yours is not here, a representative will answer it directly, usually the same day.</p>
               <Link href="#contact" className={buttonClassName("secondary", "h-11 text-[13.5px] mt-[26px]")}>
                 Ask us anything
               </Link>
@@ -362,15 +361,15 @@ export default async function HomePage() {
               </p>
               <div className="flex flex-col gap-4 mt-8 pt-[26px] border-t border-dashed border-neutral-300">
                 {[
-                  ["@", "candidates@lavelle.ng", "Enrolment, programmes and fees"],
+                  ["@", "candidates@lavelle.ng"],
                   ["☎", "+234 700 528 3553", "Monday to Friday, 9am – 5pm WAT"],
-                  ["W", "+234 803 552 8841", "WhatsApp: a representative, not a bot"],
+                  ["W", "+234 803 552 8841"],
                 ].map(([mark, value, meta]) => (
                   <div key={value} className="flex gap-[13px] items-start">
                     <span className="w-[34px] h-[34px] flex-none rounded-[9px] bg-accent-100 text-accent-700 flex items-center justify-center text-[13px] font-semibold">{mark}</span>
                     <div className="min-w-0">
                       <div className="text-[13.5px] font-medium">{value}</div>
-                      <div className="text-[11.5px] text-neutral-700 mt-[2px]">{meta}</div>
+                      {meta && <div className="text-[11.5px] text-neutral-700 mt-[2px]">{meta}</div>}
                     </div>
                   </div>
                 ))}
