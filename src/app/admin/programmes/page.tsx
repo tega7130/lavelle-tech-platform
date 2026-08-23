@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { listProgrammes } from "@/lib/programme-reads";
+import { getCurrentStaff } from "@/lib/staff-session";
 import { formatNaira, tierLabel, statusLabel } from "@/lib/format";
 import { Tag } from "@/components/ui/tag";
 import { buttonClassName } from "@/components/ui/button";
 import { ProgrammesFilterBar } from "@/components/admin/programmes-filter-bar";
-import { duplicateProgrammeAndRedirect } from "@/app/actions/programme";
+import { ProgrammeRowActions } from "@/components/admin/programme-row-actions";
 import type { ProgrammeStatus, ProgrammeTier } from "@/generated/prisma/client";
 
 const STATUS_TAG_VARIANT: Record<string, "success" | "neutral"> = {
@@ -19,11 +20,14 @@ export default async function ProgrammesListPage({
   searchParams: Promise<{ q?: string; tier?: string; status?: string }>;
 }) {
   const sp = await searchParams;
-  const programmes = await listProgrammes({
-    q: sp.q,
-    tier: (sp.tier as ProgrammeTier) || undefined,
-    status: (sp.status as ProgrammeStatus) || undefined,
-  });
+  const [programmes, currentStaff] = await Promise.all([
+    listProgrammes({
+      q: sp.q,
+      tier: (sp.tier as ProgrammeTier) || undefined,
+      status: (sp.status as ProgrammeStatus) || undefined,
+    }),
+    getCurrentStaff(),
+  ]);
 
   return (
     <div className="max-w-[1280px]">
@@ -83,19 +87,14 @@ export default async function ProgrammesListPage({
                   <Tag variant={STATUS_TAG_VARIANT[p.status]}>{statusLabel(p.status)}</Tag>
                 </td>
                 <td className="border-b border-dashed border-neutral-300 py-[10px] pr-[var(--space-4)] text-right">
-                  <div className="flex items-center justify-end gap-2">
-                    <form action={duplicateProgrammeAndRedirect.bind(null, p.id)}>
-                      <button type="submit" className={buttonClassName("secondary", "px-[11px] py-[5px] text-xs")}>
-                        Duplicate
-                      </button>
-                    </form>
-                    <Link
-                      href={`/admin/programmes/${p.id}/edit`}
-                      className={buttonClassName("secondary", "px-[11px] py-[5px] text-xs")}
-                    >
-                      Edit
-                    </Link>
-                  </div>
+                  <ProgrammeRowActions
+                    id={p.id}
+                    code={p.code}
+                    title={p.title}
+                    status={p.status}
+                    isPublished={p.listing?.isPublished}
+                    staffRole={currentStaff?.role ?? null}
+                  />
                 </td>
               </tr>
             ))}

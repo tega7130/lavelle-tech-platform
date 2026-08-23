@@ -5,7 +5,9 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { Permission, Prisma, ProgrammeStatus } from "@/generated/prisma/client";
 import { requireStaffPermission } from "@/lib/staff-auth";
+import { getCurrentStaff } from "@/lib/staff-session";
 import { recordAuditEvent } from "@/lib/audit";
+import { PermissionDeniedError } from "@/lib/rbac";
 import { slugify } from "@/lib/slug";
 import { CodeImmutableError, PublishCheckError } from "@/lib/programme-errors";
 import { computePublishFailures } from "@/lib/programme-publish";
@@ -425,4 +427,84 @@ export async function duplicateProgramme(id: string) {
 export async function duplicateProgrammeAndRedirect(id: string) {
   const copy = await duplicateProgramme(id);
   redirect(`/admin/programmes/${copy.id}/edit`);
+}
+
+/** Unpublish a programme from the public listing. Requires MANAGE_PROGRAMMES permission. */
+export async function unpublishProgramme(id: string) {
+  const staff = await requireStaffPermission(Permission.MANAGE_PROGRAMMES);
+
+  const programme = await prisma.programme.findUniqueOrThrow({
+    where: { id },
+    include: { listing: true },
+  });
+
+  if (!programme.listing?.isPublished) {
+    throw new Error("Programme is not published");
+  }
+
+  const updated = await prisma.programmeListing.update({
+    where: { programmeId: id },
+    data: { isPublished: false },
+  });
+
+  await recordAuditEvent(prisma, {
+    actorStaffId: staff.id,
+    subjectType: "programme",
+    subjectId: id,
+    action: "programme.unpublished",
+    description: `Unpublished ${programme.code} from the public listing`,
+  });
+
+  revalidatePath("/");
+  revalidatePath("/admin/programmes");
+  return updated;
+}
+
+/** Delete a programme and all related data. Requires SUPER_ADMIN role. Hard delete is only allowed for DRAFT programmes with zero enrolments. */
+export async function deleteProgramme(id: string) {
+  const staffRecord = await getCurrentStaff();
+  if (!staffRecord || staffRecord.role !== "SUPER_ADMIN") {
+    throw new PermissionDeniedError(Permission.MANAGE_PROGRAMMES);
+  }
+
+  const programme = await prisma.programme.findUniqueOrThrow({
+    where: { id },
+    include: {
+      _count: { select: { enrolments: true } },
+      listing: true,
+    },
+  });
+
+  // Only allow deletion of DRAFT programmes with zero enrolments
+  if (programme.status !== "DRAFT") {
+    throw new Error("Only DRAFT programmes can be deleted");
+  }
+
+  if (programme._count.enrolments > 0) {
+    throw new Error("Cannot delete programmes with existing enrolments");
+  }
+
+  // Delete in transaction to maintain consistency
+  const deleted = await prisma.$transaction(async (tx) => {
+    // Unpublish first if needed
+    if (programme.listing?.isPublished) {
+      await tx.programmeListing.delete({
+        where: { programmeId: id },
+      });
+    }
+
+    // Delete all related data (cascades from Prisma schema)
+    return tx.programme.delete({ where: { id } });
+  });
+
+  await recordAuditEvent(prisma, {
+    actorStaffId: staffRecord.id,
+    subjectType: "programme",
+    subjectId: id,
+    action: "programme.deleted",
+    description: `Deleted DRAFT programme ${programme.code} with zero enrolments`,
+  });
+
+  revalidatePath("/admin/programmes");
+  return deleted;
 }
