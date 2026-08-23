@@ -30,7 +30,7 @@ const TIERS = [
 ] as const;
 
 const STEPS = [
-  { n: "01", title: "Register free, with no commitment", body: "Give us your name, email and a password. You receive a provisional applicant number and full access to the catalogue.", note: "No payment details required" },
+  { n: "01", title: "Your journey starts here", body: "Register for free to explore Lavelle’s programmes, discover your area of specialisation, and decide which path is right for you.", note: null },
   { n: "02", title: "Choose a specialization and tier", body: "Browse by practice area and level. Each programme lists its syllabus module by module, its faculty, its intake dates and its fee.", note: null },
   { n: "03", title: "Enrol in a Programme", body: "Choose a programme that fits your goals and complete your enrolment. Once you're enrolled, you'll get access to your learning materials and receive your Candidate ID card.", note: null },
   { n: "04", title: "Learn, practise and be assessed", body: "Recorded lectures with narration, applied scenarios, drafting exercises marked by faculty, and a quiz at the close of every module.", note: null },
