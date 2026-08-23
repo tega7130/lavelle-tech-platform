@@ -28,6 +28,8 @@ export default async function ProgrammesListPage({
     }),
     getCurrentStaff(),
   ]);
+  const canManageProgrammes = currentStaff?.permissions.includes("MANAGE_PROGRAMMES") ?? false;
+  const isSuperAdmin = currentStaff?.role === "SUPER_ADMIN";
 
   return (
     <div className="max-w-[1280px]">
@@ -89,11 +91,9 @@ export default async function ProgrammesListPage({
                 <td className="border-b border-dashed border-neutral-300 py-[10px] pr-[var(--space-4)] text-right">
                   <ProgrammeRowActions
                     id={p.id}
-                    code={p.code}
-                    title={p.title}
                     status={p.status}
-                    isPublished={p.listing?.isPublished}
-                    staffRole={currentStaff?.role ?? null}
+                    canManageProgrammes={canManageProgrammes}
+                    isSuperAdmin={isSuperAdmin}
                   />
                 </td>
               </tr>

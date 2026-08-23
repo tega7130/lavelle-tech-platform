@@ -34,7 +34,6 @@ export async function listProgrammes(params: ListProgrammesParams = {}) {
     },
     include: {
       category: true,
-      listing: { select: { isPublished: true } },
       _count: { select: { enrolments: true, modules: true } },
     },
     orderBy: { createdAt: "desc" },

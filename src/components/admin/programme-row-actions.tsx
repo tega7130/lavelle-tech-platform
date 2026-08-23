@@ -1,111 +1,106 @@
 "use client";
 
-import { useState } from "react";
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 import Link from "next/link";
 import { buttonClassName } from "@/components/ui/button";
-import { deleteProgramme, unpublishProgramme, duplicateProgrammeAndRedirect } from "@/app/actions/programme";
-import type { StaffRole } from "@/generated/prisma/client";
+import { deleteProgramme, duplicateProgrammeAndRedirect, setProgrammeStatus } from "@/app/actions/programme";
+import type { ProgrammeStatus } from "@/generated/prisma/client";
 
 interface ProgrammeRowActionsProps {
   id: string;
-  code: string;
-  title: string;
-  status: string;
-  isPublished?: boolean;
-  staffRole: StaffRole | null;
+  status: ProgrammeStatus;
+  /** Same permission setProgrammeStatus itself requires (MANAGE_PROGRAMMES) — computed server-side from the signed-in staff's actual grants, not guessed from role name. */
+  canManageProgrammes: boolean;
+  isSuperAdmin: boolean;
 }
 
-export function ProgrammeRowActions({
-  id,
-  code,
-  title,
-  status,
-  isPublished,
-  staffRole,
-}: ProgrammeRowActionsProps) {
+export function ProgrammeRowActions({ id, status, canManageProgrammes, isSuperAdmin }: ProgrammeRowActionsProps) {
   const [isPending, startTransition] = useTransition();
   const [deleteConfirm, setDeleteConfirm] = useState(false);
-  const [unpublishConfirm, setUnpublishConfirm] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const isSuperAdmin = staffRole === "SUPER_ADMIN";
-  const isAdmin = staffRole === "REGISTRAR" || staffRole === "ACADEMIC_ADMIN";
-  const canDelete = isSuperAdmin && status === "DRAFT";
-  const canUnpublish = isPublished && (isSuperAdmin || isAdmin);
+  // Mirrors programme-content-editor.tsx's Publish to catalogue / Revert
+  // to draft pair — same underlying setProgrammeStatus action and publish
+  // checks, just reachable from the list row instead of the content step.
+  function handlePublish() {
+    setError(null);
+    startTransition(async () => {
+      try {
+        await setProgrammeStatus(id, "ACTIVE");
+      } catch (e) {
+        const failures = (e as { failures?: string[] })?.failures;
+        setError(failures ? failures.join(" ") : e instanceof Error ? e.message : "Failed to publish programme");
+      }
+    });
+  }
 
-  const handleDelete = () => {
+  function handleUnpublish() {
+    setError(null);
+    startTransition(async () => {
+      try {
+        await setProgrammeStatus(id, "DRAFT");
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Failed to revert programme to draft");
+      }
+    });
+  }
+
+  function handleDelete() {
     if (!deleteConfirm) {
       setDeleteConfirm(true);
       return;
     }
-
+    setError(null);
     startTransition(async () => {
       try {
         await deleteProgramme(id);
-        // The server action will revalidate paths, causing a page refresh
-      } catch (error) {
-        alert(`Error: ${error instanceof Error ? error.message : "Failed to delete programme"}`);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Failed to delete programme");
         setDeleteConfirm(false);
       }
     });
-  };
-
-  const handleUnpublish = () => {
-    if (!unpublishConfirm) {
-      setUnpublishConfirm(true);
-      return;
-    }
-
-    startTransition(async () => {
-      try {
-        await unpublishProgramme(id);
-      } catch (error) {
-        alert(`Error: ${error instanceof Error ? error.message : "Failed to unpublish programme"}`);
-        setUnpublishConfirm(false);
-      }
-    });
-  };
+  }
 
   return (
-    <div className="flex items-center justify-end gap-2">
-      <form action={duplicateProgrammeAndRedirect.bind(null, id)}>
-        <button type="submit" className={buttonClassName("secondary", "px-[11px] py-[5px] text-xs")}>
-          Duplicate
-        </button>
-      </form>
+    <div className="flex flex-col items-end gap-1">
+      <div className="flex items-center justify-end gap-2">
+        <form action={duplicateProgrammeAndRedirect.bind(null, id)}>
+          <button type="submit" className={buttonClassName("secondary", "px-[11px] py-[5px] text-xs")}>
+            Duplicate
+          </button>
+        </form>
 
-      <Link
-        href={`/admin/programmes/${id}/edit`}
-        className={buttonClassName("secondary", "px-[11px] py-[5px] text-xs")}
-      >
-        Edit
-      </Link>
+        <Link href={`/admin/programmes/${id}/edit`} className={buttonClassName("secondary", "px-[11px] py-[5px] text-xs")}>
+          Edit
+        </Link>
 
-      {canUnpublish && (
-        <button
-          onClick={handleUnpublish}
-          disabled={isPending}
-          className={buttonClassName(
-            unpublishConfirm ? "danger" : "secondary",
-            "px-[11px] py-[5px] text-xs"
-          )}
-        >
-          {unpublishConfirm ? "Confirm unpublish?" : "Unpublish"}
-        </button>
-      )}
+        {canManageProgrammes && status === "ACTIVE" && (
+          <button
+            onClick={handleUnpublish}
+            disabled={isPending}
+            className={buttonClassName("secondary", "px-[11px] py-[5px] text-xs")}
+          >
+            Unpublish
+          </button>
+        )}
 
-      {canDelete && (
-        <button
-          onClick={handleDelete}
-          disabled={isPending}
-          className={buttonClassName(
-            deleteConfirm ? "danger" : "secondary",
-            "px-[11px] py-[5px] text-xs"
-          )}
-        >
-          {deleteConfirm ? "Confirm delete?" : "Delete"}
-        </button>
-      )}
+        {canManageProgrammes && status === "DRAFT" && (
+          <button onClick={handlePublish} disabled={isPending} className={buttonClassName("secondary", "px-[11px] py-[5px] text-xs")}>
+            Publish
+          </button>
+        )}
+
+        {isSuperAdmin && (
+          <button
+            onClick={handleDelete}
+            disabled={isPending}
+            className={buttonClassName(deleteConfirm ? "danger" : "secondary", "px-[11px] py-[5px] text-xs")}
+          >
+            {deleteConfirm ? "Confirm delete?" : "Delete"}
+          </button>
+        )}
+      </div>
+      {error && <div className="max-w-[320px] text-right text-[11.5px] text-[#912019]">{error}</div>}
     </div>
   );
 }

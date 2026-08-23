@@ -209,7 +209,8 @@ export async function updateProgramme(
  * module; every module has at least one lecture; weights total 100;
  * feeMinor > 0. Returns the specific failures rather than a generic
  * refusal — the builder lists them. Moving to ARCHIVED is Slice 02's
- * soft-delete mechanism (rule 4); there is no hard-delete action.
+ * soft-delete mechanism (rule 4); the only hard-delete action is
+ * deleteProgramme below, gated to SUPER_ADMIN and zero enrolments.
  */
 export async function setProgrammeStatus(id: string, status: ProgrammeStatus) {
   const staff = await requireStaffPermission(Permission.MANAGE_PROGRAMMES);
@@ -247,6 +248,7 @@ export async function setProgrammeStatus(id: string, status: ProgrammeStatus) {
 
   revalidatePath(`/programmes/${id}/content`);
   revalidatePath("/programmes");
+  revalidatePath("/admin/programmes");
   return updated;
 }
 
@@ -429,38 +431,16 @@ export async function duplicateProgrammeAndRedirect(id: string) {
   redirect(`/admin/programmes/${copy.id}/edit`);
 }
 
-/** Unpublish a programme from the public listing. Requires MANAGE_PROGRAMMES permission. */
-export async function unpublishProgramme(id: string) {
-  const staff = await requireStaffPermission(Permission.MANAGE_PROGRAMMES);
-
-  const programme = await prisma.programme.findUniqueOrThrow({
-    where: { id },
-    include: { listing: true },
-  });
-
-  if (!programme.listing?.isPublished) {
-    throw new Error("Programme is not published");
-  }
-
-  const updated = await prisma.programmeListing.update({
-    where: { programmeId: id },
-    data: { isPublished: false },
-  });
-
-  await recordAuditEvent(prisma, {
-    actorStaffId: staff.id,
-    subjectType: "programme",
-    subjectId: id,
-    action: "programme.unpublished",
-    description: `Unpublished ${programme.code} from the public listing`,
-  });
-
-  revalidatePath("/");
-  revalidatePath("/admin/programmes");
-  return updated;
-}
-
-/** Delete a programme and all related data. Requires SUPER_ADMIN role. Hard delete is only allowed for DRAFT programmes with zero enrolments. */
+/**
+ * Hard delete — SUPER_ADMIN only (README-equivalent rule: this is the one
+ * genuinely destructive action in the programme lifecycle, everything
+ * else in setProgrammeStatus above is reversible). Allowed at any status
+ * (DRAFT/ACTIVE/ARCHIVED) — status just governs catalogue visibility, not
+ * data safety. The real safety boundary is zero enrolments: an Enrolment
+ * row references the programme with no cascade, so real candidate data
+ * can never be pulled down with it. A live marketing listing is dropped
+ * first, in the same transaction, so the FK doesn't block the delete.
+ */
 export async function deleteProgramme(id: string) {
   const staffRecord = await getCurrentStaff();
   if (!staffRecord || staffRecord.role !== "SUPER_ADMIN") {
@@ -475,34 +455,41 @@ export async function deleteProgramme(id: string) {
     },
   });
 
-  // Only allow deletion of DRAFT programmes with zero enrolments
-  if (programme.status !== "DRAFT") {
-    throw new Error("Only DRAFT programmes can be deleted");
-  }
-
   if (programme._count.enrolments > 0) {
-    throw new Error("Cannot delete programmes with existing enrolments");
+    throw new Error("Cannot delete a programme with existing enrolments");
   }
 
-  // Delete in transaction to maintain consistency
-  const deleted = await prisma.$transaction(async (tx) => {
-    // Unpublish first if needed
-    if (programme.listing?.isPublished) {
-      await tx.programmeListing.delete({
-        where: { programmeId: id },
-      });
+  let deleted;
+  try {
+    deleted = await prisma.$transaction(async (tx) => {
+      if (programme.listing) {
+        await tx.programmeListing.delete({ where: { programmeId: id } });
+      }
+      return tx.programme.delete({ where: { id } });
+    });
+  } catch (e) {
+    // Certificates, guest checkouts and exam sittings reference Programme
+    // with no cascade, and ExamQuestion references a programme's Module
+    // with no cascade either (one level down, hit via the Module cascade
+    // off Programme) — the exact Prisma/Postgres error code varies by
+    // which RESTRICT fires (P2003 for a direct FK, a raw Postgres SQLSTATE
+    // like 23001 for one hit mid-cascade), so any known-request error out
+    // of this two-statement transaction is treated as a blocked delete —
+    // there's nothing else in here that could fail this way.
+    if (e instanceof Prisma.PrismaClientKnownRequestError) {
+      throw new Error(
+        "Cannot delete this programme — other records (exam questions, certificates, sittings or guest checkouts) still reference it"
+      );
     }
-
-    // Delete all related data (cascades from Prisma schema)
-    return tx.programme.delete({ where: { id } });
-  });
+    throw e;
+  }
 
   await recordAuditEvent(prisma, {
     actorStaffId: staffRecord.id,
     subjectType: "programme",
     subjectId: id,
     action: "programme.deleted",
-    description: `Deleted DRAFT programme ${programme.code} with zero enrolments`,
+    description: `Deleted ${programme.code} (${programme.status}, zero enrolments)`,
   });
 
   revalidatePath("/admin/programmes");
