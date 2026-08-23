@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { buttonClassName } from "@/components/ui/button";
+import { cn } from "@/lib/cn";
 import { deleteProgramme, duplicateProgrammeAndRedirect, setProgrammeStatus } from "@/app/actions/programme";
 import type { ProgrammeStatus } from "@/generated/prisma/client";
 
@@ -61,31 +62,33 @@ export function ProgrammeRowActions({ id, status, canManageProgrammes, isSuperAd
     });
   }
 
+  const btn = "flex items-center justify-center px-[11px] py-[5px] text-xs";
+
   return (
     <div className="flex flex-col items-end gap-1">
-      <div className="flex items-center justify-end gap-2">
+      {/* Fixed-width columns (Duplicate | Edit | Publish/Unpublish | Delete) so every
+          row's buttons line up regardless of which ones this row/staff member has —
+          an omitted button still reserves its column's width instead of letting the
+          row shrink and stagger the whole group leftward. */}
+      <div className="grid w-fit grid-cols-[100px_68px_104px_132px] gap-2">
         <form action={duplicateProgrammeAndRedirect.bind(null, id)}>
-          <button type="submit" className={buttonClassName("secondary", "px-[11px] py-[5px] text-xs")}>
+          <button type="submit" className={buttonClassName("secondary", cn(btn, "w-full"))}>
             Duplicate
           </button>
         </form>
 
-        <Link href={`/admin/programmes/${id}/edit`} className={buttonClassName("secondary", "px-[11px] py-[5px] text-xs")}>
+        <Link href={`/admin/programmes/${id}/edit`} className={buttonClassName("secondary", cn(btn, "w-full"))}>
           Edit
         </Link>
 
         {canManageProgrammes && status === "ACTIVE" && (
-          <button
-            onClick={handleUnpublish}
-            disabled={isPending}
-            className={buttonClassName("secondary", "px-[11px] py-[5px] text-xs")}
-          >
+          <button onClick={handleUnpublish} disabled={isPending} className={buttonClassName("secondary", cn(btn, "w-full"))}>
             Unpublish
           </button>
         )}
 
         {canManageProgrammes && status === "DRAFT" && (
-          <button onClick={handlePublish} disabled={isPending} className={buttonClassName("secondary", "px-[11px] py-[5px] text-xs")}>
+          <button onClick={handlePublish} disabled={isPending} className={buttonClassName("secondary", cn(btn, "w-full"))}>
             Publish
           </button>
         )}
@@ -94,7 +97,7 @@ export function ProgrammeRowActions({ id, status, canManageProgrammes, isSuperAd
           <button
             onClick={handleDelete}
             disabled={isPending}
-            className={buttonClassName(deleteConfirm ? "danger" : "secondary", "px-[11px] py-[5px] text-xs")}
+            className={buttonClassName(deleteConfirm ? "danger" : "secondary", cn(btn, "w-full"))}
           >
             {deleteConfirm ? "Confirm delete?" : "Delete"}
           </button>
