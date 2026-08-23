@@ -48,7 +48,6 @@ describe("concurrent module reordering stays transactional", () => {
         summary: "test",
         weeks: 4,
         weeklyHoursLabel: "4 hrs / week",
-        credits: 8,
         feeMinor: 1000,
         createdByStaffId: staffId,
       },

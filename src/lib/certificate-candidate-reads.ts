@@ -16,11 +16,11 @@ export async function getCandidateCredentials(candidateId: string) {
     prisma.certificate.findMany({
       where: { candidateId },
       orderBy: { issuedAt: "desc" },
-      include: { programme: { select: { credits: true, code: true } } },
+      include: { programme: { select: { code: true } } },
     }),
     prisma.enrolment.findMany({
       where: { candidateId, status: { in: ["ACTIVE", "COMPLETED"] } },
-      include: { programme: { select: { id: true, title: true, tier: true, credits: true, code: true } } },
+      include: { programme: { select: { id: true, title: true, tier: true, code: true } } },
     }),
   ]);
 
@@ -37,14 +37,9 @@ export async function getCandidateCredentials(candidateId: string) {
       programmeTitle: enrolment.programme.title,
       programmeCode: enrolment.programme.code,
       tier: enrolment.programme.tier,
-      credits: enrolment.programme.credits,
       percent: computePercent(completedCount, totalCount),
     });
   }
-
-  const totalCreditsEarned = certificates
-    .filter((c) => c.status !== "SUPERSEDED")
-    .reduce((sum, c) => sum + (c.programme.credits ?? 0), 0);
 
   return {
     certificates: certificates.map((c) => ({
@@ -62,10 +57,8 @@ export async function getCandidateCredentials(candidateId: string) {
       revokedReason: c.revokedReason,
       supersededById: c.supersededById,
       replacesId: c.replacesId,
-      credits: c.programme.credits,
     })),
     inProgress,
-    totalCreditsEarned,
   };
 }
 

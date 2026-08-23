@@ -278,9 +278,9 @@ async function main() {
   }
 
   const TIER_DEFAULTS = {
-    [ProgrammeTier.FOUNDATION]: { weeks: 8, credits: 12, weeklyHoursLabel: "4–6 hrs / week" },
-    [ProgrammeTier.SPECIALIST]: { weeks: 12, credits: 24, weeklyHoursLabel: "6–8 hrs / week" },
-    [ProgrammeTier.ADVANCED_PRACTITIONER]: { weeks: 16, credits: 36, weeklyHoursLabel: "8–10 hrs / week" },
+    [ProgrammeTier.FOUNDATION]: { weeks: 8, weeklyHoursLabel: "4–6 hrs / week" },
+    [ProgrammeTier.SPECIALIST]: { weeks: 12, weeklyHoursLabel: "6–8 hrs / week" },
+    [ProgrammeTier.ADVANCED_PRACTITIONER]: { weeks: 16, weeklyHoursLabel: "8–10 hrs / week" },
   };
 
   // The one COMPLETE programme this slice's README asks for — later

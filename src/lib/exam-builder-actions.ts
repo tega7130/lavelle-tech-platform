@@ -110,7 +110,6 @@ export async function createStandaloneExam(input: CreateStandaloneExamInput, sta
         summary: title,
         weeks: 0,
         weeklyHoursLabel: "—",
-        credits: 0,
         feeMinor: 0,
         createdByStaffId: staffId,
       },

@@ -36,7 +36,7 @@ export async function getPublishedListings() {
     where: { isPublished: true },
     orderBy: { orderIndex: "asc" },
     include: {
-      programme: { select: { code: true, title: true, summary: true, tier: true, weeks: true, credits: true, feeMinor: true } },
+      programme: { select: { code: true, title: true, summary: true, tier: true, weeks: true, feeMinor: true } },
     },
   });
   return rows.map((r) => {
@@ -48,7 +48,6 @@ export async function getPublishedListings() {
       tier: r.programme.tier,
       tierLabel: tierLabel(r.programme.tier),
       weeks: `${r.programme.weeks} weeks`,
-      credits: `${r.programme.credits} credits`,
       fee: formatNaira(r.programme.feeMinor),
     };
   });
@@ -136,7 +135,6 @@ export async function getListingDetail(code: string) {
     facts: [
       { label: "Length", value: `${programme.weeks} weeks` },
       { label: "Commitment", value: programme.weeklyHoursLabel },
-      { label: "Credits", value: String(programme.credits) },
       { label: "Delivery", value: programme.deliveryLabel },
     ],
     outcomes: content.outcomes,

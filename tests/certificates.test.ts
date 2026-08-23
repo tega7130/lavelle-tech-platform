@@ -36,7 +36,6 @@ async function seedProgramme(categoryId: string, staffId: string) {
       summary: "test",
       weeks: 12,
       weeklyHoursLabel: "6-8 hrs / week",
-      credits: 24,
       feeMinor: 45_000_000,
       createdByStaffId: staffId,
     },

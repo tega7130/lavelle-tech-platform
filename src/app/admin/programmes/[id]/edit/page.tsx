@@ -30,7 +30,6 @@ export default async function EditProgrammePage({ params }: { params: Promise<{ 
           authorName: programme.authorName,
           weeks: programme.weeks,
           weeklyHoursLabel: programme.weeklyHoursLabel,
-          credits: programme.credits,
           feeNaira: programme.feeMinor / 100,
           deliveryLabel: programme.deliveryLabel,
           prerequisiteTier: programme.prerequisiteTier,

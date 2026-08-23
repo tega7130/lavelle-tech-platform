@@ -38,7 +38,6 @@ describe("suspending a candidate preserves enrolment and progress rows (rule: su
         summary: "test",
         weeks: 12,
         weeklyHoursLabel: "6-8 hrs / week",
-        credits: 24,
         feeMinor: 45_000_000,
         createdByStaffId: staff.id,
       },

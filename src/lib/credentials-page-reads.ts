@@ -43,7 +43,6 @@ export async function getCredentialsPageData(candidateId: string) {
     ladder,
     certificates: credentials.certificates,
     inProgress: credentials.inProgress,
-    totalCreditsEarned: credentials.totalCreditsEarned,
     milestones,
     milestonesEarned,
     standingHeadline,

@@ -23,7 +23,6 @@ const programmeObjectSchema = z.object({
   authorName: z.string().trim().max(120).optional(),
   weeks: z.coerce.number().int().positive(),
   weeklyHoursLabel: z.string().trim().min(1, "Required"),
-  credits: z.coerce.number().int().positive(),
   // Fee arrives from the form as naira (a human types "450000"); the
   // server converts to kobo — feeMinor itself is never entered directly,
   // so a decimal typo can't silently become a 100x-off integer.

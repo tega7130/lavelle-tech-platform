@@ -38,7 +38,7 @@ function Seal({ tone }: { tone: "gold" | "blue" }) {
 }
 
 export function Credentials({ data }: { data: PageData }) {
-  const { ladder, certificates, inProgress, totalCreditsEarned, milestones, milestonesEarned, standingHeadline, standingExplanation, nextCertificate, advancedPractitioner } = data;
+  const { ladder, certificates, inProgress, milestones, milestonesEarned, standingHeadline, standingExplanation, nextCertificate, advancedPractitioner } = data;
 
   if (certificates.length === 0 && inProgress.length === 0) {
     return (

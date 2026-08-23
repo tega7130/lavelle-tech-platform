@@ -27,7 +27,6 @@ async function seedPublishableProgramme(categoryId: string, staffId: string, ove
       summary: "A test programme for website publishing checks.",
       weeks: 12,
       weeklyHoursLabel: "6-8 hrs / week",
-      credits: 24,
       feeMinor: overrides.feeMinor ?? 45_000_000,
       createdByStaffId: staffId,
     },
