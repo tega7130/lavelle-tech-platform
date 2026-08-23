@@ -52,7 +52,8 @@ export function serializeEditableDom(root: HTMLElement): string {
   function lineFromListItem(li: HTMLElement, marker: string): string {
     let text = "";
     for (const child of Array.from(li.childNodes)) text += serializeInline(child, false, false);
-    return `${marker}${text}`;
+    // Only return a line if there's actual text — empty list items are discarded
+    return text.length > 0 ? `${marker}${text}` : "";
   }
 
   const blocks: string[] = [];
@@ -68,7 +69,8 @@ export function serializeEditableDom(root: HTMLElement): string {
       const marker = el.tagName === "UL" ? "- " : "1. ";
       const lines = Array.from(el.children)
         .filter((c) => c.tagName === "LI")
-        .map((li) => lineFromListItem(li as HTMLElement, marker));
+        .map((li) => lineFromListItem(li as HTMLElement, marker))
+        .filter((line) => line.length > 0); // Skip empty list items
       if (lines.length) blocks.push(lines.join("\n"));
       continue;
     }
