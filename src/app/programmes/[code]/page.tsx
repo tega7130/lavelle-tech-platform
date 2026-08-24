@@ -44,12 +44,12 @@ export default async function ProgrammeDetailPage({ params }: { params: Promise<
       <SiteCompactHeader />
 
       <div className="py-11 pb-[88px]">
-        <div className="mx-auto max-w-[1200px] px-10">
+        <div className="mx-auto max-w-[1200px] px-5 sm:px-6 md:px-8 lg:px-10">
           <Link href="/programmes" className="text-[12.5px] text-neutral-600 font-medium no-underline hover:text-accent">
             &larr; All specializations
           </Link>
 
-          <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.35fr)_348px] gap-14 items-start mt-[26px]">
+          <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.35fr)_348px] gap-10 lg:gap-14 items-start mt-[26px]">
             <div>
               <div className="flex items-center gap-[9px] flex-wrap">
                 <span className={cn("px-[11px] py-1 rounded-full text-[10px] font-semibold tracking-[0.05em] uppercase", detail.tier === "FOUNDATION" ? "bg-neutral-100 text-neutral-700" : detail.tier === "ADVANCED_PRACTITIONER" ? "bg-accent-2-100 text-accent-2-800" : "bg-accent-100 text-accent-700")}>
@@ -59,7 +59,7 @@ export default async function ProgrammeDetailPage({ params }: { params: Promise<
                   {detail.code} · September 2026 intake
                 </span>
               </div>
-              <h1 className="font-heading font-semibold text-[38px] leading-[1.12] mt-4 max-w-[22ch] tracking-[-0.022em]">{detail.title}</h1>
+              <h1 className="font-heading font-semibold text-[26px] sm:text-[30px] lg:text-[38px] leading-[1.12] mt-4 max-w-[22ch] tracking-[-0.022em]">{detail.title}</h1>
               <p className="text-[16px] leading-[1.7] text-neutral-700 mt-[18px] max-w-[60ch]">{detail.pitch}</p>
 
               {detail.video && <ProgrammeVideo video={detail.video} title={detail.title} />}
@@ -109,7 +109,7 @@ export default async function ProgrammeDetailPage({ params }: { params: Promise<
                         </svg>
                       </span>
                     </summary>
-                    <div className="px-5 pb-[18px] pl-[89px]">
+                    <div className="px-5 pb-[18px] pl-5 sm:pl-[89px]">
                       <ul className="m-0 pl-4 flex flex-col gap-[6px]">
                         {m.lectures.map((title, i) => (
                           <li key={i} className="text-[12.5px] leading-[1.5] text-neutral-700">
@@ -128,7 +128,7 @@ export default async function ProgrammeDetailPage({ params }: { params: Promise<
             <div className="lg:sticky lg:top-8 rounded-2xl overflow-hidden border border-accent-200 shadow-[0_18px_44px_rgba(19,26,46,0.1)] bg-bg">
               <div className="px-[26px] pt-[26px] pb-[22px] bg-[linear-gradient(158deg,#0c356f,#08234a)] text-white">
                 <div className="text-[10px] tracking-[0.14em] uppercase text-accent-2">Programme fee</div>
-                <div className="font-heading font-bold text-[36px] leading-none mt-[10px]">{detail.fee}</div>
+                <div className="font-heading font-bold text-[28px] sm:text-[32px] lg:text-[36px] leading-none mt-[10px]">{detail.fee}</div>
                 <div className="text-[12px] text-white/66 mt-2">{detail.feeNote}</div>
               </div>
 

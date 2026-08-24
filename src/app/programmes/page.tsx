@@ -11,9 +11,9 @@ export default async function ProgrammesPage() {
       <SiteCompactHeader />
 
       <div className="py-11 pb-[88px]">
-        <div className="mx-auto max-w-[1200px] px-10">
+        <div className="mx-auto max-w-[1200px] px-5 sm:px-6 md:px-8 lg:px-10">
           <div className="text-[11px] tracking-[0.18em] uppercase font-semibold text-accent">Specializations</div>
-          <h1 className="font-heading font-semibold text-[38px] leading-[1.12] mt-4 max-w-[22ch] tracking-[-0.022em]">All programmes</h1>
+          <h1 className="font-heading font-semibold text-[26px] sm:text-[30px] lg:text-[38px] leading-[1.12] mt-4 max-w-[22ch] tracking-[-0.022em]">All programmes</h1>
           <p className="text-[15px] leading-[1.7] text-neutral-600 mt-[14px] max-w-[60ch]">
             Every specialization currently open for enrolment. Filter by tier or search by name to find the programme that fits where you are in practice.
           </p>

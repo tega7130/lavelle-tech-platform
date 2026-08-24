@@ -101,7 +101,7 @@ export function CertificateView({ certificate: c }: { certificate: Certificate }
           </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-3 px-6 pb-5 -mt-1">
+        <div className="grid grid-cols-3 max-[540px]:grid-cols-1 gap-3 px-6 pb-5 -mt-1">
           <div>
             <div className="text-neutral-500 text-[9.5px] tracking-[0.1em] uppercase">Certificate ID</div>
             <div className="text-[13px] font-medium mt-0.5">{c.certificateNumber}</div>

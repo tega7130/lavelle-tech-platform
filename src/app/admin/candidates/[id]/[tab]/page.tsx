@@ -9,6 +9,7 @@ import { listCandidateEnrolments, listCandidatePayments, candidateHasStalePendin
 import { listProgrammes } from "@/lib/programme-reads";
 import { listCandidateMarks } from "@/lib/marking-reads";
 import { getCandidateProgress } from "@/lib/progress-admin-reads";
+import { getVideoWatchStatsForCandidate } from "@/lib/video-analytics";
 import { getSignedAssetUrl } from "@/lib/storage";
 import { requireStaffSession } from "@/lib/staff-auth";
 import { Permission, ProgrammeStatus } from "@/generated/prisma/client";
@@ -83,8 +84,8 @@ export default async function CandidateRecordTabPage({ params }: { params: Promi
     }
 
     case "progress": {
-      const progress = await getCandidateProgress(id);
-      return <CandidateProgressTab progress={progress} />;
+      const [progress, videoWatch] = await Promise.all([getCandidateProgress(id), getVideoWatchStatsForCandidate(id)]);
+      return <CandidateProgressTab progress={progress} videoWatch={videoWatch} />;
     }
 
     case "assessments": {

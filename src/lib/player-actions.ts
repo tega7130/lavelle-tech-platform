@@ -60,6 +60,52 @@ export async function savePosition(
 }
 
 /**
+ * Engagement tracking, separate from the resume cursor savePosition
+ * above writes — maxPositionSeconds only ever moves forward, so a rewind
+ * doesn't undercount how far the candidate actually got. Called
+ * alongside savePosition on the same throttled ~10s/unload cadence, for
+ * both a self-hosted <video> (timeupdate) and a YouTube embed (IFrame
+ * Player API) — see src/components/portal/lecture-player.tsx.
+ * durationSeconds is only ever passed for a pasted-link lecture (an
+ * upload's duration is already known via videoAsset.durationSeconds,
+ * probed at upload time) and is first-report-wins: once
+ * Lecture.durationSeconds is set, later reports never overwrite it,
+ * since it's the same video for every candidate.
+ *
+ * A no-op for anything other than a VIDEO lecture — the position-save
+ * payload always carries mediaPositionSeconds (defaulting to 0), even
+ * for a slide lecture with no video at all, so mediaKind is checked
+ * here rather than trusting "a position was sent" as a video signal.
+ */
+export async function recordVideoWatchProgress(
+  candidateId: string,
+  enrolmentId: string,
+  lectureId: string,
+  input: { positionSeconds: number; durationSeconds?: number }
+) {
+  await assertOwnedEnrolment(candidateId, enrolmentId);
+
+  const lecture = await prisma.lecture.findUniqueOrThrow({ where: { id: lectureId }, select: { mediaKind: true, durationSeconds: true } });
+  if (lecture.mediaKind !== "VIDEO") return null;
+
+  if (input.durationSeconds != null && lecture.durationSeconds == null) {
+    await prisma.lecture.update({ where: { id: lectureId }, data: { durationSeconds: input.durationSeconds } });
+  }
+
+  const existing = await prisma.videoWatchProgress.findUnique({
+    where: { enrolmentId_lectureId: { enrolmentId, lectureId } },
+    select: { maxPositionSeconds: true },
+  });
+  const maxPositionSeconds = Math.max(existing?.maxPositionSeconds ?? 0, input.positionSeconds);
+
+  return prisma.videoWatchProgress.upsert({
+    where: { enrolmentId_lectureId: { enrolmentId, lectureId } },
+    create: { enrolmentId, lectureId, maxPositionSeconds },
+    update: { maxPositionSeconds },
+  });
+}
+
+/**
  * Notes never gate progression and aren't a step — just a free-form
  * per-lecture scratchpad. body is always the rich text editor's
  * serialized markup (never raw HTML), so this never needs to sanitize

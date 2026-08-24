@@ -38,7 +38,7 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
       <SiteCompactHeader />
 
       <div className="py-11 pb-[88px]">
-        <div className="mx-auto max-w-[760px] px-10">
+        <div className="mx-auto max-w-[760px] px-5 sm:px-6 md:px-8 lg:px-10">
           <Link href="/blog" className="text-[12.5px] text-neutral-600 font-medium no-underline hover:text-accent">
             &larr; Blog
           </Link>

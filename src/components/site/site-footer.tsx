@@ -34,8 +34,8 @@ const FOOTER_COLS = [
 export function SiteFooter() {
   return (
     <footer className="border-t border-divider bg-neutral-100">
-      <div className="mx-auto max-w-[1200px] px-10 pt-14 pb-8">
-        <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1.2fr)_minmax(0,2fr)] gap-14">
+      <div className="mx-auto max-w-[1200px] px-5 sm:px-6 md:px-8 lg:px-10 pt-11 sm:pt-14 pb-8">
+        <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1.2fr)_minmax(0,2fr)] gap-10 md:gap-14">
           <div>
             <div className="flex items-center gap-[11px]">
               <LogoMark size={34} />

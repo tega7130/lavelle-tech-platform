@@ -2,8 +2,10 @@ import { Card, CardKicker } from "@/components/ui/card";
 import { Tag, type TagVariant } from "@/components/ui/tag";
 import { tierLabel } from "@/lib/format";
 import type { getCandidateProgress } from "@/lib/progress-admin-reads";
+import type { getVideoWatchStatsForCandidate } from "@/lib/video-analytics";
 
 type Progress = Awaited<ReturnType<typeof getCandidateProgress>>;
+type VideoWatch = Awaited<ReturnType<typeof getVideoWatchStatsForCandidate>>;
 
 const DEADLINE_TAG: Record<string, TagVariant | "success" | "warning" | "danger"> = {
   MET: "success",
@@ -13,7 +15,7 @@ const DEADLINE_TAG: Record<string, TagVariant | "success" | "warning" | "danger"
   UPCOMING: "neutral",
 };
 
-export function CandidateProgressTab({ progress }: { progress: Progress }) {
+export function CandidateProgressTab({ progress, videoWatch }: { progress: Progress; videoWatch: VideoWatch }) {
   if (progress.length === 0) {
     return (
       <div className="text-center py-12 px-6 border border-divider rounded-md">
@@ -56,6 +58,37 @@ export function CandidateProgressTab({ progress }: { progress: Progress }) {
           )}
         </Card>
       ))}
+
+      {videoWatch.length > 0 && (
+        <Card elev="sm">
+          <CardKicker>Video engagement</CardKicker>
+          <div className="font-heading font-semibold text-[15px] mb-3">Watch progress</div>
+          <div className="flex flex-col gap-2">
+            {videoWatch.map((v) => (
+              <div key={v.lectureId} className="flex items-center justify-between gap-3 text-[12.5px] py-1.5 border-b border-dashed border-neutral-200 last:border-b-0">
+                <div className="min-w-0">
+                  <div className="truncate">{v.lectureTitle}</div>
+                  <div className="text-[11px] text-neutral-500">
+                    {v.programmeCode} · Week {v.weekNumber} · {v.moduleTitle}
+                  </div>
+                </div>
+                <div className="flex-none flex items-center gap-2">
+                  {v.watchedPercent != null ? (
+                    <>
+                      <div className="h-[6px] w-[70px] rounded-full bg-neutral-200 overflow-hidden">
+                        <div className="h-full rounded-full bg-accent" style={{ width: `${v.watchedPercent}%` }} />
+                      </div>
+                      <span className="tabular-nums text-neutral-600 w-[36px] text-right">{v.watchedPercent}%</span>
+                    </>
+                  ) : (
+                    <span className="text-neutral-400">Duration unknown</span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
     </div>
   );
 }

@@ -42,7 +42,10 @@ export function youtubeEmbedUrl(url: string): string | null {
     // rel=0 disables related-videos recommendations from other channels.
     // modestbranding=1 hides YouTube logo from controls.
     // fs=0 disables fullscreen mode and removes "Watch on YouTube" button.
-    const params = "?rel=0&modestbranding=1&fs=0";
+    // enablejsapi=1 lets the candidate player (lecture-player.tsx) attach
+    // the YouTube IFrame Player API to this exact iframe for watch-time
+    // tracking — a plain embed with no API wired up can't report position.
+    const params = "?rel=0&modestbranding=1&fs=0&enablejsapi=1";
     if (u.hostname === "youtu.be") return `https://www.youtube.com/embed/${u.pathname.slice(1)}${params}`;
     if (u.hostname.endsWith("youtube.com")) {
       if (u.pathname === "/watch") {

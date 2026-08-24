@@ -92,7 +92,7 @@ export function ProgrammeOverview({ overview }: { overview: Overview }) {
         <Card elev="sm">
           <CardKicker>About this programme</CardKicker>
           <p className="text-[13px] text-neutral-700 mt-2 mb-0">{programme.summary}</p>
-          <div className="grid grid-cols-3 gap-3 mt-[var(--space-4)] text-[13px]">
+          <div className="grid grid-cols-3 max-[540px]:grid-cols-1 gap-3 mt-[var(--space-4)] text-[13px]">
             <div>
               <div className="text-neutral-500 text-xs">Duration</div>
               <div>{programme.weeks} weeks</div>

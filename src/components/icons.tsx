@@ -126,6 +126,14 @@ export const SignOutIcon = (p: IconProps) => (
   </Svg>
 );
 
+export const MenuIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <line x1="2.5" y1="5" x2="15.5" y2="5" />
+    <line x1="2.5" y1="9" x2="15.5" y2="9" />
+    <line x1="2.5" y1="13" x2="15.5" y2="13" />
+  </Svg>
+);
+
 export const BellIcon = (p: IconProps) => (
   <Svg width={17} height={17} {...p}>
     <path d="M4.5 7.5a4.5 4.5 0 0 1 9 0c0 3 1 4.5 1 4.5H3.5s1-1.5 1-4.5Z" />
@@ -174,6 +182,8 @@ export const ADMIN_NAV_PATHS: Record<string, string> = {
   invigilation: "M1.8 9S4.4 4.4 9 4.4 16.2 9 16.2 9 13.6 13.6 9 13.6 1.8 9 1.8 9ZM9 11.2a2.2 2.2 0 1 0 0-4.4 2.2 2.2 0 0 0 0 4.4Z",
   reviews:
     "M9 1.8l1.9 3.9 4.3.6-3.1 3 .7 4.3L9 11.6l-3.8 2 .7-4.3-3.1-3 4.3-.6z",
+  funnel: "M2.5 2.8h13l-4.8 6v5.4l-3.4-2v-3.4z",
+  analytics: "M2.8 15.2V6.8M8.6 15.2V2.8M14.4 15.2V9.8",
 };
 
 export function AdminNavIcon({ name, ...p }: { name: string } & IconProps) {

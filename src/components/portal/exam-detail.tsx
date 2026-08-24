@@ -86,7 +86,7 @@ export function ExamDetail({ detail }: { detail: Detail }) {
 
       <Card elev="sm">
         <p className="text-[13.5px] text-neutral-700 leading-relaxed m-0">{detail.exam.description || detail.programme.summary}</p>
-        <div className="grid grid-cols-3 gap-4 mt-4 pt-4 border-t border-dashed border-neutral-300">
+        <div className="grid grid-cols-3 max-[540px]:grid-cols-1 gap-4 mt-4 pt-4 border-t border-dashed border-neutral-300">
           <div>
             <div className="text-neutral-500 text-[10px] tracking-[0.1em] uppercase">{detail.exam.examFormat ? "Format" : "Duration"}</div>
             <div className="text-[13px] font-medium mt-0.5">{detail.exam.examFormat || `${detail.exam.durationMinutes / 60} hours`}</div>

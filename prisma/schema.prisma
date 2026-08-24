@@ -278,6 +278,7 @@ enum Permission {
   MARK_SUBMISSIONS
   MODERATE_GRADES
   MANAGE_EXAMS
+  RESET_CANDIDATE_PROGRESS
   VIEW_FINANCE
   CONFIRM_PAYMENTS
   MANAGE_FINANCE
@@ -599,6 +600,15 @@ model Lecture {
   mediaKind LectureMediaKind
   videoUrl  String? // video only — a pasted hosted URL; nothing to probe, duration shows "pending"
 
+  // Only meaningful when videoUrl is a pasted link (YouTube etc.) — an
+  // uploaded video's duration is videoAsset.durationSeconds instead,
+  // probed server-side at upload. A pasted link has nothing to probe, so
+  // this stays null until the candidate player reports it once via the
+  // YouTube IFrame API (see recordVideoWatchProgress) — first report
+  // wins, never overwritten afterward, since it's the same video for
+  // every candidate.
+  durationSeconds Int?
+
   // Not in the README's literal table — added because the duration rule
   // ("...or the video's duration") is only achievable for a video that
   // was actually uploaded (and so has bytes to probe), as distinct from
@@ -628,6 +638,7 @@ model Lecture {
 
   slides              Slide[]
   progress            LectureProgress[]
+  videoWatchProgress  VideoWatchProgress[]
   draftingSubmissions DraftingSubmission[]
   deadlines           Deadline[]
   rubrics             MarkRubric[]
@@ -881,6 +892,7 @@ model Enrolment {
 
   payments            Payment[]
   lectureProgress     LectureProgress[]
+  videoWatchProgress  VideoWatchProgress[]
   draftingSubmissions DraftingSubmission[]
   quizAttempts        QuizAttempt[]
   deadlines           Deadline[]
@@ -941,6 +953,35 @@ model LectureProgress {
 
   @@unique([enrolmentId, lectureId])
   @@index([enrolmentId, lastSeenAt(sort: Desc)])
+}
+
+// Engagement tracking, distinct from LectureProgress.mediaPositionSeconds
+// (a resume cursor that can move backward on rewind) — maxPositionSeconds
+// only ever increases, so it's "how much of the video has this candidate
+// ever gotten to," the number analytics actually wants. Watched % and
+// "completed" are deliberately NOT stored here — they're derived at read
+// time from this value against the lecture's duration (videoAsset's
+// probed durationSeconds for an upload, or Lecture.durationSeconds for a
+// pasted link — see there), so there's only ever one place a duration
+// figure can go stale. Keyed by enrolment (not candidateId directly),
+// mirroring LectureProgress, so a reset via resetEnrolmentProgress
+// (src/lib/candidate-progress.ts) clears it the same way. Covers both
+// self-hosted <video> (timeupdate) and a YouTube embed (IFrame Player
+// API) — both report through the same recordVideoWatchProgress call.
+model VideoWatchProgress {
+  id          String    @id @default(uuid())
+  enrolmentId String
+  enrolment   Enrolment @relation(fields: [enrolmentId], references: [id], onDelete: Cascade)
+  lectureId   String
+  lecture     Lecture   @relation(fields: [lectureId], references: [id], onDelete: Cascade)
+
+  maxPositionSeconds Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([enrolmentId, lectureId])
+  @@index([lectureId])
 }
 
 enum SubmissionState {

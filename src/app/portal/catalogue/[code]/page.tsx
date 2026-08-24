@@ -49,7 +49,7 @@ export default async function ProgrammeDetailPage({ params }: { params: Promise<
         </div>
       )}
 
-      <div className="grid grid-cols-[2fr_1fr] gap-[var(--space-6)] mt-[var(--space-6)]">
+      <div className="grid grid-cols-[2fr_1fr] max-[760px]:grid-cols-1 gap-[var(--space-6)] mt-[var(--space-6)]">
         <div>
           <h3>
             Syllabus &middot; {programme.modules.length} modules &middot;{" "}

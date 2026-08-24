@@ -43,7 +43,7 @@ export default async function CataloguePage({
           </p>
         </Card>
       ) : (
-        <div className="grid grid-cols-3 gap-[var(--space-4)]">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-[var(--space-4)]">
           {programmes.map((p) => (
             <Card key={p.id} elev="sm" className="overflow-hidden">
               <div className="flex gap-1.5 min-w-0">

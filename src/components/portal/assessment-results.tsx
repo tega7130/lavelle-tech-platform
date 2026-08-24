@@ -88,7 +88,7 @@ export function AssessmentResults({ results, scale }: { results: Results; scale:
 
               {isOpen && (
                 <div className="border-t border-dashed border-neutral-300">
-                  <div className="grid grid-cols-4 gap-[var(--space-3)] px-[var(--space-5)] py-[var(--space-4)]">
+                  <div className="grid grid-cols-4 max-[600px]:grid-cols-2 gap-[var(--space-3)] px-[var(--space-5)] py-[var(--space-4)]">
                     <div className="p-3 rounded-md bg-neutral-100">
                       <div className="text-neutral-500 text-[9.5px] tracking-[0.1em] uppercase">Quizzes</div>
                       <div className="font-heading font-semibold text-[14px] mt-0.5">{r.quizRows.length}</div>
@@ -148,7 +148,7 @@ export function AssessmentResults({ results, scale }: { results: Results; scale:
 
       <Card elev="sm" className="mt-[var(--space-6)]">
         <CardKicker>Grading scale</CardKicker>
-        <div className="grid grid-cols-4 gap-[var(--space-3)] mt-2">
+        <div className="grid grid-cols-4 max-[600px]:grid-cols-2 gap-[var(--space-3)] mt-2">
           {scale.map((b, i) => {
             const upper = i === 0 ? null : scale[i - 1]!.minPercent - 1;
             const range = i === 0 ? `${b.minPercent}% and above` : b.minPercent === 0 ? `Below ${upper! + 1}% — resit required` : `${b.minPercent}–${upper}%`;

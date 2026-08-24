@@ -20,7 +20,12 @@ export default async function StaffPage() {
     <div className="max-w-[1000px]">
       <div className="flex items-center justify-between mb-[var(--space-4)]">
         <h1 className="font-heading text-2xl">Staff & permissions</h1>
-        <InviteStaffButton />
+        <div className="flex gap-2 items-center">
+          <Link href="/admin/staff/performance" className="text-[13px] text-accent no-underline">
+            View performance →
+          </Link>
+          <InviteStaffButton />
+        </div>
       </div>
 
       {staff.length === 0 ? (

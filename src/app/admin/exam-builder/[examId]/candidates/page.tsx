@@ -1,12 +1,14 @@
 import Link from "next/link";
 import { getExamSummaryForAccess, listExamCandidates } from "@/lib/exam-reads";
 import { listExamStaffAssignments, listAssignableStaffForExam } from "@/lib/exam-staff";
+import { getExamStats } from "@/lib/assessment-analytics";
 import { ExamCandidates } from "@/components/admin/exam-candidates";
+import { ExamStatsCards } from "@/components/admin/exam-stats-cards";
 
 export default async function Page({ params }: { params: Promise<{ examId: string }> }) {
   const { examId } = await params;
   const exam = await getExamSummaryForAccess(examId);
-  const candidates = await listExamCandidates(examId);
+  const [candidates, stats] = await Promise.all([listExamCandidates(examId), getExamStats(examId)]);
   const [assignments, assignable] = exam.canManageStaff
     ? await Promise.all([listExamStaffAssignments(examId), listAssignableStaffForExam(examId)])
     : [[], []];
@@ -21,6 +23,7 @@ export default async function Page({ params }: { params: Promise<{ examId: strin
           {exam.programmeTitle} ({exam.programmeCode}) — Candidates
         </h2>
       </div>
+      <ExamStatsCards stats={stats} />
       <ExamCandidates
         examId={examId}
         canManageStaff={exam.canManageStaff}

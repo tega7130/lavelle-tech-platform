@@ -21,7 +21,7 @@ export function ProgrammeCarousel({ listings }: { listings: CarouselListing[] })
     <>
       <div
         ref={containerRef}
-        className="flex gap-[18px] mt-11 overflow-x-auto snap-x snap-mandatory pb-3 -mx-10 px-10 scrollbar-hidden"
+        className="flex gap-[18px] mt-11 overflow-x-auto snap-x snap-mandatory pb-3 -mx-5 sm:-mx-6 md:-mx-8 lg:-mx-10 px-5 sm:px-6 md:px-8 lg:px-10 scrollbar-hidden"
         style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
       >
         {listings.map((p) => (

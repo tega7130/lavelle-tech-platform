@@ -80,7 +80,13 @@ export default async function ProgrammesListPage({
                 </td>
                 <td className="border-b border-dashed border-neutral-300 py-[10px] pr-2 text-[13px]">{tierLabel(p.tier)}</td>
                 <td className="border-b border-dashed border-neutral-300 py-[10px] pr-2 text-[13px]">
-                  {p._count.enrolments || "—"}
+                  {p._count.enrolments ? (
+                    <Link href={`/admin/programmes/${p.id}/enrolments`} className="text-accent hover:underline">
+                      {p._count.enrolments}
+                    </Link>
+                  ) : (
+                    "—"
+                  )}
                 </td>
                 <td className="border-b border-dashed border-neutral-300 py-[10px] pr-2 text-[13px]">
                   {formatNaira(p.feeMinor)}

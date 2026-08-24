@@ -29,7 +29,7 @@ export function ContactForm({ listings }: { listings: { code: string; title: str
       <h3 className="font-heading font-semibold text-[19px]">Contact a representative</h3>
       <div className="text-[12.5px] text-neutral-700 mt-[5px]">We reply within one working day.</div>
 
-      <div className="grid grid-cols-2 gap-[13px] mt-[22px]">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-[13px] mt-[22px]">
         <div>
           <label className="lv-lab block text-[12px] font-medium text-neutral-700 mb-[6px]">Full name</label>
           <input name="name" required className="lv-in w-full h-11 px-3 rounded-[9px] border border-neutral-300 bg-bg text-[14px]" placeholder="Adaeze Okonkwo" />
@@ -40,7 +40,7 @@ export function ContactForm({ listings }: { listings: { code: string; title: str
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-[13px] mt-[14px]">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-[13px] mt-[14px]">
         <div>
           <label className="lv-lab block text-[12px] font-medium text-neutral-700 mb-[6px]">Phone (optional)</label>
           <input name="phone" className="lv-in w-full h-11 px-3 rounded-[9px] border border-neutral-300 bg-bg text-[14px]" placeholder="+234 803 552 8841" />

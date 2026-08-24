@@ -9,6 +9,7 @@ import { Table, Thead, Tbody, Tr, Th, Td } from "@/components/ui/table";
 import { Input, Textarea, Label } from "@/components/ui/field";
 import { Dialog } from "@/components/ui/dialog";
 import { tierLabel } from "@/lib/format";
+import { computeCertificateStats, computeIssuanceTimeline } from "@/lib/certificate-analytics";
 import {
   listCertificatesAction,
   listCertificateTemplatesAction,
@@ -136,6 +137,10 @@ export function AdminCertificates({
     window.open(url, "_blank");
   }
 
+  const stats = React.useMemo(() => computeCertificateStats(certificates), [certificates]);
+  const timeline = React.useMemo(() => computeIssuanceTimeline(certificates), [certificates]);
+  const recentTimeline = timeline.slice(-6);
+
   return (
     <div className="max-w-[1300px] flex flex-col gap-[var(--space-6)]">
       <div className="flex items-start justify-between gap-4 flex-wrap">
@@ -152,6 +157,44 @@ export function AdminCertificates({
           <Button onClick={() => setShowIssueForm((v) => !v)}>{showIssueForm ? "Close" : "Issue manually"}</Button>
         </div>
       </div>
+
+      {certificates.length > 0 && (
+        <div className="flex flex-col gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+            <StatCard label="Total issued" value={stats.totalIssued} />
+            <StatCard label="Active" value={stats.active} />
+            <StatCard label="Revoked" value={stats.revoked} />
+            <StatCard label="Superseded" value={stats.superseded} />
+            <StatCard label="Verification checks" value={stats.totalVerifications} />
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="rounded-md border border-divider bg-bg p-4">
+              <div className="text-[11px] tracking-[0.05em] uppercase text-neutral-500 mb-2">Band breakdown (active)</div>
+              <div className="flex gap-2 flex-wrap">
+                {(Object.keys(BAND_LABEL) as (keyof typeof BAND_LABEL)[]).map((band) => (
+                  <Tag key={band} variant="outline">
+                    {BAND_LABEL[band]} &middot; {stats.bandCounts[band as keyof typeof stats.bandCounts]}
+                  </Tag>
+                ))}
+              </div>
+            </div>
+            <div className="rounded-md border border-divider bg-bg p-4">
+              <div className="text-[11px] tracking-[0.05em] uppercase text-neutral-500 mb-2">Issued by month</div>
+              {recentTimeline.length === 0 ? (
+                <span className="text-neutral-400 text-[13px]">No certificates issued yet</span>
+              ) : (
+                <div className="flex gap-2 flex-wrap">
+                  {recentTimeline.map((m) => (
+                    <Tag key={m.monthKey} variant="neutral">
+                      {m.label} &middot; {m.count}
+                    </Tag>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {showIssueForm && <ManualIssueForm onIssued={async () => { setShowIssueForm(false); await refresh(); router.refresh(); }} />}
       {showBulkIssue && (
@@ -622,5 +665,14 @@ function BulkIssueDialog({ onClose, onIssued }: { onClose: () => void; onIssued:
         )}
       </div>
     </Dialog>
+  );
+}
+
+function StatCard({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div className="rounded-md border border-divider bg-bg p-4">
+      <div className="text-[11px] tracking-[0.05em] uppercase text-neutral-500">{label}</div>
+      <div className="font-heading text-2xl mt-1 tabular-nums">{value}</div>
+    </div>
   );
 }

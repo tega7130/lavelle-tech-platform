@@ -56,15 +56,15 @@ export default async function HomePage() {
 
         <SiteHeroHeader />
 
-        <div className="relative z-[2] mx-auto max-w-[1200px] px-10 pt-[70px] pb-24">
+        <div className="relative z-[2] mx-auto max-w-[1200px] px-5 sm:px-6 md:px-8 lg:px-10 pt-12 pb-24">
           <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.08fr)_minmax(0,0.92fr)] gap-[72px] items-center">
             <div>
-              <h1 className="font-heading font-semibold text-[58px] leading-[1.05] text-white mt-[26px] max-w-[16ch] tracking-[-0.022em]">
+              <h1 className="font-heading font-semibold text-[32px] sm:text-[42px] lg:text-[58px] leading-[1.05] text-white mt-[26px] max-w-full sm:max-w-none tracking-[-0.022em] text-center sm:text-left">
                 Lavelle transforms lawyers into recognised specialists
               </h1>
 
-              <p className="text-[16.5px] leading-[1.68] text-white/74 max-w-[52ch] mt-[22px]">
-                Build a reputation for expertise. Specialise in the areas of law shaping the future, learn from leading practitioners, and earn verifiable credentials that distinguish you in the legal profession.
+              <p className="text-[16.5px] leading-[1.68] text-white/74 max-w-[52ch] mt-[22px] text-center sm:text-left">
+                Build a reputation for expertise. <br className="sm:hidden" />Specialise in the areas of law shaping the future, learn from leading practitioners, and earn verifiable credentials that distinguish you in the legal profession.
               </p>
 
               <div className="flex gap-[13px] mt-[34px] flex-wrap">
@@ -123,7 +123,7 @@ export default async function HomePage() {
 
       {/* TRUST STRIP */}
       <div className="border-b border-divider bg-neutral-100">
-        <div className="mx-auto max-w-[1200px] px-10 py-[26px] flex items-center justify-between gap-9 flex-wrap">
+        <div className="mx-auto max-w-[1200px] px-5 sm:px-6 md:px-8 lg:px-10 py-[26px] flex items-center justify-between gap-9 flex-wrap">
           <div className="text-[11px] tracking-[0.18em] uppercase font-semibold text-neutral-700">Candidates practise at</div>
           <div className="flex items-center gap-[34px] flex-wrap">
             {FIRMS.map((f) => (
@@ -137,10 +137,10 @@ export default async function HomePage() {
 
       {/* THE LADDER */}
       <div id="ladder" className="py-[104px]">
-        <div className="mx-auto max-w-[1200px] px-10">
+        <div className="mx-auto max-w-[1200px] px-5 sm:px-6 md:px-8 lg:px-10">
           <div className="max-w-[660px]">
             <div className="text-[11px] tracking-[0.18em] uppercase font-semibold text-accent">The credentialing ladder</div>
-            <h2 className="font-heading font-semibold text-[40px] leading-[1.14] mt-4 tracking-[-0.022em]">A title you earn, not a certificate you collect.</h2>
+            <h2 className="font-heading font-semibold text-[26px] sm:text-[30px] lg:text-[40px] leading-[1.14] mt-4 tracking-[-0.022em]">A title you earn, not a certificate you collect.</h2>
             <p className="text-[15.5px] leading-[1.7] text-neutral-600 mt-[18px]">
               At Lavelle, candidates are challenged to put their knowledge into practice, sharpen their work through feedback from practising legal professionals, and demonstrate their competence through rigorous assessment. Each level takes you further, building deeper expertise, stronger credibility, and a professional distinction earned through demonstrated capability.
             </p>
@@ -174,11 +174,11 @@ export default async function HomePage() {
 
       {/* SPECIALIZATIONS */}
       <div id="programmes" className="py-[104px] bg-neutral-100 border-t border-b border-divider">
-        <div className="mx-auto max-w-[1200px] px-10">
+        <div className="mx-auto max-w-[1200px] px-5 sm:px-6 md:px-8 lg:px-10">
           <div className="flex items-end justify-between gap-10 flex-wrap">
             <div className="max-w-[600px]">
               <div className="text-[11px] tracking-[0.18em] uppercase font-semibold text-accent">Specializations</div>
-              <h2 className="font-heading font-semibold text-[40px] leading-[1.14] mt-4 tracking-[-0.022em]">Pick the sector your next brief comes from.</h2>
+              <h2 className="font-heading font-semibold text-[26px] sm:text-[30px] lg:text-[40px] leading-[1.14] mt-4 tracking-[-0.022em]">Pick the sector your next brief comes from.</h2>
             </div>
             <p className="text-[14.5px] leading-[1.7] text-neutral-600 max-w-[44ch]">
               Our programmes go beyond theory to develop the practical knowledge, skills and judgement required in today's legal landscape. Explore each programme to discover what you'll learn.
@@ -207,11 +207,11 @@ export default async function HomePage() {
 
       {/* HOW IT WORKS */}
       <div id="how" className="py-[104px]">
-        <div className="mx-auto max-w-[1200px] px-10">
+        <div className="mx-auto max-w-[1200px] px-5 sm:px-6 md:px-8 lg:px-10">
           <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)] gap-[72px] items-start">
             <div className="lg:sticky lg:top-10">
               <div className="text-[11px] tracking-[0.18em] uppercase font-semibold text-accent">How it works</div>
-              <h2 className="font-heading font-semibold text-[40px] leading-[1.14] mt-4 tracking-[-0.022em]">Enrol, study, sit, be credentialed.</h2>
+              <h2 className="font-heading font-semibold text-[26px] sm:text-[30px] lg:text-[40px] leading-[1.14] mt-4 tracking-[-0.022em]">Enrol, study, sit, be credentialed.</h2>
               <p className="text-[15px] leading-[1.7] text-neutral-600 mt-[18px]">Registration is free and commits you to nothing. You pay per programme, when you are ready.</p>
               <Link href="/register" className={cn(buttonClassName("primary"), "h-[50px] px-6 rounded-[9px] text-[14.5px] mt-7")}>
                 Create your account
@@ -242,11 +242,11 @@ export default async function HomePage() {
       {/* VERIFICATION */}
       <div className="py-24 bg-[linear-gradient(158deg,#0c356f,#08234a)] relative overflow-hidden">
         <div className="pointer-events-none absolute -top-[180px] -left-[120px] w-[520px] h-[520px] rounded-full bg-[radial-gradient(circle,rgba(255,198,41,0.13),rgba(255,198,41,0)_70%)]" />
-        <div className="relative mx-auto max-w-[1200px] px-10">
+        <div className="relative mx-auto max-w-[1200px] px-5 sm:px-6 md:px-8 lg:px-10">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-[72px] items-center">
             <div>
               <div className="text-[11px] tracking-[0.18em] uppercase font-semibold text-accent-2">Public verification</div>
-              <h2 className="font-heading font-semibold text-[38px] leading-[1.14] text-white mt-4 tracking-[-0.022em]">A credential anyone can check in seconds.</h2>
+              <h2 className="font-heading font-semibold text-[24px] sm:text-[28px] lg:text-[38px] leading-[1.14] text-white mt-4 tracking-[-0.022em]">A credential anyone can check in seconds.</h2>
               <p className="text-[15px] leading-[1.72] text-white/72 mt-[18px] max-w-[46ch]">
                 Every certificate carries an identifier and a QR code. Employers, clients and regulators can confirm the holder, the tier, the grade and the issue date, and see immediately if a credential has been revoked.
               </p>
@@ -287,10 +287,10 @@ export default async function HomePage() {
 
       {/* FACULTY */}
       <div id="faculty" className="py-[104px] hidden">
-        <div className="mx-auto max-w-[1200px] px-10">
+        <div className="mx-auto max-w-[1200px] px-5 sm:px-6 md:px-8 lg:px-10">
           <div className="max-w-[620px]">
             <div className="text-[11px] tracking-[0.18em] uppercase font-semibold text-accent">Faculty</div>
-            <h2 className="font-heading font-semibold text-[40px] leading-[1.14] mt-4 tracking-[-0.022em]">Taught by people who do the work.</h2>
+            <h2 className="font-heading font-semibold text-[26px] sm:text-[30px] lg:text-[40px] leading-[1.14] mt-4 tracking-[-0.022em]">Taught by people who do the work.</h2>
             <p className="text-[15.5px] leading-[1.7] text-neutral-600 mt-[18px]">
               Our faculty are senior practitioners and regulators. They author the material, set the papers, and mark the drafting themselves.
             </p>
@@ -316,11 +316,11 @@ export default async function HomePage() {
 
       {/* FAQ */}
       <div id="faq" className="py-[104px]">
-        <div className="mx-auto max-w-[1200px] px-10">
+        <div className="mx-auto max-w-[1200px] px-5 sm:px-6 md:px-8 lg:px-10">
           <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] gap-[72px] items-start">
             <div className="lg:sticky lg:top-10">
               <div className="text-[11px] tracking-[0.18em] uppercase font-semibold text-accent">Questions</div>
-              <h2 className="font-heading font-semibold text-[40px] leading-[1.14] mt-4 tracking-[-0.022em]">Straight answers.</h2>
+              <h2 className="font-heading font-semibold text-[26px] sm:text-[30px] lg:text-[40px] leading-[1.14] mt-4 tracking-[-0.022em]">Straight answers.</h2>
               <Link href="#contact" className={buttonClassName("secondary", "h-11 text-[13.5px] mt-[26px]")}>
                 Ask us anything
               </Link>
@@ -337,7 +337,7 @@ export default async function HomePage() {
                       </svg>
                     </span>
                   </summary>
-                  <div className="px-[60px] pb-[22px] pl-[22px]">
+                  <div className="px-[22px] sm:pr-[60px] pb-[22px]">
                     <p className="text-[13.5px] leading-[1.72] text-neutral-700 m-0">{q.answer}</p>
                   </div>
                 </details>
@@ -350,11 +350,11 @@ export default async function HomePage() {
 
       {/* CONTACT */}
       <div id="contact" className="py-24 bg-neutral-100 border-t border-divider">
-        <div className="mx-auto max-w-[1200px] px-10">
+        <div className="mx-auto max-w-[1200px] px-5 sm:px-6 md:px-8 lg:px-10">
           <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] gap-16 items-start">
             <div>
               <div className="text-[11px] tracking-[0.18em] uppercase font-semibold text-accent">Talk to us first</div>
-              <h2 className="font-heading font-semibold text-[38px] leading-[1.14] mt-4 tracking-[-0.022em]">Not sure which tier fits you?</h2>
+              <h2 className="font-heading font-semibold text-[24px] sm:text-[28px] lg:text-[38px] leading-[1.14] mt-4 tracking-[-0.022em]">Not sure which tier fits you?</h2>
               <p className="text-[15px] leading-[1.72] text-neutral-700 mt-[18px] max-w-[44ch]">
                 Tell us where you are in practice and what you want to be known for. A representative will come back with a straight recommendation, not a sales call.
               </p>

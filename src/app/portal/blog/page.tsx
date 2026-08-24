@@ -20,7 +20,7 @@ export default async function PortalBlogPage() {
           <p className="text-neutral-600 text-[12.5px] max-w-[44ch] mx-auto mt-2">Check back soon.</p>
         </Card>
       ) : (
-        <div className="grid grid-cols-3 gap-[var(--space-4)]">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-[var(--space-4)]">
           {posts.map((p) => (
             <Link key={p.slug} href={`/portal/blog/${p.slug}`} className="no-underline text-text">
               <Card elev="sm" className="overflow-hidden h-full">

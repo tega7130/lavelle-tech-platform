@@ -31,6 +31,7 @@ export const ADMIN_NAV: AdminNavGroup[] = [
     items: [
       { key: "overview", label: "Overview", href: "/admin/overview" },
       { key: "programmes", label: "Programmes", href: "/admin/programmes" },
+      { key: "analytics", label: "Analytics", href: "/admin/analytics" },
     ],
   },
   {

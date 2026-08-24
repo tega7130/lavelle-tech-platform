@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { Tag } from "@/components/ui/tag";
 import { Button } from "@/components/ui/button";
@@ -45,6 +46,9 @@ export function ExamSitting({ data }: { data: SittingData }) {
   const [tabWarning, setTabWarning] = React.useState<string | null>(null);
   const [quitOpen, setQuitOpen] = React.useState(false);
   const [submitOpen, setSubmitOpen] = React.useState(false);
+  // Mobile-only bottom drawer for the question navigator — desktop keeps it
+  // as a permanently visible right-hand column (see the `md:` split below).
+  const [navigatorOpen, setNavigatorOpen] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
   const [expiring, setExpiring] = React.useState(false);
   // expiresAt is only ever null before startSitting has run — the page
@@ -158,6 +162,41 @@ export function ExamSitting({ data }: { data: SittingData }) {
     }
   }
 
+  // Shared between the permanent desktop column and the mobile bottom
+  // drawer — onSelect additionally dismisses the drawer, wired up only for
+  // the mobile variant, after jumping to the chosen question.
+  function renderQuestionNavigator(onSelect?: () => void) {
+    return (
+      <div className="grid grid-cols-5 gap-1.5">
+        {paper.map((q, i) => {
+          const a = answers[q.questionId];
+          const done = a?.selectedOptionId || (a?.writtenAnswer && a.writtenAnswer.trim());
+          const locked = !canReview && i < index;
+          return (
+            <button
+              key={q.questionId}
+              onClick={() => {
+                setIndex(i);
+                onSelect?.();
+              }}
+              disabled={locked}
+              title={locked ? "Review before submission is switched off for this examination" : undefined}
+              className="h-8 rounded-md text-[11px] font-medium relative disabled:cursor-not-allowed"
+              style={{
+                border: i === index ? "2px solid var(--color-accent)" : "1px solid var(--color-neutral-300)",
+                background: done ? "var(--color-accent-2-100)" : "transparent",
+                opacity: locked ? 0.45 : 1,
+              }}
+            >
+              {i + 1}
+              {a?.flagged && <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-[#c77d0a]" />}
+            </button>
+          );
+        })}
+      </div>
+    );
+  }
+
   if (data.exam.enforceFullScreen && !fullscreenOk) {
     return (
       <div className="min-h-screen bg-surface flex items-center justify-center p-6">
@@ -177,26 +216,35 @@ export function ExamSitting({ data }: { data: SittingData }) {
 
   return (
     <div className="min-h-screen bg-surface flex flex-col">
-      <div className="flex items-center justify-between gap-4 px-6 py-3.5 border-b border-divider bg-bg">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4 px-3 sm:px-6 py-3 sm:py-3.5 border-b border-divider bg-bg">
         <div className="min-w-0">
           <div className="font-heading font-semibold text-[13.5px] truncate">{data.programme.title} — Examination</div>
-          <div className="text-neutral-500 text-[11px] mt-0.5">
+          <div className="text-neutral-500 text-[11px] mt-0.5 whitespace-nowrap">
             Question {index + 1} of {paper.length} · {answeredCount} answered
           </div>
         </div>
-        <div className="flex items-center gap-3 flex-none">
+        <div className="flex items-center justify-between sm:justify-end gap-2 sm:gap-3 flex-none">
           <div
-            className="font-heading font-bold text-lg tabular-nums px-3 py-1 rounded-md"
+            className="font-heading font-bold text-base sm:text-lg tabular-nums px-2 sm:px-3 py-1 rounded-md"
             style={{ color: remaining < 5 * 60 * 1000 ? "#b42318" : "inherit", background: remaining < 5 * 60 * 1000 ? "#fef3f2" : "transparent" }}
           >
             {formatClock(remaining)}
           </div>
-          <Button variant="secondary" className="h-9 px-3 text-xs" onClick={() => setQuitOpen(true)}>
-            Quit
-          </Button>
-          <Button className="h-9 px-4 text-xs" onClick={() => setSubmitOpen(true)}>
-            Submit
-          </Button>
+          <div className="flex items-center gap-2 sm:gap-3">
+            <Button
+              variant="secondary"
+              className="md:hidden h-9 px-3 text-xs"
+              onClick={() => setNavigatorOpen(true)}
+            >
+              Questions
+            </Button>
+            <Button variant="secondary" className="h-9 px-3 text-xs" onClick={() => setQuitOpen(true)}>
+              Quit
+            </Button>
+            <Button className="h-9 px-4 text-xs" onClick={() => setSubmitOpen(true)}>
+              Submit
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -205,7 +253,7 @@ export function ExamSitting({ data }: { data: SittingData }) {
       )}
 
       <div className="flex-1 flex min-h-0">
-        <div className="flex-1 overflow-y-auto p-8">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-8">
           <div className="max-w-[720px] mx-auto">
             {question && (
               <div key={question.questionId}>
@@ -282,34 +330,36 @@ export function ExamSitting({ data }: { data: SittingData }) {
           </div>
         </div>
 
-        <div className="w-[220px] flex-none border-l border-divider bg-bg p-4 overflow-y-auto">
-          <div className="text-neutral-500 text-[10px] tracking-[0.1em] uppercase mb-2">Questions</div>
-          <div className="grid grid-cols-5 gap-1.5">
-            {paper.map((q, i) => {
-              const a = answers[q.questionId];
-              const done = a?.selectedOptionId || (a?.writtenAnswer && a.writtenAnswer.trim());
-              const locked = !canReview && i < index;
-              return (
-                <button
-                  key={q.questionId}
-                  onClick={() => setIndex(i)}
-                  disabled={locked}
-                  title={locked ? "Review before submission is switched off for this examination" : undefined}
-                  className="h-8 rounded-md text-[11px] font-medium relative disabled:cursor-not-allowed"
-                  style={{
-                    border: i === index ? "2px solid var(--color-accent)" : "1px solid var(--color-neutral-300)",
-                    background: done ? "var(--color-accent-2-100)" : "transparent",
-                    opacity: locked ? 0.45 : 1,
-                  }}
-                >
-                  {i + 1}
-                  {a?.flagged && <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-[#c77d0a]" />}
-                </button>
-              );
-            })}
-          </div>
+        <div className="hidden md:block w-[220px] flex-none border-l border-divider bg-bg p-4 overflow-y-auto">
+          {renderQuestionNavigator()}
         </div>
       </div>
+
+      {navigatorOpen &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div className="fixed inset-0 z-[70] flex md:hidden items-end bg-[rgba(19,26,46,0.45)]" onClick={() => setNavigatorOpen(false)}>
+            <div
+              role="dialog"
+              aria-modal="true"
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-h-[70vh] rounded-t-lg bg-bg border-t border-divider p-4 pb-6 overflow-y-auto"
+            >
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-neutral-500 text-[10px] tracking-[0.1em] uppercase">Questions</div>
+                <button
+                  onClick={() => setNavigatorOpen(false)}
+                  aria-label="Close"
+                  className="w-7 h-7 rounded-md border border-divider bg-bg text-neutral-600 flex items-center justify-center hover:bg-neutral-100 cursor-pointer"
+                >
+                  ×
+                </button>
+              </div>
+              {renderQuestionNavigator(() => setNavigatorOpen(false))}
+            </div>
+          </div>,
+          document.body
+        )}
 
       <Dialog open={quitOpen} onClose={() => setQuitOpen(false)} title="Quit this sitting?">
         <p>

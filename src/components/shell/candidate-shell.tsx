@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/cn";
@@ -26,6 +27,7 @@ import {
   SupportIcon,
   SignOutIcon,
   BellIcon,
+  MenuIcon,
 } from "@/components/icons";
 import { LogoMark } from "@/components/ui/logo-mark";
 import { Button } from "@/components/ui/button";
@@ -134,6 +136,13 @@ export function CandidateShell({
   const [inboxOpen, setInboxOpen] = React.useState(false);
   const [inbox, setInbox] = React.useState(initialNotifications ?? { unreadCount: 0, items: [] });
   const inboxRef = React.useRef<HTMLDivElement>(null);
+  const [navOpen, setNavOpen] = React.useState(false);
+
+  // Close the mobile drawer automatically whenever navigation completes —
+  // covers both a nav-link tap and any programmatic router.push elsewhere.
+  React.useEffect(() => {
+    setNavOpen(false);
+  }, [pathname]);
 
   React.useEffect(() => {
     if (!inboxOpen) return;
@@ -167,9 +176,12 @@ export function CandidateShell({
     setInbox((cur) => ({ unreadCount: 0, items: cur.items.map((i) => ({ ...i, unread: false })) }));
   }
 
-  return (
-    <div className="flex h-screen bg-bg text-text font-body">
-      <aside className="w-[236px] flex-none flex flex-col border-r border-divider p-[var(--space-4)] px-[var(--space-3)]">
+  // Shared between the static desktop sidebar and the mobile drawer so the
+  // two never drift apart — onLinkClick is only wired up for the drawer
+  // variant, to dismiss it the moment a nav link is tapped.
+  function renderNavContent(onLinkClick?: () => void) {
+    return (
+      <>
         <div className="flex items-center gap-[10px] px-[2px] pb-[var(--space-6)]">
           <LogoMark size={34} />
           <div>
@@ -188,6 +200,7 @@ export function CandidateShell({
               <Link
                 key={item.key}
                 href={item.href}
+                onClick={onLinkClick}
                 className={cn(
                   "flex items-center gap-[10px] px-[var(--space-3)] py-[9px] rounded-md text-sm no-underline",
                   active ? "text-accent bg-accent-100" : "text-text hover:bg-neutral-100"
@@ -203,6 +216,7 @@ export function CandidateShell({
         <div className="border-t border-divider pt-[var(--space-3)] flex items-center gap-[10px]">
           <Link
             href="/portal/profile"
+            onClick={onLinkClick}
             className="flex-1 min-w-0 flex items-center gap-[10px] no-underline text-text"
           >
             <div className="w-8 h-8 flex-none rounded-full bg-accent-100 text-accent-700 flex items-center justify-center text-xs font-heading">
@@ -224,7 +238,31 @@ export function CandidateShell({
             <SignOutIcon />
           </button>
         </div>
+      </>
+    );
+  }
+
+  return (
+    <div className="flex h-screen bg-bg text-text font-body">
+      <aside className="hidden md:flex w-[236px] flex-none flex-col border-r border-divider p-[var(--space-4)] px-[var(--space-3)]">
+        {renderNavContent()}
       </aside>
+
+      {navOpen &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div className="fixed inset-0 z-[70] flex md:hidden bg-[rgba(19,26,46,0.45)]" onClick={() => setNavOpen(false)}>
+            <div
+              role="dialog"
+              aria-modal="true"
+              onClick={(e) => e.stopPropagation()}
+              className="w-[266px] max-w-[82vw] h-full flex flex-col border-r border-divider bg-bg p-[var(--space-4)] px-[var(--space-3)] overflow-y-auto"
+            >
+              {renderNavContent(() => setNavOpen(false))}
+            </div>
+          </div>,
+          document.body
+        )}
 
       <Dialog
         open={signOutOpen}
@@ -245,14 +283,24 @@ export function CandidateShell({
       </Dialog>
 
       <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
-        <header className="flex-none flex items-center justify-between px-[var(--space-6)] py-[var(--space-4)] border-b border-divider">
-          <div>
-            <div className="text-[11px] tracking-[0.08em] uppercase text-neutral-500">
-              {resolvedCrumb.section}
+        <header className="flex-none flex items-center justify-between gap-3 px-[var(--space-4)] md:px-[var(--space-6)] py-[var(--space-4)] border-b border-divider">
+          <div className="flex items-center gap-3 min-w-0">
+            <button
+              onClick={() => setNavOpen(true)}
+              aria-label="Open menu"
+              title="Open menu"
+              className="flex-none md:hidden w-[38px] h-[38px] rounded-md border border-neutral-300 bg-bg text-text flex items-center justify-center hover:bg-neutral-100 cursor-pointer"
+            >
+              <MenuIcon />
+            </button>
+            <div className="min-w-0">
+              <div className="text-[11px] tracking-[0.08em] uppercase text-neutral-500 truncate">
+                {resolvedCrumb.section}
+              </div>
+              <h2 className="mt-[2px] mb-0 truncate">{resolvedCrumb.title}</h2>
             </div>
-            <h2 className="mt-[2px] mb-0">{resolvedCrumb.title}</h2>
           </div>
-          <div className="flex items-center gap-[var(--space-3)]">
+          <div className="flex items-center gap-[var(--space-3)] flex-none">
             <div className="relative" ref={inboxRef}>
               <button
                 onClick={toggleInbox}
@@ -268,7 +316,7 @@ export function CandidateShell({
                 )}
               </button>
               {inboxOpen && (
-                <div className="absolute top-[calc(100%+8px)] right-0 z-[60] w-[390px] max-h-[440px] overflow-y-auto rounded-md bg-bg border border-divider shadow-lg">
+                <div className="absolute top-[calc(100%+8px)] right-0 z-[60] w-[min(390px,calc(100vw-32px))] max-h-[440px] overflow-y-auto rounded-md bg-bg border border-divider shadow-lg">
                   <div className="flex justify-between items-center gap-3 px-4 pt-4 pb-3 border-b border-dashed border-neutral-300 sticky top-0 bg-bg">
                     <div className="font-heading font-semibold text-[13.5px]">Your notifications</div>
                     <button onClick={markAllRead} className="text-[11.5px] font-medium text-accent hover:underline cursor-pointer">
@@ -305,17 +353,17 @@ export function CandidateShell({
         </header>
 
         {!online && (
-          <div className="flex-none flex items-center gap-3 px-[var(--space-6)] py-2.5 bg-[#fff7e6] border-b border-[#f0d9a8] text-[#8a6013] text-[12.5px]">
+          <div className="flex-none flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-3 px-[var(--space-4)] md:px-[var(--space-6)] py-2.5 bg-[#fff7e6] border-b border-[#f0d9a8] text-[#8a6013] text-[12.5px]">
             <span className="font-semibold">You are offline.</span>
             <span>
               Your connection dropped. You can keep reading anything already open, but marks, submissions and new
               lectures will not load until you are back on a network.
             </span>
-            <span className="ml-auto text-[11px] opacity-75">Reconnecting automatically</span>
+            <span className="sm:ml-auto text-[11px] opacity-75">Reconnecting automatically</span>
           </div>
         )}
 
-        <main className="flex-1 overflow-y-auto p-[var(--space-6)]">{children}</main>
+        <main className="flex-1 overflow-y-auto p-[var(--space-4)] md:p-[var(--space-6)]">{children}</main>
       </div>
     </div>
   );

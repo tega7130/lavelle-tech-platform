@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import confetti from "canvas-confetti";
@@ -11,9 +12,10 @@ import { Dialog } from "@/components/ui/dialog";
 import { LectureStateDot } from "@/components/portal/lecture-state-dot";
 import { QuizPlayer } from "@/components/portal/quiz-player";
 import { LectureNotesPanel } from "@/components/portal/lecture-notes-panel";
-import { ChevronLeftIcon, LockIcon } from "@/components/icons";
+import { ChevronLeftIcon, LockIcon, MenuIcon } from "@/components/icons";
 import { computePercent } from "@/lib/progress";
 import { youtubeEmbedUrl } from "@/lib/format";
+import { loadYouTubeIframeApi, type YouTubePlayer } from "@/lib/youtube-player";
 import type { LectureStep } from "@/lib/lecture-steps";
 import { completeStepAction, submitDraftingAction, completeProgrammeAction } from "@/app/actions/player";
 import type { getLecturePlayer } from "@/lib/player-reads";
@@ -52,6 +54,9 @@ export function LecturePlayer({ enrolmentId, data }: { enrolmentId: string; data
   const [stepIndex, setStepIndex] = React.useState(firstIncomplete === -1 ? steps.length - 1 : firstIncomplete);
   const [completed, setCompleted] = React.useState<Set<string>>(new Set(data.stepsCompleted));
   const activeStep = steps[stepIndex]!;
+  // Mobile-only drawer for the module/lecture rail — desktop keeps it as a
+  // permanently visible column (see the `md:` split in the JSX below).
+  const [railOpen, setRailOpen] = React.useState(false);
 
   // ── Media state ──
   const [slideIndex, setSlideIndex] = React.useState(resumePosition.slideIndex);
@@ -66,9 +71,15 @@ export function LecturePlayer({ enrolmentId, data }: { enrolmentId: string; data
   // Uploaded assets never resolve here (embedUrl stays null) since
   // lecture.videoUrl is only ever the signed asset URL or a pasted link.
   const embedUrl = lecture.videoUrl ? youtubeEmbedUrl(lecture.videoUrl) : null;
+  const youtubePlayerElementId = `youtube-player-${lecture.id}`;
 
   // ── Position autosave — throttled to ~10s and on unload, never per interaction ──
-  const positionRef = React.useRef({ slideIndex: resumePosition.slideIndex, mediaPositionSeconds: resumePosition.mediaPositionSeconds });
+  // mediaDurationSeconds rides along on the same payload, for watch-time
+  // analytics (recordVideoWatchProgress) — see the route handler.
+  const positionRef = React.useRef<{ slideIndex: number; mediaPositionSeconds: number; mediaDurationSeconds?: number }>({
+    slideIndex: resumePosition.slideIndex,
+    mediaPositionSeconds: resumePosition.mediaPositionSeconds,
+  });
   React.useEffect(() => {
     positionRef.current.slideIndex = slideIndex;
   }, [slideIndex]);
@@ -100,6 +111,47 @@ export function LecturePlayer({ enrolmentId, data }: { enrolmentId: string; data
       savePosition(true);
     };
   }, [savePosition]);
+
+  // A YouTube embed has no timeupdate event of its own — the IFrame
+  // Player API is the only way to read its position/duration. Polled (not
+  // event-driven) while playing, at the same cadence savePosition already
+  // throttles to, so this never adds extra network chatter of its own —
+  // it only ever updates positionRef, which the existing interval reports.
+  React.useEffect(() => {
+    if (!embedUrl) return;
+    let destroyed = false;
+    let player: YouTubePlayer | null = null;
+    let pollInterval: ReturnType<typeof setInterval> | null = null;
+
+    loadYouTubeIframeApi().then((YT) => {
+      if (destroyed) return;
+      player = new YT.Player(youtubePlayerElementId, {
+        events: {
+          onStateChange: (event) => {
+            if (pollInterval) {
+              clearInterval(pollInterval);
+              pollInterval = null;
+            }
+            if (event.data === YT.PlayerState.PLAYING) {
+              pollInterval = setInterval(() => {
+                const p = event.target;
+                positionRef.current.mediaPositionSeconds = Math.floor(p.getCurrentTime());
+                const duration = p.getDuration();
+                if (Number.isFinite(duration) && duration > 0) positionRef.current.mediaDurationSeconds = Math.floor(duration);
+              }, 3000);
+            }
+          },
+        },
+      });
+    });
+
+    return () => {
+      destroyed = true;
+      if (pollInterval) clearInterval(pollInterval);
+      player?.destroy();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [embedUrl, youtubePlayerElementId]);
 
   async function markStepComplete(step: LectureStep) {
     if (completed.has(step)) return;
@@ -191,10 +243,11 @@ export function LecturePlayer({ enrolmentId, data }: { enrolmentId: string; data
     }
   }
 
-  return (
-    <div className="min-h-screen bg-bg grid" style={{ gridTemplateColumns: "300px 1fr" }}>
-      {/* Dark lecture rail */}
-      <aside className="text-white flex flex-col" style={{ background: "#0b1322" }}>
+  // Shared between the permanent desktop column and the mobile drawer —
+  // onLinkClick dismisses the drawer, wired up only for the mobile variant.
+  function renderRailContent(onLinkClick?: () => void) {
+    return (
+      <>
         <div className="p-[var(--space-4)] border-b border-white/10">
           <Link
             href={`/portal/programme?programme=${data.programme.code}`}
@@ -223,6 +276,7 @@ export function LecturePlayer({ enrolmentId, data }: { enrolmentId: string; data
                     key={lec.id}
                     href={lec.isLocked ? "#" : `/learn/${enrolmentId}/${lec.id}`}
                     aria-disabled={lec.isLocked}
+                    onClick={onLinkClick}
                     className={`flex items-center gap-2 px-2 py-1.5 rounded-md text-[12.5px] ${
                       lec.isLocked ? "text-white/30 pointer-events-none" : isNow ? "bg-white/10 text-white" : "text-white/65 hover:bg-white/5"
                     }`}
@@ -236,10 +290,55 @@ export function LecturePlayer({ enrolmentId, data }: { enrolmentId: string; data
             </div>
           ))}
         </nav>
+      </>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-bg grid grid-cols-1 md:grid-cols-[300px_1fr]">
+      {/* Dark lecture rail — permanent column on desktop, drawer on mobile */}
+      <aside className="hidden md:flex text-white flex-col" style={{ background: "#0b1322" }}>
+        {renderRailContent()}
       </aside>
 
+      {/* Mobile-only top bar: back link, progress, and a toggle for the rail drawer */}
+      <div className="md:hidden flex items-center justify-between gap-3 px-[var(--space-4)] py-3 text-white" style={{ background: "#0b1322" }}>
+        <Link
+          href={`/portal/programme?programme=${data.programme.code}`}
+          className="inline-flex items-center gap-1.5 text-white/70 hover:text-white text-[13px] flex-none"
+        >
+          <ChevronLeftIcon width={14} height={14} /> Back
+        </Link>
+        <span className="text-accent-2 text-[12px] font-semibold flex-1 text-center truncate">{percent}% complete</span>
+        <button
+          onClick={() => setRailOpen(true)}
+          aria-label="Open module navigation"
+          title="Open module navigation"
+          className="flex-none w-[34px] h-[34px] rounded-md border border-white/20 text-white flex items-center justify-center hover:bg-white/10 cursor-pointer"
+        >
+          <MenuIcon />
+        </button>
+      </div>
+
+      {railOpen &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div className="fixed inset-0 z-[70] flex md:hidden bg-[rgba(19,26,46,0.55)]" onClick={() => setRailOpen(false)}>
+            <div
+              role="dialog"
+              aria-modal="true"
+              onClick={(e) => e.stopPropagation()}
+              className="w-[280px] max-w-[84vw] h-full flex flex-col text-white overflow-y-auto"
+              style={{ background: "#0b1322" }}
+            >
+              {renderRailContent(() => setRailOpen(false))}
+            </div>
+          </div>,
+          document.body
+        )}
+
       {/* Content */}
-      <main className="flex flex-col p-[var(--space-6)] max-w-[720px] mx-auto w-full">
+      <main className="flex flex-col p-[var(--space-4)] md:p-[var(--space-6)] max-w-[720px] mx-auto w-full">
         <div className="flex items-center justify-between">
           <span className="text-[11px] text-neutral-500">
             Week {mod.weekNumber} &middot; {mod.title}
@@ -289,6 +388,7 @@ export function LecturePlayer({ enrolmentId, data }: { enrolmentId: string; data
               <div className="relative rounded-md overflow-hidden bg-black">
                 {embedUrl ? (
                   <iframe
+                    id={youtubePlayerElementId}
                     src={embedUrl}
                     title={`${mod.title} — ${lecture.title}`}
                     className="w-full aspect-video"
@@ -313,6 +413,10 @@ export function LecturePlayer({ enrolmentId, data }: { enrolmentId: string; data
                       onPlaying={() => setMediaBuffering(false)}
                       onTimeUpdate={(e) => {
                         positionRef.current.mediaPositionSeconds = Math.floor(e.currentTarget.currentTime);
+                      }}
+                      onLoadedMetadata={(e) => {
+                        const d = e.currentTarget.duration;
+                        if (Number.isFinite(d) && d > 0) positionRef.current.mediaDurationSeconds = Math.floor(d);
                       }}
                       onEnded={() => markStepComplete("content")}
                     />

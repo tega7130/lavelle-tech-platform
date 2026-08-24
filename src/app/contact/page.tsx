@@ -11,16 +11,16 @@ export default async function ContactPage() {
       <SiteCompactHeader />
 
       <div className="py-16">
-        <div className="mx-auto max-w-[640px] px-10">
+        <div className="mx-auto max-w-[640px] px-5 sm:px-6 md:px-8 lg:px-10">
           <div className="text-center mb-10">
             <div className="text-[11px] tracking-[0.18em] uppercase font-semibold text-accent">Talk to us first</div>
-            <h1 className="font-heading font-semibold text-[34px] leading-[1.14] mt-4 tracking-[-0.022em]">Not sure which tier fits you?</h1>
+            <h1 className="font-heading font-semibold text-[24px] sm:text-[28px] lg:text-[34px] leading-[1.14] mt-4 tracking-[-0.022em]">Not sure which tier fits you?</h1>
             <p className="text-[15px] leading-[1.72] text-neutral-700 mt-[14px]">
               Tell us where you are in practice and what you want to be known for. A representative will come back with a straight recommendation, not a sales call.
             </p>
           </div>
 
-          <div className="relative bg-bg border border-divider rounded-2xl p-[30px] shadow-[0_14px_36px_rgba(19,26,46,0.07)]">
+          <div className="relative bg-bg border border-divider rounded-2xl p-5 sm:p-[30px] shadow-[0_14px_36px_rgba(19,26,46,0.07)]">
             <ContactForm listings={listings.map((l) => ({ code: l.code, title: l.title }))} />
           </div>
         </div>

@@ -27,7 +27,7 @@ export function BlogPostView({ title, tags, authorName, dateLabel, heroImageUrl,
         </div>
       )}
 
-      <h1 className="font-heading font-semibold text-[34px] leading-[1.16] mt-4 tracking-[-0.02em]">{title || "Untitled post"}</h1>
+      <h1 className="font-heading font-semibold text-[24px] sm:text-[28px] lg:text-[34px] leading-[1.16] mt-4 tracking-[-0.02em]">{title || "Untitled post"}</h1>
       <div className="text-[13px] text-neutral-500 mt-3">
         {authorName || "—"} · {dateLabel}
       </div>

@@ -1,8 +1,16 @@
 import * as React from "react";
 import { cn } from "@/lib/cn";
 
+// The scroll container lives here, not at each call site, so every table
+// in the app is protected the same way — a narrow viewport scrolls the
+// table itself, never the whole page horizontally. Invisible on desktop,
+// where the table already fits within its container.
 export function Table({ className, ...props }: React.TableHTMLAttributes<HTMLTableElement>) {
-  return <table className={cn("w-full border-collapse text-sm", className)} {...props} />;
+  return (
+    <div className="overflow-x-auto">
+      <table className={cn("w-full border-collapse text-sm", className)} {...props} />
+    </div>
+  );
 }
 
 export function Thead({ className, ...props }: React.HTMLAttributes<HTMLTableSectionElement>) {

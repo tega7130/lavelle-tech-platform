@@ -19,7 +19,7 @@ export interface PermissionMeta {
   description: string;
 }
 
-// The 17-permission catalogue, six categories — Slice 08 README
+// The permission catalogue, grouped by category — Slice 08 README
 // "Permissions" table. Every permission has a plain-English description
 // shown beside its toggle.
 export const PERMISSIONS: PermissionMeta[] = [
@@ -31,6 +31,7 @@ export const PERMISSIONS: PermissionMeta[] = [
   { key: "MARK_SUBMISSIONS" as Permission, category: "Academic", description: "Submit and edit grades for drafting exercises and examinations" },
   { key: "MODERATE_GRADES" as Permission, category: "Academic", description: "Act as second marker on a returned mark" },
   { key: "MANAGE_EXAMS" as Permission, category: "Academic", description: "Build examinations and manage sittings and results" },
+  { key: "RESET_CANDIDATE_PROGRESS" as Permission, category: "Academic", description: "Reset a candidate's progress in a programme back to the start" },
   { key: "VIEW_FINANCE" as Permission, category: "Finance", description: "View payment history and transaction records" },
   { key: "CONFIRM_PAYMENTS" as Permission, category: "Finance", description: "Manually confirm payments and record offline transactions" },
   { key: "MANAGE_FINANCE" as Permission, category: "Finance", description: "Process refunds and adjust the ledger" },
@@ -82,6 +83,7 @@ const MANAGE_INTAKES_COHORTS = "MANAGE_INTAKES_COHORTS" as Permission;
 const MARK_SUBMISSIONS = "MARK_SUBMISSIONS" as Permission;
 const MODERATE_GRADES = "MODERATE_GRADES" as Permission;
 const MANAGE_EXAMS = "MANAGE_EXAMS" as Permission;
+const RESET_CANDIDATE_PROGRESS = "RESET_CANDIDATE_PROGRESS" as Permission;
 const VIEW_FINANCE = "VIEW_FINANCE" as Permission;
 const CONFIRM_PAYMENTS = "CONFIRM_PAYMENTS" as Permission;
 const MANAGE_FINANCE = "MANAGE_FINANCE" as Permission;
@@ -102,7 +104,7 @@ export const ROLE_PRESETS: Record<StaffRole, Permission[]> = {
   // Faculty — Faculty are the first markers being moderated.
   ACADEMIC_ADMIN: [
     VIEW_CANDIDATES, MARK_SUBMISSIONS, MODERATE_GRADES, MANAGE_PROGRAMMES, MANAGE_EXAMS,
-    MANAGE_INTAKES_COHORTS, ISSUE_CERTIFICATES, VIEW_AUDIT_LOG,
+    RESET_CANDIDATE_PROGRESS, MANAGE_INTAKES_COHORTS, ISSUE_CERTIFICATES, VIEW_AUDIT_LOG,
   ],
   FACULTY: [VIEW_CANDIDATES, MARK_SUBMISSIONS],
   FINANCE: [VIEW_CANDIDATES, VIEW_FINANCE, CONFIRM_PAYMENTS, MANAGE_FINANCE, VIEW_AUDIT_LOG],
