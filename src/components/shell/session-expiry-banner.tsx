@@ -12,7 +12,7 @@ const WARN_MS = 15 * 60 * 1000;
  * the current one, which is the exact sliding-renewal this policy rules
  * out (rule 1).
  */
-export function SessionExpiryBanner({ expiresAt, signInPath }: { expiresAt: Date; signInPath: string }) {
+export function SessionExpiryBanner({ expiresAt, signInPath }: { expiresAt: string; signInPath: string }) {
   const pathname = usePathname();
   const [showing, setShowing] = React.useState(false);
   const [dismissed, setDismissed] = React.useState(false);
