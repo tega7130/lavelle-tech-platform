@@ -2,11 +2,7 @@ import { withSentryConfig } from "@sentry/nextjs";
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  api: {
-    bodyParser: {
-      sizeLimit: '500mb',
-    },
-  },
+  /* config options here */
 };
 
 export default withSentryConfig(nextConfig, {
