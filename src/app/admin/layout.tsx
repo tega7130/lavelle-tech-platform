@@ -20,7 +20,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   return (
     <>
-      <SessionExpiryBanner expiresAt={staff.sessionExpiresAt} signInPath="/staff/sign-in" />
+      <SessionExpiryBanner expiresAt={staff.sessionExpiresAt.toISOString()} signInPath="/staff/sign-in" />
       <AdminShell
         staff={{ name: staff.name, initials, role: ROLE_LABELS[staff.role] }}
         headerTag="September 2026 intake"
