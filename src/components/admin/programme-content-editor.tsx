@@ -157,7 +157,6 @@ function ContentStatusSelect({
 }
 
 async function uploadFile(file: File, kind: "audio" | "video" | "image" | "document") {
-  // Use Cloudinary for videos, presigned URL for other media
   if (kind === "video") {
     const formData = new FormData();
     formData.append("file", file);
