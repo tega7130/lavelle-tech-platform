@@ -19,7 +19,7 @@ export default async function PortalLayout({ children }: { children: React.React
 
   return (
     <>
-      <SessionExpiryBanner expiresAt={candidate.sessionExpiresAt} signInPath="/sign-in" />
+      <SessionExpiryBanner expiresAt={candidate.sessionExpiresAt.toISOString()} signInPath="/sign-in" />
       <CandidateShell
         candidate={{
           name: `${candidate.firstName} ${candidate.lastName}`,
