@@ -1124,12 +1124,12 @@ async function main() {
             enrolmentId: amaraEnrolment.id,
             kind: MarkableKind.DRAFTING,
             draftingSubmissionId: submission.id,
-            state: MarkState.RETURNED,
-            scorePercent: d.scorePercent,
-            band,
-            feedback: "Sound on the law and clearly structured. Tighten the drafting precision on the operative clause — see the marked-up paragraph.",
-            markedByStaffId: faculty.id,
-            markedAt: now,
+            state: MarkState.AWAITING,
+            scorePercent: null,
+            band: null,
+            feedback: null,
+            markedByStaffId: null,
+            markedAt: null,
           },
         });
       }

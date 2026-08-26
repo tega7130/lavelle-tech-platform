@@ -11,17 +11,20 @@ import { Button, buttonClassName } from "@/components/ui/button";
 import { Label, Input, Textarea, FieldError } from "@/components/ui/field";
 import { Dialog } from "@/components/ui/dialog";
 
-async function uploadVideo(file: File) {
-  const signRes = await fetch("/api/uploads/sign", {
+async function uploadVideoToCloudinary(file: File) {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("purpose", "programme");
+  const res = await fetch("/api/uploads/cloudinary", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ kind: "video", mimeType: file.type, bytes: file.size }),
+    body: formData,
   });
-  if (!signRes.ok) throw new Error("Could not get an upload URL.");
-  const { storageKey, uploadUrl } = await signRes.json();
-  const putRes = await fetch(uploadUrl, { method: "PUT", body: file });
-  if (!putRes.ok) throw new Error("Upload failed.");
-  return finaliseUpload({ storageKey, kind: "video", mimeType: file.type, originalFilename: file.name });
+  if (!res.ok) {
+    const error = await res.json();
+    throw new Error(error.error || "Upload failed.");
+  }
+  const { asset } = await res.json();
+  return asset;
 }
 
 export interface CategoryOption {
@@ -102,7 +105,7 @@ export function ProgrammeDetailsForm({
     setVideoError(null);
     setVideoUploading(true);
     try {
-      const asset = await uploadVideo(file);
+      const asset = await uploadVideoToCloudinary(file);
       setCoverVideoAsset({ id: asset.id, originalFilename: asset.originalFilename });
     } catch (err) {
       setVideoError(err instanceof Error ? err.message : "Upload failed.");

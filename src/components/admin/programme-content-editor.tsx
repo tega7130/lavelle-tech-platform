@@ -157,6 +157,24 @@ function ContentStatusSelect({
 }
 
 async function uploadFile(file: File, kind: "audio" | "video" | "image" | "document") {
+  // Use Cloudinary for videos, presigned URL for other media
+  if (kind === "video") {
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("purpose", "programme");
+    const res = await fetch("/api/uploads/cloudinary", {
+      method: "POST",
+      body: formData,
+    });
+    if (!res.ok) {
+      const error = await res.json();
+      throw new Error(error.error || "Upload failed.");
+    }
+    const { asset } = await res.json();
+    return asset;
+  }
+
+  // Presigned URL flow for audio, images, documents
   const signRes = await fetch("/api/uploads/sign", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
