@@ -14,8 +14,14 @@ function formatDate(d: Date) {
 // /programmes/[code]) — revalidatePath in publish/unpublishBlogPostAction
 // keeps this current without a deploy.
 export async function generateStaticParams() {
-  const posts = await getPublishedBlogPosts();
-  return posts.map((p) => ({ slug: p.slug }));
+  try {
+    const posts = await getPublishedBlogPosts();
+    return posts.map((p) => ({ slug: p.slug }));
+  } catch (error) {
+    // Fail gracefully during build if database is unavailable (e.g., Vercel build environment)
+    console.warn("Could not generate static params for blog posts:", error);
+    return [];
+  }
 }
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
