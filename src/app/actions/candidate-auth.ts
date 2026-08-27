@@ -82,9 +82,23 @@ export async function requestRegistrationOtp(
   const code = await createOtpChallenge(email);
   logOtpEmail(email, code);
 
-  // No email provider is wired up in this slice (same honest dev stand-in
-  // as the rest of the auth flow) — the code rides along in the response
-  // so registration is testable end to end without a mail server.
+  // Send email verification OTP asynchronously
+  (async () => {
+    try {
+      await sendTransactionalEmailByTemplate("email-verification-otp", email, {
+        firstName: "",
+        otp: code,
+        expiryMinutes: 48,
+        supportEmail: EMAIL_CONFIG.supportEmail,
+        currentYear: new Date().getFullYear(),
+      });
+    } catch (emailError) {
+      console.error("Failed to send email-verification-otp:", emailError);
+      // Do not fail the OTP request on email errors
+    }
+  })();
+
+  // In development, include the code in response for testing without email
   const devCode = process.env.NODE_ENV !== "production" ? code : undefined;
   return { ok: true, data: { otpSent: true, ...(devCode ? { devCode } : {}) } };
 }
