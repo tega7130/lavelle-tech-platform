@@ -47,7 +47,8 @@ export async function staffSignInCore(email: string, password: string, ip: strin
     throw e;
   }
 
-  const staff = await prisma.staff.findUnique({ where: { email }, include: { permissionGrants: true } });
+  const normalizedEmail = email.toLowerCase();
+  const staff = await prisma.staff.findUnique({ where: { email: normalizedEmail }, include: { permissionGrants: true } });
 
   // The per-account bucket is checked BEFORE verifying the password, on
   // every attempt — not just failures. A lockout must refuse EVERY
@@ -57,7 +58,7 @@ export async function staffSignInCore(email: string, password: string, ip: strin
   // regardless of whether it matches a real account, so a real and a
   // fake address lock out identically (indistinguishable, rule 1).
   try {
-    await enforceRateLimit("staffSignInEmail", { email }, { limit: LOCKOUT_LIMIT, windowSeconds: LOCKOUT_WINDOW_SECONDS });
+    await enforceRateLimit("staffSignInEmail", { email: normalizedEmail }, { limit: LOCKOUT_LIMIT, windowSeconds: LOCKOUT_WINDOW_SECONDS });
   } catch (e) {
     if (e instanceof RateLimitError) {
       if (staff) {
@@ -164,7 +165,8 @@ export async function requestStaffPasswordResetCore(email: string, ip: string | 
     return; // same silent, generic outcome as any other case
   }
 
-  const staff = await prisma.staff.findUnique({ where: { email } });
+  const normalizedEmail = email.toLowerCase();
+  const staff = await prisma.staff.findUnique({ where: { email: normalizedEmail } });
   if (!staff || staff.status !== StaffStatus.ACTIVE) return;
 
   await invalidateOutstandingStaffTokens(staff.id);

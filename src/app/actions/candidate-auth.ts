@@ -74,7 +74,7 @@ export async function requestRegistrationOtp(
 
   const parsed = requestOtpSchema.safeParse(raw);
   if (!parsed.success) return { errors: fieldErrors(parsed.error), values: raw };
-  const email = parsed.data.email;
+  const email = parsed.data.email.toLowerCase();
 
   const existing = await prisma.candidate.findUnique({ where: { email }, select: { id: true } });
   if (existing) return { errors: { email: "An account with this email already exists" }, values: raw };
@@ -171,7 +171,7 @@ export async function registerCandidate(
             applicantNumber,
             firstName: data.firstName,
             lastName: data.lastName,
-            email: data.email,
+            email: data.email.toLowerCase(),
             emailVerifiedAt: new Date(),
             phoneCountryCode: data.phoneCountryCode || "+234",
             phone: data.phone || null,
@@ -251,7 +251,7 @@ export async function signInCandidate(
   if (!parsed.success) return { errors: fieldErrors(parsed.error), values: raw };
   const data = parsed.data;
 
-  const candidate = await prisma.candidate.findUnique({ where: { email: data.email } });
+  const candidate = await prisma.candidate.findUnique({ where: { email: data.email.toLowerCase() } });
   const invalid: FormActionState = { values: raw, message: "Incorrect email or password." };
   if (!candidate) return invalid;
   if (!(await verifyPassword(data.password, candidate.passwordHash))) return invalid;
@@ -351,7 +351,7 @@ export async function requestPasswordResetOtp(
 
   const parsed = requestPasswordResetOtpSchema.safeParse(raw);
   if (!parsed.success) return { errors: fieldErrors(parsed.error), values: raw };
-  const email = parsed.data.email;
+  const email = parsed.data.email.toLowerCase();
 
   const candidate = await prisma.candidate.findUnique({ where: { email } });
   if (candidate && candidate.accountStatus === "ACTIVE") {
@@ -399,6 +399,7 @@ export async function verifyPasswordResetOtp(
   const parsed = verifyPasswordResetOtpSchema.safeParse(raw);
   if (!parsed.success) return { errors: fieldErrors(parsed.error), values: raw };
   const { email, code } = parsed.data;
+  const normalizedEmail = email.toLowerCase();
 
   const messages: Record<string, string> = {
     invalid: "That code is incorrect.",
@@ -410,7 +411,7 @@ export async function verifyPasswordResetOtp(
   // Same address unknown either way — resolving to a candidate row here,
   // not before the rate limit above, keeps that check indistinguishable
   // from an "invalid code" reply.
-  const candidate = await prisma.candidate.findUnique({ where: { email } });
+  const candidate = await prisma.candidate.findUnique({ where: { email: normalizedEmail } });
   if (!candidate) return { errors: { code: messages.not_found }, values: raw };
 
   const result = await verifyPasswordResetOtpChallenge(candidate.id, code);
@@ -444,7 +445,7 @@ export async function resetPasswordWithOtp(
   if (!parsed.success) return { errors: fieldErrors(parsed.error), values: raw };
   const data = parsed.data;
 
-  const candidate = await prisma.candidate.findUnique({ where: { email: data.email } });
+  const candidate = await prisma.candidate.findUnique({ where: { email: data.email.toLowerCase() } });
   if (!candidate) return { message: "Please verify your email address first.", values: raw };
 
   const otpVerified = await consumeVerifiedPasswordResetOtp(candidate.id);
