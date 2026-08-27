@@ -1,5 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import { recordAuditEvent } from "@/lib/audit";
+import { sendTransactionalEmailByTemplate } from "@/lib/send-transactional-email";
+import { getFirstName } from "@/lib/email-utils";
+import { EMAIL_CONFIG } from "@/lib/email-config";
 import { slugify } from "@/lib/slug";
 import { computeShortfalls, type DrawableQuestion } from "@/lib/exam-draw";
 import type { ExamQuestionType, ExamQuestionStatus, AttemptPolicy } from "@/generated/prisma/client";
@@ -371,6 +374,57 @@ export async function createExamWindow(examId: string, input: ExamWindowInput, s
     description: `Sitting added: opens ${input.opensAt.toISOString().slice(0, 10)}`,
     ipAddress,
   });
+
+  // Send exam-scheduled emails to eligible candidates asynchronously
+  (async () => {
+    try {
+      const exam = await prisma.exam.findUniqueOrThrow({
+        where: { id: examId },
+        include: { programme: true },
+      });
+
+      // Find all candidates eligible for this exam (enrolled in the programme)
+      const enrolments = await prisma.enrolment.findMany({
+        where: {
+          programmeId: exam.programmeId,
+          status: { in: ["ACTIVE", "COMPLETED"] },
+        },
+        include: { candidate: true },
+        distinct: ["candidateId"],
+      });
+
+      const currentYear = new Date().getFullYear();
+
+      for (const enrolment of enrolments) {
+        try {
+          await sendTransactionalEmailByTemplate("exam-scheduled", enrolment.candidate.email, {
+            firstName: getFirstName(enrolment.candidate.firstName),
+            programmeName: exam.programme.title,
+            tier: exam.programme.tier,
+            examDate: input.opensAt.toLocaleDateString(),
+            examTime: input.opensAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+            examDuration: `${exam.durationMinutes} minutes`,
+            windowOpenDate: input.opensAt.toLocaleDateString(),
+            windowCloseDate: input.closesAt.toLocaleDateString(),
+            registrationDeadline: input.registrationDeadline.toLocaleDateString(),
+            registrationUrl: `${process.env.NEXTAUTH_URL}/portal/exams`,
+            examRulesUrl: `${process.env.NEXTAUTH_URL}/exams/rules`,
+            supportEmail: EMAIL_CONFIG.supportEmail,
+            currentYear,
+          });
+        } catch (candidateEmailError) {
+          console.error(
+            `Failed to send exam-scheduled email to ${enrolment.candidate.email}:`,
+            candidateEmailError
+          );
+          // Continue with next candidate if one fails
+        }
+      }
+    } catch (emailError) {
+      console.error("Failed to send exam-scheduled emails:", emailError);
+      // Do not fail the window creation on email errors
+    }
+  })();
 
   return window;
 }

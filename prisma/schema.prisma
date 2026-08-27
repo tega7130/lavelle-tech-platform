@@ -2382,3 +2382,23 @@ model ContactEnquiry {
 
   @@index([createdAt])
 }
+
+// ─── Email Delivery Logging ─────────────────────────────────────────────────
+
+model EmailLog {
+  id String @id @default(uuid())
+
+  template String
+  recipient String
+  subject String
+
+  status String // "sent" | "failed"
+  errorMessage String?
+
+  sentAt DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([template, createdAt(sort: Desc)])
+  @@index([recipient, createdAt(sort: Desc)])
+  @@index([status, createdAt(sort: Desc)])
+}

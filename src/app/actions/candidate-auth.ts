@@ -42,6 +42,9 @@ import {
 import { recordAuditEvent } from "@/lib/audit";
 import { p2002Target } from "@/lib/prisma-errors";
 import type { FormActionState } from "@/lib/action-state";
+import { sendTransactionalEmailByTemplate } from "@/lib/send-transactional-email";
+import { getFirstName } from "@/lib/email-utils";
+import { EMAIL_CONFIG } from "@/lib/email-config";
 
 function formToObject(formData: FormData): Record<string, string> {
   const obj: Record<string, string> = {};
@@ -196,6 +199,17 @@ export async function registerCandidate(
       });
 
       await setSessionCookie(result.sessionToken, true);
+
+      await sendTransactionalEmailByTemplate(
+        'account-welcome',
+        result.candidate.email,
+        {
+          firstName: getFirstName(result.candidate.firstName),
+          exploreProgrammesUrl: `${process.env.NEXTAUTH_URL}/programmes`,
+          currentYear: new Date().getFullYear(),
+        }
+      );
+
       redirect("/portal/dashboard");
     } catch (e) {
       if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
@@ -288,6 +302,24 @@ export async function resendVerification(): Promise<FormActionState> {
   await invalidateOutstandingTokens(candidate.id);
   const token = await createVerificationTokenRecord(prisma, candidate.id);
   logVerificationEmail(candidate.email, token);
+
+  // Send email-verification-otp email asynchronously
+  (async () => {
+    try {
+      const verifyUrl = `${process.env.NEXTAUTH_URL}/api/auth/verify-email?token=${token}`;
+      await sendTransactionalEmailByTemplate("email-verification-otp", candidate.email, {
+        firstName: getFirstName(candidate.firstName),
+        verificationUrl: verifyUrl,
+        expiryHours: Math.floor(48),
+        supportEmail: EMAIL_CONFIG.supportEmail,
+        currentYear: new Date().getFullYear(),
+      });
+    } catch (emailError) {
+      console.error("Failed to send email-verification-otp:", emailError);
+      // Do not fail the resend on email errors
+    }
+  })();
+
   return { ok: true };
 }
 
@@ -325,6 +357,23 @@ export async function requestPasswordResetOtp(
   if (candidate && candidate.accountStatus === "ACTIVE") {
     const code = await createPasswordResetOtpChallenge(candidate.id);
     logPasswordResetOtpEmail(email, code);
+
+    // Send password-reset-request email asynchronously
+    (async () => {
+      try {
+        const resetUrl = `${process.env.NEXTAUTH_URL}/reset-password?email=${encodeURIComponent(email)}`;
+        await sendTransactionalEmailByTemplate("password-reset-request", email, {
+          firstName: getFirstName(candidate.firstName),
+          resetPasswordUrl: resetUrl,
+          supportEmail: EMAIL_CONFIG.supportEmail,
+          currentYear: new Date().getFullYear(),
+        });
+      } catch (emailError) {
+        console.error("Failed to send password-reset-request:", emailError);
+        // Do not fail the reset request on email errors
+      }
+    })();
+
     const devCode = process.env.NODE_ENV !== "production" ? code : undefined;
     return { ok: true, data: { otpSent: true, ...(devCode ? { devCode } : {}) } };
   }

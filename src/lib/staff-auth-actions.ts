@@ -5,6 +5,8 @@ import { enforceRateLimit, RateLimitError } from "@/lib/rate-limit";
 import { createStaffSessionRecord } from "@/lib/staff-session";
 import { createInvitationTokenRecord, logStaffInvitationEmail, invalidateOutstandingStaffTokens, consumeInvitationToken } from "@/lib/staff-invitation";
 import { recordAuditEvent } from "@/lib/audit";
+import { sendTransactionalEmailByTemplate } from "@/lib/send-transactional-email";
+import { getFirstName } from "@/lib/email-utils";
 
 // No "server-only" / staff-auth import here, deliberately — same
 // discipline as marking-actions.ts / exam-builder-actions.ts / Slice 09's
@@ -168,6 +170,24 @@ export async function requestStaffPasswordResetCore(email: string, ip: string | 
   await invalidateOutstandingStaffTokens(staff.id);
   const token = await createInvitationTokenRecord(prisma, staff.id);
   logStaffInvitationEmail(staff.email, token);
+
+  // Send admin-password-reset-request email asynchronously
+  (async () => {
+    try {
+      const resetPasswordUrl = `${process.env.NEXTAUTH_URL}/staff/set-password?token=${token}`;
+      await sendTransactionalEmailByTemplate("admin-password-reset-request", staff.email, {
+        firstName: getFirstName(staff.name),
+        role: staff.role,
+        resetPasswordUrl,
+        expiryMinutes: 30,
+        supportEmail: "support@lavelle.ng", // Use a sensible default
+        currentYear: new Date().getFullYear(),
+      });
+    } catch (emailError) {
+      console.error("Failed to send admin-password-reset-request:", emailError);
+      // Do not fail the password reset request on email errors
+    }
+  })();
 
   await recordAuditEvent(prisma, {
     subjectType: "staff",

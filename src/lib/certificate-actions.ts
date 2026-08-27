@@ -3,6 +3,9 @@ import { recordAuditEvent } from "@/lib/audit";
 import { writeBlob } from "@/lib/storage";
 import { renderCertificatePdf } from "@/lib/certificate-pdf";
 import { tierLabel } from "@/lib/format";
+import { sendTransactionalEmailByTemplate } from "@/lib/send-transactional-email";
+import { getFirstName } from "@/lib/email-utils";
+import { EMAIL_CONFIG } from "@/lib/email-config";
 import type { CertificateStatus, GradeBand, Prisma } from "@/generated/prisma/client";
 
 // No "server-only" / staff-auth / candidate-session import here,
@@ -81,8 +84,21 @@ async function findActiveTemplate(tier: string, db: Prisma.TransactionClient | t
  * (a required column) — issuedByStaffId on the Certificate itself stays
  * null, which is what marks this as an automatic issue.
  */
+interface CertificateEmailData {
+  email: string;
+  firstName: string;
+  certificateId: string;
+  certificateNumber: string;
+  issuedAt: Date;
+  band: GradeBand;
+  programmeTitle: string;
+  tier: string;
+}
+
 export async function issueCertificate(sittingId: string, mintedByStaffId: string) {
-  return prisma.$transaction(async (tx) => {
+  let emailData: CertificateEmailData | null = null;
+
+  const certificate = await prisma.$transaction(async (tx) => {
     const rows = await tx.$queryRaw<{ id: string }[]>`SELECT id FROM "Sitting" WHERE id = ${sittingId} FOR UPDATE`;
     if (rows.length === 0) throw new Error("Sitting not found.");
 
@@ -135,7 +151,7 @@ export async function issueCertificate(sittingId: string, mintedByStaffId: strin
       },
     });
 
-    const certificate = await tx.certificate.create({
+    const cert = await tx.certificate.create({
       data: {
         certificateNumber,
         candidateId: candidate.id,
@@ -169,14 +185,55 @@ export async function issueCertificate(sittingId: string, mintedByStaffId: strin
     await recordAuditEvent(tx, {
       actorStaffId: null,
       subjectType: "certificate",
-      subjectId: certificate.id,
+      subjectId: cert.id,
       action: "certificate.issued",
       description: `Certificate ${certificateNumber} issued to ${holderName} for ${programme.title}`,
       ipAddress: null,
     });
 
-    return certificate;
+    // Capture email data for async sending
+    emailData = {
+      email: candidate.email,
+      firstName: candidate.firstName,
+      certificateId: cert.id,
+      certificateNumber,
+      issuedAt,
+      band: certBand,
+      programmeTitle: programme.title,
+      tier: programme.tier,
+    };
+
+    return cert;
   });
+
+  // Send certificate-issued email asynchronously — do not block the transaction
+  if (emailData) {
+    const data: CertificateEmailData = emailData;
+    (async () => {
+      try {
+        const certificateDownloadUrl = `${process.env.NEXTAUTH_URL}/portal/credentials/${data.certificateId}/download`;
+        const certificateVerificationUrl = `${process.env.NEXTAUTH_URL}/verify/${data.certificateNumber}`;
+
+        await sendTransactionalEmailByTemplate("certificate-issued", data.email, {
+          firstName: getFirstName(data.firstName),
+          programmeName: data.programmeTitle,
+          tier: data.tier,
+          grade: BAND_LABEL[data.band],
+          certificateId: data.certificateNumber,
+          issueDate: data.issuedAt.toLocaleDateString(),
+          certificateDownloadUrl,
+          certificateVerificationUrl,
+          supportEmail: EMAIL_CONFIG.supportEmail,
+          currentYear: new Date().getFullYear(),
+        });
+      } catch (emailError) {
+        console.error("Failed to send certificate-issued email:", emailError);
+        // Do not fail the certificate issuance on email errors
+      }
+    })();
+  }
+
+  return certificate;
 }
 
 export class NotEligibleForCourseCertificateError extends Error {
@@ -463,14 +520,14 @@ export async function revokeCertificate(id: string, reason: string, staffId: str
   const trimmedReason = reason.trim();
   if (!trimmedReason) throw new Error("A reason is required to revoke a certificate.");
 
-  return prisma.$transaction(async (tx) => {
+  const updated = await prisma.$transaction(async (tx) => {
     const certificate = await tx.certificate.findUnique({ where: { id } });
     if (!certificate) throw new CertificateNotFoundError();
     if (certificate.status === "REVOKED") throw new AlreadyRevokedError();
     if (certificate.status === "SUPERSEDED") throw new AlreadySupersededError();
 
     const now = new Date();
-    const updated = await tx.certificate.update({
+    const result = await tx.certificate.update({
       where: { id },
       data: { status: "REVOKED", revokedAt: now, revokedReason: trimmedReason, revokedByStaffId: staffId },
     });
@@ -494,8 +551,38 @@ export async function revokeCertificate(id: string, reason: string, staffId: str
       ipAddress,
     });
 
-    return updated;
+    return { certificate, result };
   });
+
+  // Send certificate-revoked email asynchronously — do not block the revocation
+  (async () => {
+    try {
+      const candidate = await prisma.candidate.findUniqueOrThrow({
+        where: { id: updated.certificate.candidateId },
+      });
+
+      const appealDeadlineDate = new Date();
+      appealDeadlineDate.setDate(appealDeadlineDate.getDate() + EMAIL_CONFIG.appealDeadlineDays);
+
+      await sendTransactionalEmailByTemplate("certificate-revoked", candidate.email, {
+        firstName: getFirstName(candidate.firstName),
+        programmeName: updated.certificate.programmeTitle,
+        tier: updated.certificate.tier,
+        certificateId: updated.certificate.certificateNumber,
+        revocationReason: trimmedReason,
+        appealDeadlineDate: appealDeadlineDate.toLocaleDateString(),
+        appealInstructionsUrl: `${process.env.NEXTAUTH_URL}/appeals/new`,
+        supportEmail: EMAIL_CONFIG.supportEmail,
+        securityContactEmail: EMAIL_CONFIG.securityContactEmail,
+        currentYear: new Date().getFullYear(),
+      });
+    } catch (emailError) {
+      console.error("Failed to send certificate-revoked email:", emailError);
+      // Do not fail the revocation on email errors
+    }
+  })();
+
+  return updated.result;
 }
 
 /**

@@ -7,6 +7,9 @@ import { computeExpiresAt, isSittingExpired } from "@/lib/exam-clock";
 import { resolveGradeBand } from "@/lib/grading";
 import { recomputeProgrammeResult } from "@/lib/programme-result";
 import { issueCertificate } from "@/lib/certificate-actions";
+import { sendTransactionalEmailByTemplate } from "@/lib/send-transactional-email";
+import { getFirstName } from "@/lib/email-utils";
+import { EMAIL_CONFIG } from "@/lib/email-config";
 import { EnrolmentStatus, MarkState, MarkableKind, type AttemptPolicy, type ExamOutcome, type Prisma } from "@/generated/prisma/client";
 
 // No "server-only" / staff-auth / candidate-session import here,
@@ -264,10 +267,10 @@ export async function saveSittingAnswer(sittingId: string, candidateId: string, 
  * territory (expireOverdueSittings), which marks EXPIRED, not SUBMITTED.
  */
 export async function submitSitting(sittingId: string, candidateId: string) {
-  return prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     const sitting = await tx.sitting.findUniqueOrThrow({
       where: { id: sittingId },
-      include: { registration: true, answers: true },
+      include: { registration: { include: { candidate: true, exam: { include: { programme: true } } } }, answers: true },
     });
     if (sitting.registration.candidateId !== candidateId) throw new NotYourSittingError();
     if (sitting.state !== "IN_PROGRESS") throw new Error("This sitting cannot be submitted.");
@@ -320,8 +323,40 @@ export async function submitSitting(sittingId: string, candidateId: string) {
       }
     }
 
-    return updated;
+    return { updated, sitting };
   });
+
+  // Send exam-submission-received-admin email asynchronously
+  (async () => {
+    try {
+      const totalSubmissions = await prisma.sitting.count({
+        where: { registration: { windowId: result.sitting.registration.windowId }, state: { in: ["SUBMITTED", "RELEASED"] } },
+      });
+      const totalExpected = await prisma.examRegistration.count({
+        where: { windowId: result.sitting.registration.windowId, cancelledAt: null },
+      });
+
+      await sendTransactionalEmailByTemplate("exam-submission-received-admin", EMAIL_CONFIG.examCoordinatorEmail, {
+        adminFirstName: "Exam",
+        candidateName: `${result.sitting.registration.candidate.firstName} ${result.sitting.registration.candidate.lastName}`,
+        candidateNumber: result.sitting.registration.candidate.candidateNumber || "TBD",
+        programmeName: result.sitting.registration.exam.programme.title,
+        tier: result.sitting.registration.exam.programme.tier,
+        submissionTime: result.sitting.submittedAt?.toLocaleString() || new Date().toLocaleString(),
+        examDuration: `${result.sitting.registration.exam.durationMinutes} minutes`,
+        totalSubmissions,
+        totalExpected,
+        markingUrl: `${process.env.NEXTAUTH_URL}/admin/exam-marking`,
+        supportEmail: EMAIL_CONFIG.supportEmail,
+        currentYear: new Date().getFullYear(),
+      });
+    } catch (emailError) {
+      console.error("Failed to send exam-submission-received-admin:", emailError);
+      // Do not fail the submission on email errors
+    }
+  })();
+
+  return result.updated;
 }
 
 /**
@@ -449,7 +484,7 @@ export async function expireSittingIfOverdue(sittingId: string, candidateId: str
 export async function releaseResults(windowId: string, staffId: string, ipAddress: string | null) {
   const window = await prisma.examWindow.findUniqueOrThrow({
     where: { id: windowId },
-    include: { exam: { include: { programme: { select: { title: true } } } } },
+    include: { exam: { include: { programme: { select: { title: true, tier: true } } } } },
   });
 
   // Slice 11 Part B rule 3: a sitting referred to the examinations panel
@@ -526,6 +561,50 @@ export async function releaseResults(windowId: string, staffId: string, ipAddres
             : `Your ${programmeTitle} examination has been marked. Your result and feedback are ready to view.`,
       },
     });
+
+    // Send exam-results email asynchronously — do not block the release
+    const resultData = {
+      candidateId: sitting.registration.candidateId,
+      examId: sitting.registration.examId,
+      outcome: outcome as "PASS" | "FAIL" | "REFER",
+      totalPercent: totalPercent ?? 0,
+      band: band,
+      programmeTier: window.exam.programme.tier,
+      windowOpenDate: window.opensAt?.toLocaleDateString() || "TBD",
+    };
+
+    (async () => {
+      try {
+        const candidate = await prisma.candidate.findUniqueOrThrow({
+          where: { id: resultData.candidateId },
+        });
+        const gradeMap: Record<string, string> = {
+          DISTINCTION: "Distinction",
+          MERIT: "Merit",
+          PASS: "Pass",
+          REFER: "Refer",
+        };
+        const grade = resultData.band && resultData.band in gradeMap ? gradeMap[resultData.band] : "Pending";
+
+        await sendTransactionalEmailByTemplate("exam-results", candidate.email, {
+          firstName: getFirstName(candidate.firstName),
+          programmeName: programmeTitle,
+          tier: resultData.programmeTier,
+          examDate: resultData.windowOpenDate,
+          marksObtained: resultData.totalPercent,
+          marksTotal: 100,
+          percentage: resultData.totalPercent,
+          grade,
+          outcome: resultData.outcome,
+          resultsPortalUrl: `${process.env.NEXTAUTH_URL}/portal/exams/${resultData.examId}/results`,
+          supportEmail: EMAIL_CONFIG.supportEmail,
+          currentYear: new Date().getFullYear(),
+        });
+      } catch (emailError) {
+        console.error("Failed to send exam-results email:", emailError);
+        // Do not fail the result release on email errors
+      }
+    })();
 
     releasedCount++;
   }
