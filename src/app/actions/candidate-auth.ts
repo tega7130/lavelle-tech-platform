@@ -86,10 +86,9 @@ export async function requestRegistrationOtp(
   (async () => {
     try {
       await sendTransactionalEmailByTemplate("email-verification-otp", email, {
-        firstName: "",
-        otp: code,
-        expiryMinutes: 48,
-        supportEmail: EMAIL_CONFIG.supportEmail,
+        firstName: "there",
+        otpCode: code,
+        otpExpiryMinutes: 48,
         currentYear: new Date().getFullYear(),
       });
     } catch (emailError) {
