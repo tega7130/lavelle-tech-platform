@@ -63,8 +63,8 @@ model Candidate {
   email           String    @unique @db.Citext
   emailVerifiedAt DateTime?
 
-  phoneCountryCode String    @default("+234") @db.VarChar(6)
-  phone            String?   @db.VarChar(24)
+  phoneCountryCode String  @default("+234") @db.VarChar(6)
+  phone            String? @db.VarChar(24)
 
   passwordHash String
 
@@ -85,19 +85,19 @@ model Candidate {
   emailVerificationTokens    EmailVerificationToken[]
   passwordResetOtpChallenges PasswordResetOtpChallenge[]
   notifications              Notification[]
-  sessions                Session[]
-  enrolments              Enrolment[]
-  payments                Payment[]
-  idCards                 IdCard[]
-  certificates            Certificate[]
-  examRegistrations       ExamRegistration[]
-  supportRequests         SupportRequest[]
-  supportMessages         SupportMessage[]
-  candidateNotes          CandidateNote[]
-  announcementDeliveries  AnnouncementDelivery[]
-  reviews                 Review[]
-  uploadedMediaAssets     MediaAsset[]
-  videoUploads            VideoUpload[]
+  sessions                   Session[]
+  enrolments                 Enrolment[]
+  payments                   Payment[]
+  idCards                    IdCard[]
+  certificates               Certificate[]
+  examRegistrations          ExamRegistration[]
+  supportRequests            SupportRequest[]
+  supportMessages            SupportMessage[]
+  candidateNotes             CandidateNote[]
+  announcementDeliveries     AnnouncementDelivery[]
+  reviews                    Review[]
+  uploadedMediaAssets        MediaAsset[]
+  videoUploads               VideoUpload[]
 
   @@index([accountStatus])
 }
@@ -362,21 +362,40 @@ model Staff {
   publishedListings       ProgrammeListing[]    @relation("ListingPublishedBy")
   enquiriesHandled        ContactEnquiry[]      @relation("EnquiryHandledBy")
 
-  sessions             Session[]              @relation("StaffSessions")
-  notifications        Notification[]         @relation("StaffNotifications")
-  invitationTokens     StaffInvitationToken[] @relation("StaffInvitationTokenHolder")
-  sentInvitations      StaffInvitationToken[] @relation("StaffInvitationTokenSender")
-  assignedByRequests   SupportRequest[]       @relation("SupportRequestAssignedBy")
-  resolvedRequests     SupportRequest[]       @relation("SupportRequestResolvedBy")
-  reviewedSittings     Sitting[]              @relation("SittingReviewedBy")
-  moderatedReviews     Review[]               @relation("ReviewModeratedBy")
-  examAssignments      ExamStaffAssignment[]  @relation("ExamStaffAssignmentHolder")
-  examAssignmentsGiven ExamStaffAssignment[]  @relation("ExamStaffAssignmentGrantedBy")
-  blogPostsPublished   BlogPost[]             @relation("BlogPostPublishedBy")
-  blogPostsCreated     BlogPost[]             @relation("BlogPostCreatedBy")
+  sessions             Session[]                @relation("StaffSessions")
+  notifications        Notification[]           @relation("StaffNotifications")
+  invitationTokens     StaffInvitationToken[]   @relation("StaffInvitationTokenHolder")
+  sentInvitations      StaffInvitationToken[]   @relation("StaffInvitationTokenSender")
+  assignedByRequests   SupportRequest[]         @relation("SupportRequestAssignedBy")
+  resolvedRequests     SupportRequest[]         @relation("SupportRequestResolvedBy")
+  reviewedSittings     Sitting[]                @relation("SittingReviewedBy")
+  moderatedReviews     Review[]                 @relation("ReviewModeratedBy")
+  examAssignments      ExamStaffAssignment[]    @relation("ExamStaffAssignmentHolder")
+  examAssignmentsGiven ExamStaffAssignment[]    @relation("ExamStaffAssignmentGrantedBy")
+  blogPostsPublished   BlogPost[]               @relation("BlogPostPublishedBy")
+  blogPostsCreated     BlogPost[]               @relation("BlogPostCreatedBy")
+  loginOtpChallenges   StaffLoginOtpChallenge[]
 
   @@index([role])
   @@index([status])
+}
+
+// Sign-in-by-code, an alternative to the password form on the same
+// /staff/sign-in page — mirrors PasswordResetOtpChallenge (10-minute
+// validity, 5-attempt cap, single verified use) but keyed to a staff
+// member who is already ACTIVE, not a password-reset flow.
+model StaffLoginOtpChallenge {
+  id      String @id @default(uuid())
+  staffId String
+  staff   Staff  @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  codeHash   String
+  expiresAt  DateTime
+  attempts   Int       @default(0)
+  verifiedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([staffId, verifiedAt])
 }
 
 // Slice 10 — mirrors EmailVerificationToken (Slice 01) deliberately:
@@ -2328,8 +2347,8 @@ model BlogPost {
   excerpt String
   // Rich-text markup (src/lib/rich-text.ts) — never HTML, same rule as
   // LectureNote.body. Rendered read-only via renderMarkupToReact.
-  body String
-  tags Json // string[], same Json-array convention as ProgrammeListing.outcomes/includes
+  body    String
+  tags    Json // string[], same Json-array convention as ProgrammeListing.outcomes/includes
 
   // Free-text byline — defaults to the writing staff member's name at
   // creation but is editable independently of who actually wrote it.
@@ -2389,15 +2408,15 @@ model ContactEnquiry {
 model EmailLog {
   id String @id @default(uuid())
 
-  template String
+  template  String
   recipient String
-  subject String
+  subject   String
 
-  status String // "sent" | "failed"
+  status       String // "sent" | "failed"
   errorMessage String?
 
-  sentAt DateTime?
-  createdAt DateTime @default(now())
+  sentAt    DateTime?
+  createdAt DateTime  @default(now())
 
   @@index([template, createdAt(sort: Desc)])
   @@index([recipient, createdAt(sort: Desc)])
@@ -2407,13 +2426,13 @@ model EmailLog {
 model VideoUpload {
   id String @id @default(uuid())
 
-  candidateId String @db.Uuid
-  candidate Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  candidateId String    @db.Uuid
+  candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
 
   cloudinaryId String @unique
-  url String
-  fileSize Int
-  status String @default("COMPLETED") // COMPLETED, PROCESSING, FAILED
+  url          String
+  fileSize     Int
+  status       String @default("COMPLETED") // COMPLETED, PROCESSING, FAILED
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

@@ -6,6 +6,11 @@ export default defineConfig({
     environment: "node",
     include: ["tests/**/*.test.ts"],
     setupFiles: ["dotenv/config"],
+    // 5000ms default assumed a local Postgres instance (see the
+    // fileParallelism comment below) — DATABASE_URL now points at a
+    // remote Supabase pooler, where round-trip latency alone can eat
+    // that whole budget on tests doing several sequential queries.
+    testTimeout: 20000,
     // Every test file shares the one real local Postgres database (no
     // per-file isolation) — Vitest's default cross-file parallelism is
     // safe as long as no test mutates genuinely global singleton state.

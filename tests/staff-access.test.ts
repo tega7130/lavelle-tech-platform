@@ -8,10 +8,13 @@ import {
   staffSignInCore,
   setStaffPasswordCore,
   resendStaffInvitationCore,
+  requestStaffLoginOtpCore,
+  verifyStaffLoginOtpCore,
   GENERIC_SIGNIN_ERROR,
   LOCKOUT_MESSAGE,
 } from "@/lib/staff-auth-actions";
 import { createInvitationTokenRecord, previewInvitationToken, consumeInvitationToken } from "@/lib/staff-invitation";
+import { createStaffLoginOtpChallenge } from "@/lib/staff-login-otp";
 import { deactivateStaff } from "@/lib/rbac";
 import { resolveRequest, assignRequest, NotAssigneeOrAssignerError } from "@/lib/support";
 
@@ -112,6 +115,62 @@ describe("staffSignInCore — the five failure cases are indistinguishable (READ
     const stillLocked = await staffSignInCore(email, DEMO_PASSWORD, "203.0.113.200", null);
     expect(stillLocked.ok).toBe(false);
     if (!stillLocked.ok) expect(stillLocked.message).toBe(LOCKOUT_MESSAGE);
+
+    await cleanupStaff(active.id);
+  });
+});
+
+describe("sign-in-by-code — a toggle alongside the password form, same account rules apply", () => {
+  it("requestStaffLoginOtpCore creates a challenge for an ACTIVE account, does nothing for INVITED or unknown addresses, and is rate-limited to five requests per window", async () => {
+    const active = await makeStaff("ACTIVE");
+    const invited = await makeStaff("INVITED");
+    const ip = `203.0.113.${crypto.randomInt(2, 254)}`;
+
+    for (let i = 0; i < 5; i++) await requestStaffLoginOtpCore(active.email, ip);
+    const beforeSixth = await testPrisma.staffLoginOtpChallenge.findFirst({ where: { staffId: active.id }, orderBy: { createdAt: "desc" } });
+    expect(beforeSixth).not.toBeNull();
+
+    await requestStaffLoginOtpCore(active.email, ip); // 6th on the same email+ip — silently rate-limited
+    const afterSixth = await testPrisma.staffLoginOtpChallenge.findFirst({ where: { staffId: active.id }, orderBy: { createdAt: "desc" } });
+    expect(afterSixth?.id).toBe(beforeSixth?.id);
+
+    await requestStaffLoginOtpCore(invited.email, `203.0.113.${crypto.randomInt(2, 254)}`);
+    expect(await testPrisma.staffLoginOtpChallenge.findFirst({ where: { staffId: invited.id } })).toBeNull();
+
+    await expect(requestStaffLoginOtpCore("no-such-staff@example.com", `203.0.113.${crypto.randomInt(2, 254)}`)).resolves.not.toThrow();
+
+    await cleanupStaff(active.id, invited.id);
+  });
+
+  it("verifyStaffLoginOtpCore signs in with a correct code, creates a real session, and the same code cannot be reused", async () => {
+    const active = await makeStaff("ACTIVE");
+    const code = await createStaffLoginOtpChallenge(active.id);
+
+    const result = await verifyStaffLoginOtpCore(active.email, code, "203.0.113.50", "test-agent");
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      const resolved = await resolveStaffFromToken(result.sessionToken);
+      expect(resolved?.id).toBe(active.id);
+    }
+
+    const reuse = await verifyStaffLoginOtpCore(active.email, code, "203.0.113.51", null);
+    expect(reuse.ok).toBe(false);
+
+    await cleanupStaff(active.id);
+  });
+
+  it("locks out after five wrong codes and refuses even the correct one afterward", async () => {
+    const active = await makeStaff("ACTIVE");
+    const code = await createStaffLoginOtpChallenge(active.id);
+    const wrongCode = code === "000000" ? "111111" : "000000";
+
+    for (let i = 0; i < 5; i++) {
+      const result = await verifyStaffLoginOtpCore(active.email, wrongCode, `203.0.113.${crypto.randomInt(2, 254)}`, null);
+      expect(result.ok).toBe(false);
+    }
+
+    const stillFails = await verifyStaffLoginOtpCore(active.email, code, `203.0.113.${crypto.randomInt(2, 254)}`, null);
+    expect(stillFails.ok).toBe(false);
 
     await cleanupStaff(active.id);
   });

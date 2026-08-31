@@ -7,6 +7,7 @@ import { createInvitationTokenRecord, logStaffInvitationEmail, invalidateOutstan
 import { recordAuditEvent } from "@/lib/audit";
 import { sendTransactionalEmailByTemplate } from "@/lib/send-transactional-email";
 import { getFirstName } from "@/lib/email-utils";
+import { createStaffLoginOtpChallenge, verifyStaffLoginOtpChallenge, STAFF_LOGIN_OTP_EXPIRY_MINUTES, type OtpVerifyResult } from "@/lib/staff-login-otp";
 
 // No "server-only" / staff-auth import here, deliberately — same
 // discipline as marking-actions.ts / exam-builder-actions.ts / Slice 09's
@@ -82,6 +83,101 @@ export async function staffSignInCore(email: string, password: string, ip: strin
 
   const sessionToken = await createStaffSessionRecord(prisma, staff.id, { userAgent, ipAddress: ip });
   await prisma.staff.update({ where: { id: staff.id }, data: { lastActiveAt: new Date() } });
+  return { ok: true, sessionToken };
+}
+
+// Sign-in-by-code — a toggle on the same /staff/sign-in page, not a
+// separate route. A staff member can switch between password and OTP
+// freely on every visit; neither is the "primary" method.
+const OTP_REQUEST_LIMIT = 5; // per email/IP, per 15 minutes — requesting codes, not verifying them
+const OTP_REQUEST_WINDOW_SECONDS = 15 * 60;
+
+/**
+ * Always returns silently regardless of outcome (same rule as
+ * requestStaffPasswordResetCore just above) — only sends a code when the
+ * email matches an ACTIVE account, so a real and a fake address behave
+ * identically from the caller's side.
+ */
+export async function requestStaffLoginOtpCore(email: string, ip: string | null): Promise<void> {
+  try {
+    await enforceRateLimit("staffLoginOtpRequest", { ip, email }, { limit: OTP_REQUEST_LIMIT, windowSeconds: OTP_REQUEST_WINDOW_SECONDS });
+  } catch {
+    return; // same silent, generic outcome as any other case
+  }
+
+  const normalizedEmail = email.toLowerCase();
+  const staff = await prisma.staff.findUnique({ where: { email: normalizedEmail } });
+  if (!staff || !isUsableForSignIn(staff.status)) return;
+
+  const code = await createStaffLoginOtpChallenge(staff.id);
+
+  // Fire-and-forget, same discipline as requestStaffPasswordResetCore's
+  // email send — a provider hiccup must not fail (or reveal anything
+  // about) the request itself.
+  (async () => {
+    try {
+      await sendTransactionalEmailByTemplate("email-verification-otp", staff.email, {
+        firstName: getFirstName(staff.name),
+        otpCode: code,
+        otpExpiryMinutes: STAFF_LOGIN_OTP_EXPIRY_MINUTES,
+        currentYear: new Date().getFullYear(),
+      });
+    } catch (emailError) {
+      console.error("Failed to send staff login OTP email:", emailError);
+    }
+  })();
+
+  await recordAuditEvent(prisma, {
+    subjectType: "staff",
+    subjectId: staff.id,
+    action: "staff.signin.otp_requested",
+    description: "Requested a sign-in code",
+    ipAddress: ip,
+  });
+}
+
+export type StaffOtpVerifyResult = { ok: true; sessionToken: string } | { ok: false; message: string };
+
+const OTP_VERIFY_MESSAGES: Record<Exclude<OtpVerifyResult, "ok">, string> = {
+  not_found: "Request a new code to sign in.",
+  expired: "That code has expired. Request a new one.",
+  too_many_attempts: "Too many attempts. Request a new code.",
+  invalid: "That code is incorrect.",
+};
+
+/**
+ * Same per-IP guard as staffSignInCore, checked unconditionally before
+ * any lookup — the per-code attempt cap (5, inside the challenge itself)
+ * blunts brute force against one code, this blunts one address hammering
+ * many different accounts' codes.
+ */
+export async function verifyStaffLoginOtpCore(email: string, code: string, ip: string | null, userAgent: string | null): Promise<StaffOtpVerifyResult> {
+  try {
+    await enforceRateLimit("staffLoginOtpVerifyIp", { ip }, { limit: IP_LIMIT, windowSeconds: LOCKOUT_WINDOW_SECONDS });
+  } catch (e) {
+    if (e instanceof RateLimitError) return { ok: false, message: LOCKOUT_MESSAGE };
+    throw e;
+  }
+
+  const normalizedEmail = email.toLowerCase();
+  const staff = await prisma.staff.findUnique({ where: { email: normalizedEmail } });
+  if (!staff || !isUsableForSignIn(staff.status)) return { ok: false, message: GENERIC_SIGNIN_ERROR };
+
+  const result = await verifyStaffLoginOtpChallenge(staff.id, code);
+  if (result !== "ok") return { ok: false, message: OTP_VERIFY_MESSAGES[result] };
+
+  const sessionToken = await createStaffSessionRecord(prisma, staff.id, { userAgent, ipAddress: ip });
+  await prisma.staff.update({ where: { id: staff.id }, data: { lastActiveAt: new Date() } });
+
+  await recordAuditEvent(prisma, {
+    actorStaffId: staff.id,
+    subjectType: "staff",
+    subjectId: staff.id,
+    action: "staff.signin.otp",
+    description: "Signed in using a one-time code",
+    ipAddress: ip,
+  });
+
   return { ok: true, sessionToken };
 }
 

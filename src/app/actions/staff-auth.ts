@@ -33,6 +33,26 @@ export async function staffSignIn(_prev: FormActionState, formData: FormData): P
   redirect(next && next.startsWith("/admin/") ? next : "/admin/overview");
 }
 
+/** Silent by design (same rule as requestStaffPasswordReset) — the caller never learns whether the address matched a real account. */
+export async function requestStaffLoginOtp(email: string): Promise<void> {
+  const ip = await getClientIp();
+  await core.requestStaffLoginOtpCore(email.trim().toLowerCase(), ip);
+}
+
+export async function verifyStaffLoginOtp(_prev: FormActionState, formData: FormData): Promise<FormActionState> {
+  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  const code = String(formData.get("code") ?? "").trim();
+  const next = String(formData.get("next") ?? "");
+
+  const ip = await getClientIp();
+  const userAgent = await getUserAgent();
+  const result = await core.verifyStaffLoginOtpCore(email, code, ip, userAgent);
+  if (!result.ok) return { message: result.message };
+
+  await setStaffSessionCookie(result.sessionToken);
+  redirect(next && next.startsWith("/admin/") ? next : "/admin/overview");
+}
+
 export async function staffSignOut() {
   await destroyStaffSession();
   redirect("/staff/sign-in?signedOut=1");
