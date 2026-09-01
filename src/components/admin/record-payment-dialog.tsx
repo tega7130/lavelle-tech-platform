@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Field, Label, Input, Textarea, FieldError } from "@/components/ui/field";
 import { confirmPaymentManually, recordOfflinePayment } from "@/app/actions/payment";
 import { finaliseUpload } from "@/app/actions/uploads";
+import { uploadToCloudinary } from "@/lib/cloudinary-upload";
 import { emptyActionState } from "@/lib/action-state";
 
 const MODES = [
@@ -17,16 +18,8 @@ const MODES = [
 ] as const;
 
 async function uploadReceipt(file: File) {
-  const signRes = await fetch("/api/uploads/sign", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ kind: "document", mimeType: file.type, bytes: file.size, purpose: "finance" }),
-  });
-  if (!signRes.ok) throw new Error("Could not get an upload URL.");
-  const { storageKey, uploadUrl } = await signRes.json();
-  const putRes = await fetch(uploadUrl, { method: "PUT", body: file });
-  if (!putRes.ok) throw new Error("Upload failed.");
-  return finaliseUpload({ storageKey, kind: "document", mimeType: file.type, originalFilename: file.name, purpose: "finance" });
+  const { storageKey, bytes } = await uploadToCloudinary(file, "lavelle/finance");
+  return finaliseUpload({ storageKey, kind: "document", mimeType: file.type, originalFilename: file.name, bytes, purpose: "finance" });
 }
 
 export interface RecordPaymentDialogProps {

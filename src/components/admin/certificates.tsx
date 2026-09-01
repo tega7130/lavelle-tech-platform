@@ -25,6 +25,7 @@ import {
   type ManualIssueFormInput,
 } from "@/app/actions/certificates";
 import { finaliseUpload } from "@/app/actions/uploads";
+import { uploadToCloudinary } from "@/lib/cloudinary-upload";
 import type { listCertificates, listCertificateTemplates, listWithheldCandidates } from "@/lib/certificate-reads";
 
 type Certificates = Awaited<ReturnType<typeof listCertificates>>;
@@ -46,16 +47,8 @@ function fmtDate(d: Date | string) {
 }
 
 async function uploadArtwork(file: File) {
-  const signRes = await fetch("/api/uploads/sign", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ kind: "image", mimeType: file.type, bytes: file.size, purpose: "certificate" }),
-  });
-  if (!signRes.ok) throw new Error("Could not get an upload URL.");
-  const { storageKey, uploadUrl } = await signRes.json();
-  const putRes = await fetch(uploadUrl, { method: "PUT", body: file });
-  if (!putRes.ok) throw new Error("Upload failed.");
-  return finaliseUpload({ storageKey, kind: "image", mimeType: file.type, originalFilename: file.name, purpose: "certificate" });
+  const { storageKey, bytes } = await uploadToCloudinary(file, "lavelle/certificate-templates");
+  return finaliseUpload({ storageKey, kind: "image", mimeType: file.type, originalFilename: file.name, bytes, purpose: "certificate" });
 }
 
 export function AdminCertificates({

@@ -20,6 +20,7 @@ import {
   getBlogHeroPreviewUrlAction,
 } from "@/app/actions/blog-admin";
 import { finaliseUpload } from "@/app/actions/uploads";
+import { uploadToCloudinary } from "@/lib/cloudinary-upload";
 import type { getBlogPostForEditor } from "@/lib/blog-admin-reads";
 
 type PostData = Awaited<ReturnType<typeof getBlogPostForEditor>> | null;
@@ -29,16 +30,8 @@ function formatDate(d: Date) {
 }
 
 async function uploadHeroImage(file: File) {
-  const signRes = await fetch("/api/uploads/sign", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ kind: "image", mimeType: file.type, bytes: file.size, purpose: "blog" }),
-  });
-  if (!signRes.ok) throw new Error("Could not get an upload URL.");
-  const { storageKey, uploadUrl } = await signRes.json();
-  const putRes = await fetch(uploadUrl, { method: "PUT", body: file });
-  if (!putRes.ok) throw new Error("Upload failed.");
-  return finaliseUpload({ storageKey, kind: "image", mimeType: file.type, originalFilename: file.name, purpose: "blog" });
+  const { storageKey, bytes } = await uploadToCloudinary(file, "lavelle/blog");
+  return finaliseUpload({ storageKey, kind: "image", mimeType: file.type, originalFilename: file.name, bytes, purpose: "blog" });
 }
 
 export function BlogEditor({ post, defaultAuthorName }: { post: PostData; defaultAuthorName: string }) {

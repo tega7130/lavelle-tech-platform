@@ -23,6 +23,7 @@ import {
 } from "@/app/actions/programme-content";
 import { setProgrammeStatus } from "@/app/actions/programme";
 import { finaliseUpload } from "@/app/actions/uploads";
+import { uploadToCloudinary } from "@/lib/cloudinary-upload";
 import { formatNaira, statusLabel } from "@/lib/format";
 
 // ── Types — a plain mirror of getProgrammeContent()'s shape, kept free of
@@ -157,33 +158,8 @@ function ContentStatusSelect({
 }
 
 async function uploadFile(file: File, kind: "audio" | "video" | "image" | "document") {
-  if (kind === "video") {
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("purpose", "programme");
-    const res = await fetch("/api/uploads/cloudinary", {
-      method: "POST",
-      body: formData,
-    });
-    if (!res.ok) {
-      const error = await res.json();
-      throw new Error(error.error || "Upload failed.");
-    }
-    const { asset } = await res.json();
-    return asset;
-  }
-
-  // Presigned URL flow for audio, images, documents
-  const signRes = await fetch("/api/uploads/sign", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ kind, mimeType: file.type, bytes: file.size }),
-  });
-  if (!signRes.ok) throw new Error("Could not get an upload URL.");
-  const { storageKey, uploadUrl } = await signRes.json();
-  const putRes = await fetch(uploadUrl, { method: "PUT", body: file });
-  if (!putRes.ok) throw new Error("Upload failed.");
-  return finaliseUpload({ storageKey, kind, mimeType: file.type, originalFilename: file.name });
+  const { storageKey, bytes, durationSeconds } = await uploadToCloudinary(file, "lavelle/programmes");
+  return finaliseUpload({ storageKey, kind, mimeType: file.type, originalFilename: file.name, bytes, durationSeconds });
 }
 
 export function ProgrammeContentEditor({ programme }: { programme: ProgrammeData }) {

@@ -11,6 +11,7 @@ import { Label, Input, FieldError } from "@/components/ui/field";
 import { LogoMark } from "@/components/ui/logo-mark";
 import { updateProfile, updateCandidateContactDetails } from "@/app/actions/candidate-auth";
 import { finaliseCandidatePhotoUpload } from "@/app/actions/uploads";
+import { uploadToCloudinary } from "@/lib/cloudinary-upload";
 import { emptyActionState } from "@/lib/action-state";
 import { professionalStatusLabel, experienceBandLabel } from "@/lib/format";
 import type { CandidateProfile, IdCard } from "@/generated/prisma/client";
@@ -18,16 +19,11 @@ import type { CandidateProfile, IdCard } from "@/generated/prisma/client";
 const MAX_PHOTO_BYTES = 8 * 1024 * 1024;
 
 async function uploadPhoto(file: File) {
-  const signRes = await fetch("/api/uploads/sign", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ kind: "image", mimeType: file.type, bytes: file.size, purpose: "candidate_photo" }),
-  });
-  if (!signRes.ok) throw new Error("Could not get an upload URL.");
-  const { storageKey, uploadUrl } = await signRes.json();
-  const putRes = await fetch(uploadUrl, { method: "PUT", body: file });
-  if (!putRes.ok) throw new Error("Upload failed.");
-  return finaliseCandidatePhotoUpload({ storageKey, mimeType: file.type, originalFilename: file.name });
+  if (file.size > MAX_PHOTO_BYTES) {
+    throw new Error(`Photo must be smaller than 8MB (yours is ${(file.size / 1024 / 1024).toFixed(1)}MB)`);
+  }
+  const { storageKey } = await uploadToCloudinary(file, "lavelle/candidate-photos");
+  return finaliseCandidatePhotoUpload({ storageKey, mimeType: file.type, originalFilename: file.name, bytes: file.size });
 }
 
 const HANDBOOK_SECTIONS = [
