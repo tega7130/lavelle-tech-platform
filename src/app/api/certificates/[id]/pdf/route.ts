@@ -1,15 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
+import { v2 as cloudinary } from "cloudinary";
 import { prisma } from "@/lib/prisma";
-import { readBlob } from "@/lib/storage";
 import { verifyCertificatePdfLink } from "@/lib/certificate-pdf";
 
-/**
- * Signed, expiring (rule 8) — and 403s when revoked, checked fresh here
- * on every request, never trusted from whatever was true when the link
- * was minted. "A revoked certificate that still downloads is worse than
- * none at all." Superseded is deliberately NOT blocked — it was never
- * invalid, only replaced, so its own record stays a real document.
- */
+cloudinary.config({
+  cloud_name: process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
+
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const exp = request.nextUrl.searchParams.get("exp");
@@ -24,7 +23,16 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   if (!certificate.pdfAssetId) return NextResponse.json({ error: "no_pdf" }, { status: 404 });
 
   const asset = await prisma.mediaAsset.findUniqueOrThrow({ where: { id: certificate.pdfAssetId } });
-  const bytes = await readBlob(asset.storageKey);
+
+  const secureUrl = cloudinary.url(asset.storageKey, {
+    secure: true,
+    sign_url: true,
+    type: "authenticated",
+    expiration: Math.floor(Date.now() / 1000) + 3600,
+  });
+
+  const response = await fetch(secureUrl);
+  const bytes = await response.arrayBuffer();
 
   return new NextResponse(new Uint8Array(bytes), {
     headers: {

@@ -1,7 +1,13 @@
+import { v2 as cloudinary } from "cloudinary";
 import { prisma } from "@/lib/prisma";
 import { recordAuditEvent } from "@/lib/audit";
-import { writeBlob } from "@/lib/storage";
 import { renderCertificatePdf } from "@/lib/certificate-pdf";
+
+cloudinary.config({
+  cloud_name: process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
 import { tierLabel } from "@/lib/format";
 import { sendTransactionalEmailByTemplate } from "@/lib/send-transactional-email";
 import { getFirstName } from "@/lib/email-utils";
@@ -15,6 +21,27 @@ import type { CertificateStatus, GradeBand, Prisma } from "@/generated/prisma/cl
 // discipline as every other core-lib file in this project.
 
 const BAND_LABEL: Record<GradeBand, string> = { DISTINCTION: "Distinction", MERIT: "Merit", PASS: "Pass", REFER: "Refer" };
+
+async function uploadCertificatePdfToCloudinary(
+  pdfBytes: Buffer,
+  certificateNumber: string
+): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const uploadStream = cloudinary.uploader.upload_stream(
+      {
+        folder: "lavelle/certificates",
+        resource_type: "auto",
+        original_filename: `${certificateNumber}.pdf`,
+        type: "authenticated",
+      },
+      (error, result) => {
+        if (error) reject(error);
+        else resolve((result as any).public_id);
+      }
+    );
+    uploadStream.end(pdfBytes);
+  });
+}
 
 /**
  * The printed certificate's own band — deliberately NOT the same scale
@@ -138,8 +165,8 @@ export async function issueCertificate(sittingId: string, mintedByStaffId: strin
       issuedAt,
       signatoryBlock: template.signatoryBlock,
     });
-    const storageKey = `certificates/${certificateNumber}.pdf`;
-    await writeBlob(storageKey, pdfBytes);
+
+    const storageKey = await uploadCertificatePdfToCloudinary(pdfBytes, certificateNumber);
     const pdfAsset = await tx.mediaAsset.create({
       data: {
         kind: "document",
@@ -316,8 +343,7 @@ export async function issueCertificateForCourseCompletion(enrolmentId: string) {
       issuedAt,
       signatoryBlock: template.signatoryBlock,
     });
-    const storageKey = `certificates/${certificateNumber}.pdf`;
-    await writeBlob(storageKey, pdfBytes);
+    const storageKey = await uploadCertificatePdfToCloudinary(pdfBytes, certificateNumber);
     const pdfAsset = await tx.mediaAsset.create({
       data: {
         kind: "document",
@@ -325,8 +351,6 @@ export async function issueCertificateForCourseCompletion(enrolmentId: string) {
         mimeType: "application/pdf",
         bytes: pdfBytes.length,
         originalFilename: `${certificateNumber}.pdf`,
-        // No staff acted here — attributed to the candidate whose
-        // completion triggered it, same as their own profile photo.
         uploadedByCandidateId: candidate.id,
       },
     });
@@ -451,8 +475,7 @@ export async function issueCertificateManually(input: ManualIssueInput, staffId:
       issuedAt,
       signatoryBlock: template.signatoryBlock,
     });
-    const storageKey = `certificates/${certificateNumber}.pdf`;
-    await writeBlob(storageKey, pdfBytes);
+    const storageKey = await uploadCertificatePdfToCloudinary(pdfBytes, certificateNumber);
     const pdfAsset = await tx.mediaAsset.create({
       data: {
         kind: "document",
@@ -620,8 +643,7 @@ export async function reissueCertificate(id: string, reason: string, staffId: st
       issuedAt,
       signatoryBlock: template.signatoryBlock,
     });
-    const storageKey = `certificates/${certificateNumber}.pdf`;
-    await writeBlob(storageKey, pdfBytes);
+    const storageKey = await uploadCertificatePdfToCloudinary(pdfBytes, certificateNumber);
     const pdfAsset = await tx.mediaAsset.create({
       data: {
         kind: "document",

@@ -5,18 +5,12 @@ import { getCurrentCandidate } from "@/lib/candidate-session";
 import { Permission } from "@/generated/prisma/client";
 import { createPresignedUpload, MAX_UPLOAD_BYTES } from "@/lib/storage";
 
-const MAX_PHOTO_BYTES = 8 * 1024 * 1024; // 8MB — a profile photo, not a lecture asset
+const MAX_PHOTO_BYTES = 8 * 1024 * 1024; // 8MB
 
 const bodySchema = z.object({
   kind: z.enum(["audio", "image", "video", "document"]),
   mimeType: z.string().min(1),
   bytes: z.number().int().positive().max(MAX_UPLOAD_BYTES),
-  // Which permission gates this upload — programme media (Slice 02,
-  // default, preserves every existing caller unchanged), a finance
-  // receipt (Slice 03: offline-payment recording), certificate template
-  // artwork (Slice 07), a blog post hero image, or a candidate's own
-  // profile photo (candidate-gated, not staff-gated — the only purpose
-  // below with no staff permission at all).
   purpose: z.enum(["programme", "finance", "certificate", "blog", "candidate_photo"]).default("programme"),
 });
 
@@ -27,13 +21,6 @@ const PERMISSION_BY_PURPOSE = {
   blog: Permission.MANAGE_BLOG,
 } as const;
 
-/**
- * A route handler, not a Server Action — audio/video exceed the Server
- * Action body limit and would fail in production. This only ever returns
- * a presigned PUT; the actual bytes go straight from the browser to
- * storage (PUT /api/uploads/blob/...), never through this app's Server
- * Action pipeline.
- */
 export async function POST(request: NextRequest) {
   const json = await request.json().catch(() => null);
   const parsed = bodySchema.safeParse(json);
