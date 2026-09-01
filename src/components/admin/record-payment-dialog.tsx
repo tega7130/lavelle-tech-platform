@@ -18,8 +18,8 @@ const MODES = [
 ] as const;
 
 async function uploadReceipt(file: File) {
-  const { storageKey, bytes } = await uploadToCloudinary(file, "lavelle/finance");
-  return finaliseUpload({ storageKey, kind: "document", mimeType: file.type, originalFilename: file.name, bytes, purpose: "finance" });
+  const { storageKey, bytes } = await uploadToCloudinary(file, "finance");
+  return finaliseUpload({ storageKey, kind: "document", mimeType: file.type, originalFilename: file.name, bytes, durationSeconds: null, purpose: "finance" });
 }
 
 export interface RecordPaymentDialogProps {

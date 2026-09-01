@@ -158,7 +158,7 @@ function ContentStatusSelect({
 }
 
 async function uploadFile(file: File, kind: "audio" | "video" | "image" | "document") {
-  const { storageKey, bytes, durationSeconds } = await uploadToCloudinary(file, "lavelle/programmes");
+  const { storageKey, bytes, durationSeconds } = await uploadToCloudinary(file, "programme");
   return finaliseUpload({ storageKey, kind, mimeType: file.type, originalFilename: file.name, bytes, durationSeconds });
 }
 

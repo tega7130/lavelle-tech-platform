@@ -22,7 +22,7 @@ async function uploadPhoto(file: File) {
   if (file.size > MAX_PHOTO_BYTES) {
     throw new Error(`Photo must be smaller than 8MB (yours is ${(file.size / 1024 / 1024).toFixed(1)}MB)`);
   }
-  const { storageKey } = await uploadToCloudinary(file, "lavelle/candidate-photos");
+  const { storageKey } = await uploadToCloudinary(file, "candidate_photo");
   return finaliseCandidatePhotoUpload({ storageKey, mimeType: file.type, originalFilename: file.name, bytes: file.size });
 }
 

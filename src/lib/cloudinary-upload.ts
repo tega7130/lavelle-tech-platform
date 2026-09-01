@@ -4,46 +4,41 @@ export interface CloudinaryUploadResult {
   storageKey: string; // Cloudinary public_id
   bytes: number;
   mimeType: string;
-  durationSeconds?: number;
+  durationSeconds: number | null;
 }
 
 /**
- * Upload a file directly to Cloudinary using unsigned upload.
- * Returns the public_id (storageKey) and file metadata.
+ * Uploads via /api/uploads/cloudinary — a server-signed proxy, not a
+ * direct-to-Cloudinary unsigned upload. There is no unsigned upload
+ * preset configured (or needed): only the server-only CLOUDINARY_API_KEY
+ * / CLOUDINARY_API_SECRET exist, so the browser posts the file to this
+ * app's own route, which authenticates the caller (staff permission or
+ * candidate session, by `purpose`) and forwards to Cloudinary itself.
  */
 export async function uploadToCloudinary(
   file: File,
-  folder: string
+  purpose: "programme" | "finance" | "certificate" | "blog" | "candidate_photo"
 ): Promise<CloudinaryUploadResult> {
-  const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
-  const uploadPreset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
-
-  if (!cloudName || !uploadPreset) {
-    throw new Error("Cloudinary credentials not configured");
-  }
-
   const formData = new FormData();
   formData.append("file", file);
-  formData.append("upload_preset", uploadPreset);
-  formData.append("folder", folder);
-  formData.append("resource_type", "auto");
+  formData.append("purpose", purpose);
 
-  const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/auto/upload`, {
+  const response = await fetch("/api/uploads/cloudinary", {
     method: "POST",
     body: formData,
   });
 
   if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error?.message || "Upload to Cloudinary failed");
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.error || "Upload failed.");
   }
 
   const result = await response.json();
 
   return {
-    storageKey: result.public_id,
+    storageKey: result.storageKey,
     bytes: result.bytes,
-    mimeType: file.type,
-    durationSeconds: result.duration || undefined,
+    mimeType: result.mimeType,
+    durationSeconds: result.durationSeconds ?? null,
   };
 }

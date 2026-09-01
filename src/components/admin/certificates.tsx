@@ -47,8 +47,8 @@ function fmtDate(d: Date | string) {
 }
 
 async function uploadArtwork(file: File) {
-  const { storageKey, bytes } = await uploadToCloudinary(file, "lavelle/certificate-templates");
-  return finaliseUpload({ storageKey, kind: "image", mimeType: file.type, originalFilename: file.name, bytes, purpose: "certificate" });
+  const { storageKey, bytes } = await uploadToCloudinary(file, "certificate");
+  return finaliseUpload({ storageKey, kind: "image", mimeType: file.type, originalFilename: file.name, bytes, durationSeconds: null, purpose: "certificate" });
 }
 
 export function AdminCertificates({

@@ -30,8 +30,8 @@ function formatDate(d: Date) {
 }
 
 async function uploadHeroImage(file: File) {
-  const { storageKey, bytes } = await uploadToCloudinary(file, "lavelle/blog");
-  return finaliseUpload({ storageKey, kind: "image", mimeType: file.type, originalFilename: file.name, bytes, purpose: "blog" });
+  const { storageKey, bytes } = await uploadToCloudinary(file, "blog");
+  return finaliseUpload({ storageKey, kind: "image", mimeType: file.type, originalFilename: file.name, bytes, durationSeconds: null, purpose: "blog" });
 }
 
 export function BlogEditor({ post, defaultAuthorName }: { post: PostData; defaultAuthorName: string }) {
