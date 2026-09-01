@@ -7,6 +7,7 @@ import { Tag, type TagVariant } from "@/components/ui/tag";
 import { Button } from "@/components/ui/button";
 import { Textarea, Input } from "@/components/ui/field";
 import { AssessmentIcon } from "@/components/icons";
+import { renderMarkupToReact } from "@/lib/rich-text";
 import {
   openMarkableAction,
   claimForMarkingAction,
@@ -290,7 +291,9 @@ export function MarkingQueue({
             {detail.submission?.prompt && (
               <div className="border border-divider rounded-md p-[var(--space-4)] mt-[var(--space-3)]">
                 <div className="text-[10px] tracking-[0.1em] uppercase text-accent font-semibold">Prompt</div>
-                <p className="text-[13px] text-neutral-700 mt-2">{detail.submission.prompt}</p>
+                <div className="text-[13px] text-neutral-700 mt-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5">
+                  {renderMarkupToReact(detail.submission.prompt)}
+                </div>
               </div>
             )}
 

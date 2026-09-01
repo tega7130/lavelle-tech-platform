@@ -14,6 +14,7 @@ import { QuizPlayer } from "@/components/portal/quiz-player";
 import { LectureNotesPanel } from "@/components/portal/lecture-notes-panel";
 import { ChevronLeftIcon, LockIcon, MenuIcon } from "@/components/icons";
 import { computePercent } from "@/lib/progress";
+import { renderMarkupToReact } from "@/lib/rich-text";
 import { youtubeEmbedUrl } from "@/lib/format";
 import { loadYouTubeIframeApi, type YouTubePlayer } from "@/lib/youtube-player";
 import type { LectureStep } from "@/lib/lecture-steps";
@@ -505,8 +506,14 @@ export function LecturePlayer({ enrolmentId, data }: { enrolmentId: string; data
 
         {activeStep === "scenario" && (
           <div>
-            <p className="text-[14px] leading-relaxed">{lecture.scenarioPrompt}</p>
-            {lecture.scenarioGuidance && <p className="text-[13px] text-neutral-600">{lecture.scenarioGuidance}</p>}
+            <div className="text-[14px] leading-relaxed [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5">
+              {renderMarkupToReact(lecture.scenarioPrompt ?? "")}
+            </div>
+            {lecture.scenarioGuidance && (
+              <div className="mt-2 text-[13px] text-neutral-600 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5">
+                {renderMarkupToReact(lecture.scenarioGuidance)}
+              </div>
+            )}
             {!completed.has("scenario") && (
               <Button className="mt-4" onClick={() => markStepComplete("scenario")}>
                 Continue
@@ -688,7 +695,9 @@ function DraftingStep({
 
   return (
     <div>
-      <p className="text-[14px] leading-relaxed">{prompt}</p>
+      <div className="text-[14px] leading-relaxed [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5">
+        {renderMarkupToReact(prompt)}
+      </div>
       {backOnline && (
         <div className="p-3 rounded-md bg-[#e7f6ed] border border-[#bfe3cd] text-[#15803d] text-[12.5px] mb-3">
           <div className="font-semibold">You are back online</div>

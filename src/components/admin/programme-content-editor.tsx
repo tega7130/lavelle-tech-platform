@@ -24,6 +24,7 @@ import {
 import { setProgrammeStatus } from "@/app/actions/programme";
 import { finaliseUpload } from "@/app/actions/uploads";
 import { uploadToCloudinary } from "@/lib/cloudinary-upload";
+import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import { formatNaira, statusLabel } from "@/lib/format";
 
 // ── Types — a plain mirror of getProgrammeContent()'s shape, kept free of
@@ -935,29 +936,45 @@ function SlideNarrationList({ lecture, onSaved }: { lecture: LectureData; onSave
 }
 
 function ScenarioTab({ lecture, onSaved }: { lecture: LectureData; onSaved: () => void }) {
+  const promptRef = React.useRef(lecture.scenarioPrompt ?? "");
+  const guidanceRef = React.useRef(lecture.scenarioGuidance ?? "");
+
   return (
-    <div>
-      <label className="mb-1.5 block text-xs font-medium text-neutral-700">Practical scenario shown to candidates</label>
-      <textarea
-        defaultValue={lecture.scenarioPrompt ?? ""}
-        rows={6}
-        onBlur={(e) => updateLecture(lecture.id, { scenarioPrompt: e.target.value }).then(onSaved)}
-        className="w-full rounded-md border border-neutral-300 bg-bg px-3 py-2 text-sm"
-      />
+    <div className="flex flex-col gap-4">
+      <div onBlur={() => updateLecture(lecture.id, { scenarioPrompt: promptRef.current }).then(onSaved)}>
+        <label className="mb-1.5 block text-xs font-medium text-neutral-700">Practical scenario shown to candidates</label>
+        <RichTextEditor
+          key={lecture.id}
+          value={lecture.scenarioPrompt ?? ""}
+          onChange={(markup) => (promptRef.current = markup)}
+          minHeightPx={140}
+        />
+      </div>
+      <div onBlur={() => updateLecture(lecture.id, { scenarioGuidance: guidanceRef.current }).then(onSaved)}>
+        <label className="mb-1.5 block text-xs font-medium text-neutral-700">Guidance shown after the scenario (optional)</label>
+        <RichTextEditor
+          key={lecture.id}
+          value={lecture.scenarioGuidance ?? ""}
+          onChange={(markup) => (guidanceRef.current = markup)}
+          minHeightPx={100}
+        />
+      </div>
     </div>
   );
 }
 
 function DraftingTab({ lecture, onSaved }: { lecture: LectureData; onSaved: () => void }) {
+  const promptRef = React.useRef(lecture.draftingPrompt ?? "");
+
   return (
     <div className="flex flex-col gap-3">
-      <div>
+      <div onBlur={() => updateLecture(lecture.id, { draftingPrompt: promptRef.current }).then(onSaved)}>
         <label className="mb-1.5 block text-xs font-medium text-neutral-700">Exercise prompt</label>
-        <textarea
-          defaultValue={lecture.draftingPrompt ?? ""}
-          rows={3}
-          onBlur={(e) => updateLecture(lecture.id, { draftingPrompt: e.target.value }).then(onSaved)}
-          className="w-full rounded-md border border-neutral-300 bg-bg px-3 py-2 text-sm"
+        <RichTextEditor
+          key={lecture.id}
+          value={lecture.draftingPrompt ?? ""}
+          onChange={(markup) => (promptRef.current = markup)}
+          minHeightPx={100}
         />
       </div>
       <div className="w-40">
