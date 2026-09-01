@@ -99,9 +99,10 @@ export async function getListingDetail(code: string) {
       listing: { include: { videoAsset: { select: { storageKey: true } } } },
       coverVideoAsset: { select: { storageKey: true } },
       modules: {
+        where: { status: "PUBLISHED" },
         orderBy: { orderIndex: "asc" },
         include: {
-          lectures: { orderBy: { orderIndex: "asc" }, select: { id: true, title: true } },
+          lectures: { where: { status: "PUBLISHED" }, orderBy: { orderIndex: "asc" }, select: { id: true, title: true } },
         },
       },
       assessmentWeightings: true,

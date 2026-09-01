@@ -59,6 +59,7 @@ export async function getProgrammeDetail(code: string) {
     include: {
       category: true,
       modules: {
+        where: { status: "PUBLISHED" },
         orderBy: { orderIndex: "asc" },
         select: {
           id: true,
@@ -66,6 +67,7 @@ export async function getProgrammeDetail(code: string) {
           weekNumber: true,
           summary: true,
           lectures: {
+            where: { status: "PUBLISHED" },
             orderBy: { orderIndex: "asc" },
             select: { id: true, title: true, mediaKind: true },
           },

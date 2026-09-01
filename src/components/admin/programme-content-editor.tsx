@@ -20,6 +20,7 @@ import {
   upsertQuiz,
   setLectureStatus,
   setQuizStatus,
+  setModuleStatus,
 } from "@/app/actions/programme-content";
 import { setProgrammeStatus } from "@/app/actions/programme";
 import { finaliseUpload } from "@/app/actions/uploads";
@@ -90,6 +91,7 @@ interface ModuleData {
   weekNumber: number;
   title: string;
   summary: string | null;
+  status: ContentStatus;
   examQuestionDraw: number;
   orderIndex: number;
   lectures: LectureData[];
@@ -216,6 +218,16 @@ export function ProgrammeContentEditor({ programme }: { programme: ProgrammeData
     setBusy(true);
     try {
       await setQuizStatus(quizId, status);
+      refresh();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleSetModuleStatus(moduleId: string, status: ContentStatus) {
+    setBusy(true);
+    try {
+      await setModuleStatus(moduleId, status);
       refresh();
     } finally {
       setBusy(false);
@@ -353,6 +365,13 @@ export function ProgrammeContentEditor({ programme }: { programme: ProgrammeData
                     <span className="ml-auto text-[11.5px] text-neutral-600">{mod.lectures.length} lectures</span>
                     <span className="text-xs text-neutral-500">{expanded === mod.id ? "▾" : "▸"}</span>
                   </button>
+                  <span onClick={(e) => e.stopPropagation()}>
+                    <ContentStatusSelect
+                      value={mod.status}
+                      disabled={busy}
+                      onChange={(status) => handleSetModuleStatus(mod.id, status)}
+                    />
+                  </span>
                 </div>
 
                 {expanded === mod.id && (

@@ -297,7 +297,7 @@ export async function issueCertificateForCourseCompletion(enrolmentId: string) {
     if (existing) return existing; // idempotent — re-clicking Complete Programme must not mint two
 
     const [totalPublished, completedCount] = await Promise.all([
-      tx.lecture.count({ where: { module: { programmeId: enrolment.programmeId }, status: "PUBLISHED" } }),
+      tx.lecture.count({ where: { module: { programmeId: enrolment.programmeId, status: "PUBLISHED" }, status: "PUBLISHED" } }),
       tx.lectureProgress.count({ where: { enrolmentId, state: "COMPLETED" } }),
     ]);
     if (totalPublished === 0 || completedCount < totalPublished) {

@@ -374,7 +374,7 @@ export async function completeProgramme(candidateId: string, enrolmentId: string
   const enrolment = await assertOwnedEnrolment(candidateId, enrolmentId);
 
   const [totalPublished, completedCount] = await Promise.all([
-    prisma.lecture.count({ where: { module: { programmeId: enrolment.programmeId }, status: "PUBLISHED" } }),
+    prisma.lecture.count({ where: { module: { programmeId: enrolment.programmeId, status: "PUBLISHED" }, status: "PUBLISHED" } }),
     prisma.lectureProgress.count({ where: { enrolmentId, state: LectureState.COMPLETED } }),
   ]);
   if (totalPublished === 0 || completedCount < totalPublished) {

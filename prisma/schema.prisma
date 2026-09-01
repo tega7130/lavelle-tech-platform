@@ -557,6 +557,7 @@ model Module {
   weekNumber Int // 1-based
   title      String
   summary    String?
+  status     ContentStatus @default(PUBLISHED)
 
   // How many approved objective questions this module contributes to the
   // certifying examination. Slice 06 reads it and blocks publishing an

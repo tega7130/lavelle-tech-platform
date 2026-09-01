@@ -41,7 +41,11 @@ async function loadOwnedEnrolment(candidateId: string, enrolmentId: string) {
 async function loadModuleTree(enrolmentId: string, programmeId: string) {
   const [modules, progressRows, releaseDeadlines, quizAttempts] = await Promise.all([
     prisma.module.findMany({
-      where: { programmeId },
+      // PUBLISHED only — a DRAFT/ARCHIVED module drops its whole subtree
+      // out of the candidate-facing programme, regardless of any
+      // individual lecture's own status (module status is the umbrella
+      // control; lecture status only matters once its module is PUBLISHED).
+      where: { programmeId, status: "PUBLISHED" },
       orderBy: { orderIndex: "asc" },
       include: {
         // PUBLISHED only — DRAFT (not yet released) and ARCHIVED (soft-
