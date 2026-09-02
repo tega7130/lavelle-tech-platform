@@ -7,7 +7,7 @@ import { ScreenPlaceholder } from "@/components/shell/placeholder";
  */
 export default function PreviewAdminPage() {
   return (
-    <AdminShell staff={{ name: "Adaeze Obi", initials: "AO", role: "Registrar" }} headerTag="September 2026 intake">
+    <AdminShell staff={{ name: "Adaeze Obi", initials: "AO", role: "Registrar" }}>
       <ScreenPlaceholder title="Overview" />
     </AdminShell>
   );

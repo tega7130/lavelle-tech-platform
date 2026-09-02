@@ -56,7 +56,7 @@ export default async function ProgrammeDetailPage({ params }: { params: Promise<
                   {detail.tierLabel}
                 </span>
                 <span className="text-[12px] text-neutral-600">
-                  {detail.code} · September 2026 intake
+                  {detail.code}
                 </span>
               </div>
               <h1 className="font-heading font-semibold text-[26px] sm:text-[30px] lg:text-[38px] leading-[1.12] mt-4 max-w-[22ch] tracking-[-0.022em]">{detail.title}</h1>

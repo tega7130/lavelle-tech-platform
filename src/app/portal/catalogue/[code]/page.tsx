@@ -79,9 +79,6 @@ export default async function ProgrammeDetailPage({ params }: { params: Promise<
         </div>
 
         <Card elev="md" className="h-fit">
-          <CardKicker>Intake</CardKicker>
-          <div className="text-[15px]">Next open intake</div>
-          <div className="border-t border-dashed border-neutral-300 my-2" />
           <CardKicker>Programme fee</CardKicker>
           <div className="font-heading text-[26px]">{formatNaira(programme.feeMinor)}</div>
           <div className="text-[12px] text-neutral-500 mb-2">Nigerian rails &amp; international cards accepted</div>
