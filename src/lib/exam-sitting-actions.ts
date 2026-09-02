@@ -162,12 +162,20 @@ export async function registerForExam(examId: string, windowId: string, candidat
     return { registration, payment };
   });
 
-  const checkout = await createProviderCheckout({
-    provider: payment.provider,
-    internalReference: payment.internalReference,
-    amountMinor: payment.amountMinor,
-    candidateEmail,
-  });
+  let checkout;
+  try {
+    checkout = await createProviderCheckout({
+      provider: payment.provider,
+      internalReference: payment.internalReference,
+      amountMinor: payment.amountMinor,
+      candidateEmail,
+    });
+  } catch (e) {
+    // Otherwise this Payment row is stuck at PENDING forever, silently
+    // consuming one of the candidate's limited exam attempts.
+    await prisma.payment.update({ where: { id: payment.id }, data: { status: "FAILED" } });
+    throw e;
+  }
 
   return { registration, internalReference: payment.internalReference, checkoutUrl: checkout.checkoutUrl };
 }

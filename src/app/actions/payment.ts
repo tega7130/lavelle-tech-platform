@@ -121,6 +121,27 @@ async function createRetryPayment(enrolmentId: string, candidateId: string, feeM
   throw new Error("Could not generate a unique payment reference. Try again.");
 }
 
+/**
+ * If the provider call throws, the just-created Payment row would otherwise
+ * be stuck at PENDING forever — resolveEnrolmentForPayment's retry path
+ * only accepts a FAILED latest payment, so a stuck PENDING row silently
+ * blocks every future attempt until an admin fixes it by hand. Marking it
+ * FAILED here lets the candidate's next attempt retry on its own.
+ */
+async function createCheckoutOrMarkFailed(payment: { id: string; provider: string; internalReference: string; amountMinor: number }, candidateEmail: string) {
+  try {
+    return await createProviderCheckout({
+      provider: payment.provider,
+      internalReference: payment.internalReference,
+      amountMinor: payment.amountMinor,
+      candidateEmail,
+    });
+  } catch (e) {
+    await prisma.payment.update({ where: { id: payment.id }, data: { status: PaymentStatus.FAILED } });
+    throw e;
+  }
+}
+
 /** Creates the PENDING payment and PENDING_PAYMENT enrolment together; rejects if a live enrolment already exists. */
 export async function initiatePayment(programmeId: string) {
   const candidate = await getCurrentCandidate();
@@ -130,12 +151,7 @@ export async function initiatePayment(programmeId: string) {
   assertProgrammeOpenForEnrolment(programme);
 
   const { payment } = await resolveEnrolmentForPayment(candidate.id, programmeId, programme.feeMinor);
-  const checkout = await createProviderCheckout({
-    provider: payment.provider,
-    internalReference: payment.internalReference,
-    amountMinor: payment.amountMinor,
-    candidateEmail: candidate.email,
-  });
+  const checkout = await createCheckoutOrMarkFailed(payment, candidate.email);
 
   revalidatePath("/portal/catalogue");
   return { internalReference: payment.internalReference, checkoutUrl: checkout.checkoutUrl };
@@ -207,12 +223,7 @@ export async function initiateGuestCheckout(_prev: FormActionState, formData: Fo
         return payment;
       });
 
-      const checkout = await createProviderCheckout({
-        provider: payment.provider,
-        internalReference: payment.internalReference,
-        amountMinor: payment.amountMinor,
-        candidateEmail: data.email,
-      });
+      const checkout = await createCheckoutOrMarkFailed(payment, data.email);
       return { ok: true, data: { checkoutUrl: checkout.checkoutUrl } };
     } catch (e) {
       if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002" && p2002Target(e).includes("internalReference") && attempt < 2) {
