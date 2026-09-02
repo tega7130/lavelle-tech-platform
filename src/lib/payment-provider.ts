@@ -19,7 +19,7 @@ function secret() {
   return s;
 }
 
-/** HMAC-SHA256 over the raw webhook body — Nomba uses this scheme (rule 5). */
+/** HMAC-SHA256 over the raw webhook body — used only by the local /pay/stub dev simulator, not real Nomba deliveries (see verifyNombaWebhookSignature for those). */
 export function signWebhookPayload(rawBody: string): string {
   return crypto.createHmac("sha256", secret()).update(rawBody).digest("hex");
 }
@@ -29,6 +29,64 @@ export function verifyWebhookSignature(rawBody: string, signature: string | null
   const expected = signWebhookPayload(rawBody);
   const bufA = Buffer.from(expected);
   const bufB = Buffer.from(signature);
+  if (bufA.length !== bufB.length) return false;
+  return crypto.timingSafeEqual(bufA, bufB);
+}
+
+function nombaWebhookSecret() {
+  const s = process.env.NOMBA_WEBHOOK_SECRET;
+  if (!s) throw new Error("NOMBA_WEBHOOK_SECRET is not set — set the same signature key configured under Developer > Webhook Setup on the Nomba dashboard.");
+  return s;
+}
+
+export interface NombaWebhookPayload {
+  event_type: string;
+  requestId: string;
+  data: {
+    merchant?: { userId?: string; walletId?: string };
+    transaction?: {
+      transactionId?: string;
+      type?: string;
+      time?: string;
+      responseCode?: string;
+      responseCodeMessage?: string;
+      transactionAmount?: number;
+      merchantTxRef?: string;
+    };
+    order?: { orderReference?: string; orderId?: string; amount?: number; customerEmail?: string; currency?: string };
+  };
+}
+
+/**
+ * Nomba's exact HMAC-SHA256 scheme (docs: "Webhook signature verification")
+ * — a colon-joined string of specific payload fields plus the delivery
+ * timestamp, HMAC'd with the signature key set on the Nomba dashboard and
+ * base64-encoded. This is NOT a hash of the raw body, unlike most
+ * webhook schemes (including our own /pay/stub simulator above) — Nomba's
+ * own reference implementations extract these fields from the parsed
+ * payload before hashing.
+ */
+export function verifyNombaWebhookSignature(payload: NombaWebhookPayload, timestamp: string, signature: string | null): boolean {
+  if (!signature) return false;
+  const merchant = payload.data.merchant ?? {};
+  const transaction = payload.data.transaction ?? {};
+  const responseCode = !transaction.responseCode || transaction.responseCode === "null" ? "" : transaction.responseCode;
+
+  const hashingPayload = [
+    payload.event_type ?? "",
+    payload.requestId ?? "",
+    merchant.userId ?? "",
+    merchant.walletId ?? "",
+    transaction.transactionId ?? "",
+    transaction.type ?? "",
+    transaction.time ?? "",
+    responseCode,
+    timestamp,
+  ].join(":");
+
+  const expected = crypto.createHmac("sha256", nombaWebhookSecret()).update(hashingPayload).digest("base64");
+  const bufA = Buffer.from(expected.toLowerCase());
+  const bufB = Buffer.from(signature.toLowerCase());
   if (bufA.length !== bufB.length) return false;
   return crypto.timingSafeEqual(bufA, bufB);
 }
