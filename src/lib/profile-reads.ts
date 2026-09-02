@@ -27,7 +27,7 @@ export async function getCandidateCohortStatus(candidateId: string, preferredTie
 
   const statusWord = candidate.accountStatus === "ACTIVE" ? "Active" : "Suspended";
   return {
-    intakeLabel: intakeLabel(enrolment.intake.month, enrolment.intake.year),
+    intakeLabel: enrolment.intake ? intakeLabel(enrolment.intake.month, enrolment.intake.year) : null,
     statusLine: `${statusWord} — ${tierLabel(enrolment.programme.tier)} Cohort`,
   };
 }

@@ -83,6 +83,7 @@ export async function transferCandidateIntake(
     const weekByModule = new Map(modules.map((m) => [m.id, m.weekNumber]));
     const outstanding = await tx.deadline.findMany({ where: { enrolmentId, metAt: null } });
 
+    if (!enrolment.intake) throw new Error("Cannot transfer an enrolment without an assigned intake.");
     const oldLabel = intakeLabel(enrolment.intake.month, enrolment.intake.year);
     const newLabel = intakeLabel(newIntake.month, newIntake.year);
     let moved = 0;

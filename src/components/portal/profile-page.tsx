@@ -72,7 +72,7 @@ export function ProfilePage({
   };
   profile: CandidateProfile | null;
   idCard: IdCard | null;
-  cohortStatus: { intakeLabel: string; statusLine: string } | null;
+  cohortStatus: { intakeLabel: string | null; statusLine: string } | null;
   photoUrl: string | null;
 }) {
   const router = useRouter();

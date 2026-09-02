@@ -893,8 +893,9 @@ model Enrolment {
   // Assigned on confirmation (enrolment transaction step 5) — null until then.
   cohortId    String?
   cohort      Cohort?   @relation(fields: [cohortId], references: [id])
-  intakeId    String
-  intake      Intake    @relation(fields: [intakeId], references: [id])
+  // Programmes are independently enrollable; intake assignment is optional and may happen later via cohort assignment
+  intakeId    String?
+  intake      Intake?   @relation(fields: [intakeId], references: [id])
 
   // Business rule 1: this record's existence at ACTIVE, and the cohort
   // placement, follow confirmed payment — never acceptance, never an
@@ -1410,8 +1411,8 @@ model GuestCheckout {
 
   programmeId String
   programme   Programme @relation(fields: [programmeId], references: [id])
-  intakeId    String
-  intake      Intake    @relation(fields: [intakeId], references: [id])
+  intakeId    String?
+  intake      Intake?   @relation(fields: [intakeId], references: [id])
 
   firstName    String @db.VarChar(80)
   lastName     String @db.VarChar(80)

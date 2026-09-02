@@ -71,7 +71,7 @@ export function CandidateEnrolmentsTab({ enrolments }: { enrolments: Enrolment[]
                 <Td className="pl-[var(--space-4)] font-medium">{e.programme.title}</Td>
                 <Td>{tierLabel(e.programme.tier)}</Td>
                 <Td>
-                  {e.intake.month} {e.intake.year}
+                  {e.intake ? `${e.intake.month} ${e.intake.year}` : "—"}
                 </Td>
                 <Td className="text-neutral-600">{e.cohort?.code ?? "—"}</Td>
                 <Td>

@@ -40,20 +40,13 @@ function formToObject(formData: FormData): Record<string, string> {
   return obj;
 }
 
-async function pickOpenIntake() {
-  const intake = await prisma.intake.findFirst({ where: { status: "OPEN" }, orderBy: { startsAt: "asc" } });
-  if (!intake) throw new Error("No open intake is currently accepting enrolments.");
-  return intake;
-}
-
 async function createPendingPaymentAndEnrolment(candidateId: string, programmeId: string, feeMinor: number) {
-  const intake = await pickOpenIntake();
   for (let attempt = 0; attempt < 3; attempt++) {
     const internalReference = generateInternalReference();
     try {
       return await prisma.$transaction(async (tx) => {
         const enrolment = await tx.enrolment.create({
-          data: { candidateId, programmeId, intakeId: intake.id, status: EnrolmentStatus.PENDING_PAYMENT },
+          data: { candidateId, programmeId, status: EnrolmentStatus.PENDING_PAYMENT },
         });
         const payment = await tx.payment.create({
           data: {
@@ -180,7 +173,6 @@ export async function initiateGuestCheckout(_prev: FormActionState, formData: Fo
     if (e instanceof ProgrammeNotOpenError) return { message: e.message, values: raw };
     throw e;
   }
-  const intake = await pickOpenIntake();
 
   const passwordHash = await hashPassword(data.password);
   const checkoutToken = crypto.randomBytes(24).toString("hex");
@@ -201,7 +193,6 @@ export async function initiateGuestCheckout(_prev: FormActionState, formData: Fo
         await tx.guestCheckout.create({
           data: {
             programmeId: programme.id,
-            intakeId: intake.id,
             firstName: data.firstName,
             lastName: data.lastName,
             email: data.email,
