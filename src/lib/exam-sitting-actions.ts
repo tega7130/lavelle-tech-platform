@@ -162,7 +162,7 @@ export async function registerForExam(examId: string, windowId: string, candidat
     return { registration, payment };
   });
 
-  const checkout = createProviderCheckout({
+  const checkout = await createProviderCheckout({
     provider: payment.provider,
     internalReference: payment.internalReference,
     amountMinor: payment.amountMinor,

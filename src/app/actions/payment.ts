@@ -130,7 +130,7 @@ export async function initiatePayment(programmeId: string) {
   assertProgrammeOpenForEnrolment(programme);
 
   const { payment } = await resolveEnrolmentForPayment(candidate.id, programmeId, programme.feeMinor);
-  const checkout = createProviderCheckout({
+  const checkout = await createProviderCheckout({
     provider: payment.provider,
     internalReference: payment.internalReference,
     amountMinor: payment.amountMinor,
@@ -207,7 +207,7 @@ export async function initiateGuestCheckout(_prev: FormActionState, formData: Fo
         return payment;
       });
 
-      const checkout = createProviderCheckout({
+      const checkout = await createProviderCheckout({
         provider: payment.provider,
         internalReference: payment.internalReference,
         amountMinor: payment.amountMinor,
