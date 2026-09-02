@@ -5,11 +5,14 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["tests/**/*.test.ts"],
-    setupFiles: ["dotenv/config"],
-    // 5000ms default assumed a local Postgres instance (see the
-    // fileParallelism comment below) — DATABASE_URL now points at a
-    // remote Supabase pooler, where round-trip latency alone can eat
-    // that whole budget on tests doing several sequential queries.
+    // Loads .env then .env.local (override), same precedence Next.js
+    // itself uses — so DATABASE_URL always resolves to local Postgres
+    // here regardless of what .env alone holds (that's the production
+    // Supabase instance; tests must never write there). See the file's
+    // own comment for the incident that made this non-negotiable.
+    setupFiles: ["./tests/env-setup.ts"],
+    // Generous headroom for a DB-backed suite with sequential queries per
+    // test; harmless overkill now that DATABASE_URL is local Postgres.
     testTimeout: 20000,
     // Every test file shares the one real local Postgres database (no
     // per-file isolation) — Vitest's default cross-file parallelism is
