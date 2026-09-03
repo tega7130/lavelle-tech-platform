@@ -7,6 +7,7 @@ import { buttonClassName } from "@/components/ui/button";
 import { LogoMark } from "@/components/ui/logo-mark";
 import { MenuIcon } from "@/components/icons";
 import { cn } from "@/lib/cn";
+import { Reveal, CTA_HOVER } from "@/components/site/motion";
 
 const NAV_LINKS = [
   { label: "Programmes", href: "/programmes" },
@@ -26,13 +27,13 @@ export function SiteHeroHeader() {
   return (
     <header className="relative z-10">
       <div className="mx-auto max-w-[1200px] flex items-center justify-between gap-4 sm:gap-8 px-5 sm:px-6 md:px-8 lg:px-10 pt-6 pb-6">
-        <div className="flex items-center gap-[11px] flex-none">
+        <Reveal className="flex items-center gap-[11px] flex-none" threshold={0}>
           <LogoMark size={38} />
           <div>
             <div className="font-heading font-bold text-[14px] sm:text-[16px] tracking-[0.02em] text-white whitespace-nowrap">LAVELLE INSTITUTE</div>
             <div className="text-[9.5px] tracking-[0.15em] uppercase text-white/55 whitespace-nowrap">Professional Specialization</div>
           </div>
-        </div>
+        </Reveal>
 
         <div className="flex items-center gap-8">
           <nav className="hidden md:flex items-center gap-[18px] lg:gap-[26px] flex-none">
@@ -40,7 +41,7 @@ export function SiteHeroHeader() {
               <Link
                 key={l.label}
                 href={l.href}
-                className="whitespace-nowrap text-[13.5px] font-medium text-white/72 hover:text-white no-underline"
+                className="lv-nav-underline whitespace-nowrap text-[13.5px] font-medium text-white/72 hover:text-white no-underline"
               >
                 {l.label}
               </Link>
@@ -50,10 +51,10 @@ export function SiteHeroHeader() {
           <div className="hidden md:block h-5 w-px bg-white/16" />
 
           <div className="hidden md:flex items-center gap-3 flex-none">
-            <Link href="/sign-in" className={buttonClassName("secondary", GHOST_ON_DARK)}>
+            <Link href="/sign-in" className={buttonClassName("secondary", cn(GHOST_ON_DARK, CTA_HOVER))}>
               Sign in
             </Link>
-            <Link href="/register" className={cn(buttonClassName("primary"), "h-[42px] px-[19px] text-[13.5px] rounded-[9px]")}>
+            <Link href="/register" className={cn(buttonClassName("primary"), "h-[42px] px-[19px] text-[13.5px] rounded-[9px]", CTA_HOVER)}>
               Apply now
             </Link>
           </div>
@@ -78,7 +79,7 @@ export function SiteHeroHeader() {
               role="dialog"
               aria-modal="true"
               onClick={(e) => e.stopPropagation()}
-              className="w-[280px] max-w-[84vw] h-full flex flex-col p-6 text-white"
+              className="lv-menu-panel w-[280px] max-w-[84vw] h-full flex flex-col p-6 text-white"
               style={{ background: "linear-gradient(158deg,#0c356f 0%,#08234a 46%,#061529 100%)" }}
             >
               <div className="flex items-center justify-between">
@@ -89,33 +90,34 @@ export function SiteHeroHeader() {
                 <button
                   onClick={() => setMenuOpen(false)}
                   aria-label="Close menu"
-                  className="w-8 h-8 rounded-md border border-white/28 flex items-center justify-center hover:bg-white/[0.09] cursor-pointer"
+                  className="w-8 h-8 rounded-md border border-white/28 flex items-center justify-center hover:bg-white/[0.09] transition-colors cursor-pointer"
                 >
                   ×
                 </button>
               </div>
 
               <nav className="flex flex-col gap-1 mt-8">
-                {NAV_LINKS.map((l) => (
+                {NAV_LINKS.map((l, i) => (
                   <Link
                     key={l.label}
                     href={l.href}
                     onClick={() => setMenuOpen(false)}
-                    className="text-[15px] font-medium text-white/85 hover:text-white no-underline py-3 border-b border-white/10"
+                    className="lv-menu-item text-[15px] font-medium text-white/85 hover:text-white no-underline py-3 border-b border-white/10 transition-colors"
+                    style={{ animationDelay: `${100 + i * 60}ms` }}
                   >
                     {l.label}
                   </Link>
                 ))}
               </nav>
 
-              <div className="flex flex-col gap-3 mt-auto pt-8">
-                <Link href="/sign-in" onClick={() => setMenuOpen(false)} className={buttonClassName("secondary", cn(GHOST_ON_DARK, "w-full justify-center"))}>
+              <div className="lv-menu-item flex flex-col gap-3 mt-auto pt-8" style={{ animationDelay: `${100 + NAV_LINKS.length * 60}ms` }}>
+                <Link href="/sign-in" onClick={() => setMenuOpen(false)} className={buttonClassName("secondary", cn(GHOST_ON_DARK, "w-full justify-center", CTA_HOVER))}>
                   Sign in
                 </Link>
                 <Link
                   href="/register"
                   onClick={() => setMenuOpen(false)}
-                  className={cn(buttonClassName("primary"), "h-[42px] px-[19px] text-[13.5px] rounded-[9px] w-full justify-center")}
+                  className={cn(buttonClassName("primary"), "h-[42px] px-[19px] text-[13.5px] rounded-[9px] w-full justify-center", CTA_HOVER)}
                 >
                   Apply now
                 </Link>

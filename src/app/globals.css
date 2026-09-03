@@ -290,4 +290,105 @@
   .scrollbar-hidden::-webkit-scrollbar {
     display: none;
   }
+
+  /*
+   * Scroll-reveal system (site/marketing pages only) — see
+   * src/components/site/motion.tsx's Reveal component. transform/opacity
+   * only, so reveals never trigger layout or cause a shift; the .lv-in
+   * class is toggled once by an IntersectionObserver and never removed.
+   */
+  .lv-reveal,
+  .lv-reveal-scale {
+    opacity: 0;
+    transform: translateY(22px);
+    transition: opacity 650ms cubic-bezier(0.16, 1, 0.3, 1), transform 650ms cubic-bezier(0.16, 1, 0.3, 1);
+    will-change: opacity, transform;
+  }
+  .lv-reveal-scale {
+    transform: translateY(16px) scale(0.98);
+  }
+  .lv-reveal.lv-in,
+  .lv-reveal-scale.lv-in {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+
+  /* the ladder's per-card top stripe "fills in" left-to-right as a progression cue — scaleX, not width, to stay off the layout thread */
+  .lv-stripe {
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform 700ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .lv-stripe.lv-in {
+    transform: scaleX(1);
+  }
+
+  /* nav link hover underline — scaleX, not width, for the same reason */
+  .lv-nav-underline {
+    position: relative;
+  }
+  .lv-nav-underline::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -3px;
+    height: 1.5px;
+    background: currentColor;
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform 250ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .lv-nav-underline:hover::after {
+    transform: scaleX(1);
+  }
+
+  /* mobile nav panel — a plain mount-triggered keyframe, since the panel is only ever mounted while open (no exit animation needed) */
+  @keyframes lv-menu-in {
+    from {
+      opacity: 0;
+      transform: translateX(18px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+  @keyframes lv-item-in {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  .lv-menu-panel {
+    animation: lv-menu-in 320ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  .lv-menu-item {
+    opacity: 0;
+    animation: lv-item-in 300ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .lv-reveal,
+    .lv-reveal-scale,
+    .lv-stripe {
+      transition: none !important;
+      opacity: 1 !important;
+      transform: none !important;
+    }
+    /* snap instead of animate on hover, but keep the underline hidden until then */
+    .lv-nav-underline::after {
+      transition: none !important;
+    }
+    .lv-menu-panel,
+    .lv-menu-item {
+      animation: none !important;
+      opacity: 1 !important;
+      transform: none !important;
+    }
+  }
 }
