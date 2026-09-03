@@ -334,35 +334,35 @@ export async function submitSitting(sittingId: string, candidateId: string) {
     return { updated, sitting };
   });
 
-  // Send exam-submission-received-admin email asynchronously
-  (async () => {
-    try {
-      const totalSubmissions = await prisma.sitting.count({
-        where: { registration: { windowId: result.sitting.registration.windowId }, state: { in: ["SUBMITTED", "RELEASED"] } },
-      });
-      const totalExpected = await prisma.examRegistration.count({
-        where: { windowId: result.sitting.registration.windowId, cancelledAt: null },
-      });
+  // Awaited, not a detached IIFE — see exam-builder-actions.ts's
+  // createExamWindow for why: on the serverless runtime an un-awaited
+  // promise can be killed before it ever reaches sendEmail.
+  try {
+    const totalSubmissions = await prisma.sitting.count({
+      where: { registration: { windowId: result.sitting.registration.windowId }, state: { in: ["SUBMITTED", "RELEASED"] } },
+    });
+    const totalExpected = await prisma.examRegistration.count({
+      where: { windowId: result.sitting.registration.windowId, cancelledAt: null },
+    });
 
-      await sendTransactionalEmailByTemplate("exam-submission-received-admin", EMAIL_CONFIG.examCoordinatorEmail, {
-        adminFirstName: "Exam",
-        candidateName: `${result.sitting.registration.candidate.firstName} ${result.sitting.registration.candidate.lastName}`,
-        candidateNumber: result.sitting.registration.candidate.candidateNumber || "TBD",
-        programmeName: result.sitting.registration.exam.programme.title,
-        tier: result.sitting.registration.exam.programme.tier,
-        submissionTime: result.sitting.submittedAt?.toLocaleString() || new Date().toLocaleString(),
-        examDuration: `${result.sitting.registration.exam.durationMinutes} minutes`,
-        totalSubmissions,
-        totalExpected,
-        markingUrl: `${process.env.NEXTAUTH_URL}/admin/exam-marking`,
-        supportEmail: EMAIL_CONFIG.supportEmail,
-        currentYear: new Date().getFullYear(),
-      });
-    } catch (emailError) {
-      console.error("Failed to send exam-submission-received-admin:", emailError);
-      // Do not fail the submission on email errors
-    }
-  })();
+    await sendTransactionalEmailByTemplate("exam-submission-received-admin", EMAIL_CONFIG.examCoordinatorEmail, {
+      adminFirstName: "Exam",
+      candidateName: `${result.sitting.registration.candidate.firstName} ${result.sitting.registration.candidate.lastName}`,
+      candidateNumber: result.sitting.registration.candidate.candidateNumber || "TBD",
+      programmeName: result.sitting.registration.exam.programme.title,
+      tier: result.sitting.registration.exam.programme.tier,
+      submissionTime: result.sitting.submittedAt?.toLocaleString() || new Date().toLocaleString(),
+      examDuration: `${result.sitting.registration.exam.durationMinutes} minutes`,
+      totalSubmissions,
+      totalExpected,
+      markingUrl: `${process.env.NEXTAUTH_URL}/admin/exam-marking`,
+      supportEmail: EMAIL_CONFIG.supportEmail,
+      currentYear: new Date().getFullYear(),
+    });
+  } catch (emailError) {
+    console.error("Failed to send exam-submission-received-admin:", emailError);
+    // Do not fail the submission on email errors
+  }
 
   return result.updated;
 }
@@ -570,7 +570,10 @@ export async function releaseResults(windowId: string, staffId: string, ipAddres
       },
     });
 
-    // Send exam-results email asynchronously — do not block the release
+    // Send exam-results email — awaited, not a detached IIFE (see
+    // exam-builder-actions.ts's createExamWindow for why: an un-awaited
+    // promise can be killed by the serverless runtime before it ever
+    // reaches sendEmail). Still never fails the release itself.
     const resultData = {
       candidateId: sitting.registration.candidateId,
       examId: sitting.registration.examId,
@@ -581,38 +584,36 @@ export async function releaseResults(windowId: string, staffId: string, ipAddres
       windowOpenDate: window.opensAt?.toLocaleDateString() || "TBD",
     };
 
-    (async () => {
-      try {
-        const candidate = await prisma.candidate.findUniqueOrThrow({
-          where: { id: resultData.candidateId },
-        });
-        const gradeMap: Record<string, string> = {
-          DISTINCTION: "Distinction",
-          MERIT: "Merit",
-          PASS: "Pass",
-          REFER: "Refer",
-        };
-        const grade = resultData.band && resultData.band in gradeMap ? gradeMap[resultData.band] : "Pending";
+    try {
+      const candidate = await prisma.candidate.findUniqueOrThrow({
+        where: { id: resultData.candidateId },
+      });
+      const gradeMap: Record<string, string> = {
+        DISTINCTION: "Distinction",
+        MERIT: "Merit",
+        PASS: "Pass",
+        REFER: "Refer",
+      };
+      const grade = resultData.band && resultData.band in gradeMap ? gradeMap[resultData.band] : "Pending";
 
-        await sendTransactionalEmailByTemplate("exam-results", candidate.email, {
-          firstName: getFirstName(candidate.firstName),
-          programmeName: programmeTitle,
-          tier: resultData.programmeTier,
-          examDate: resultData.windowOpenDate,
-          marksObtained: resultData.totalPercent,
-          marksTotal: 100,
-          percentage: resultData.totalPercent,
-          grade,
-          outcome: resultData.outcome,
-          resultsPortalUrl: `${process.env.NEXTAUTH_URL}/portal/exams/${resultData.examId}/results`,
-          supportEmail: EMAIL_CONFIG.supportEmail,
-          currentYear: new Date().getFullYear(),
-        });
-      } catch (emailError) {
-        console.error("Failed to send exam-results email:", emailError);
-        // Do not fail the result release on email errors
-      }
-    })();
+      await sendTransactionalEmailByTemplate("exam-results", candidate.email, {
+        firstName: getFirstName(candidate.firstName),
+        programmeName: programmeTitle,
+        tier: resultData.programmeTier,
+        examDate: resultData.windowOpenDate,
+        marksObtained: resultData.totalPercent,
+        marksTotal: 100,
+        percentage: resultData.totalPercent,
+        grade,
+        outcome: resultData.outcome,
+        resultsPortalUrl: `${process.env.NEXTAUTH_URL}/portal/exams/${resultData.examId}/results`,
+        supportEmail: EMAIL_CONFIG.supportEmail,
+        currentYear: new Date().getFullYear(),
+      });
+    } catch (emailError) {
+      console.error("Failed to send exam-results email:", emailError);
+      // Do not fail the result release on email errors
+    }
 
     releasedCount++;
   }

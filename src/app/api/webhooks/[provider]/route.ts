@@ -57,77 +57,80 @@ async function handlePaymentSuccess(payment: Payment) {
   const result = await confirmPayment(payment.id, { auditAction: "payment.confirmed" });
   if (result.alreadyConfirmed) return;
 
-  (async () => {
-    try {
-      const currentYear = new Date().getFullYear();
+  // Awaited (both call sites below already await handlePaymentSuccess
+  // itself) — not a detached IIFE. On the serverless runtime an
+  // un-awaited promise can be killed before it ever reaches sendEmail, so
+  // the payment receipt would silently never send — the one email in this
+  // whole codebase a candidate is most likely to actually go looking for.
+  try {
+    const currentYear = new Date().getFullYear();
 
-      if (result.paymentPurpose === "PROGRAMME_FEE" && result.programme) {
-        await sendTransactionalEmailByTemplate("payment-received-enrolment", result.candidate.email, {
+    if (result.paymentPurpose === "PROGRAMME_FEE" && result.programme) {
+      await sendTransactionalEmailByTemplate("payment-received-enrolment", result.candidate.email, {
+        firstName: getFirstName(result.candidate.firstName),
+        programmeName: result.programme.title,
+        amountPaid: (result.confirmedAmount / 100).toFixed(2),
+        paymentDate: payment.confirmedAt?.toLocaleDateString() || new Date().toLocaleDateString(),
+        transactionId: payment.internalReference,
+        paymentMethod: payment.provider || "unknown",
+        tier: result.programme.tier,
+        programmeAccessUrl: `${process.env.NEXTAUTH_URL}/portal/programmes/${result.programme.id}`,
+        invoiceUrl: `${process.env.NEXTAUTH_URL}/invoices/${payment.id}`,
+        supportEmail: EMAIL_CONFIG.supportEmail,
+        currentYear,
+      });
+
+      if (result.enrolmentId) {
+        const enrolment = await prisma.enrolment.findUniqueOrThrow({
+          where: { id: result.enrolmentId },
+          include: { intake: true },
+        });
+        const modules = await prisma.module.findMany({
+          where: { programmeId: result.programme.id },
+          include: { lectures: true },
+        });
+        const lectureCount = modules.reduce((sum, m) => sum + m.lectures.length, 0);
+        const fullProgramme = await prisma.programme.findUniqueOrThrow({ where: { id: result.programme.id } });
+
+        await sendTransactionalEmailByTemplate("enrolment-confirmation", result.candidate.email, {
           firstName: getFirstName(result.candidate.firstName),
           programmeName: result.programme.title,
-          amountPaid: (result.confirmedAmount / 100).toFixed(2),
-          paymentDate: payment.confirmedAt?.toLocaleDateString() || new Date().toLocaleDateString(),
-          transactionId: payment.internalReference,
-          paymentMethod: payment.provider || "unknown",
           tier: result.programme.tier,
-          programmeAccessUrl: `${process.env.NEXTAUTH_URL}/portal/programmes/${result.programme.id}`,
-          invoiceUrl: `${process.env.NEXTAUTH_URL}/invoices/${payment.id}`,
+          duration: (fullProgramme as any).durationWeeks ? `${(fullProgramme as any).durationWeeks} weeks` : "TBD",
+          weeklyCommitment: (fullProgramme as any).weeklyHours ? `${(fullProgramme as any).weeklyHours} hours` : "TBD",
+          startDate: enrolment.intake?.startsAt?.toLocaleDateString() || "TBD",
+          lectureCount,
+          portalUrl: `${process.env.NEXTAUTH_URL}/portal/programmes/${result.programme.id}`,
           supportEmail: EMAIL_CONFIG.supportEmail,
           currentYear,
         });
-
-        if (result.enrolmentId) {
-          const enrolment = await prisma.enrolment.findUniqueOrThrow({
-            where: { id: result.enrolmentId },
-            include: { intake: true },
-          });
-          const modules = await prisma.module.findMany({
-            where: { programmeId: result.programme.id },
-            include: { lectures: true },
-          });
-          const lectureCount = modules.reduce((sum, m) => sum + m.lectures.length, 0);
-          const fullProgramme = await prisma.programme.findUniqueOrThrow({ where: { id: result.programme.id } });
-
-          await sendTransactionalEmailByTemplate("enrolment-confirmation", result.candidate.email, {
-            firstName: getFirstName(result.candidate.firstName),
-            programmeName: result.programme.title,
-            tier: result.programme.tier,
-            duration: (fullProgramme as any).durationWeeks ? `${(fullProgramme as any).durationWeeks} weeks` : "TBD",
-            weeklyCommitment: (fullProgramme as any).weeklyHours ? `${(fullProgramme as any).weeklyHours} hours` : "TBD",
-            startDate: enrolment.intake?.startsAt?.toLocaleDateString() || "TBD",
-            lectureCount,
-            portalUrl: `${process.env.NEXTAUTH_URL}/portal/programmes/${result.programme.id}`,
-            supportEmail: EMAIL_CONFIG.supportEmail,
-            currentYear,
-          });
-        }
-      } else if (result.paymentPurpose === "EXAMINATION_FEE" && result.programme) {
-        const registration = await prisma.examRegistration.findFirst({
-          where: { paymentId: payment.id },
-          include: { window: true, exam: true },
-        });
-
-        if (registration) {
-          const examDurationStr = registration.exam?.durationMinutes ? `${registration.exam.durationMinutes} minutes` : "TBD";
-
-          await sendTransactionalEmailByTemplate("exam-registration-confirmed", result.candidate.email, {
-            firstName: getFirstName(result.candidate.firstName),
-            programmeName: result.programme.title,
-            tier: result.programme.tier,
-            examDate: registration.window?.opensAt?.toLocaleDateString() || "TBD",
-            examDuration: examDurationStr,
-            admissionSlipUrl: `${process.env.NEXTAUTH_URL}/exams/${registration.id}/admission-slip`,
-            examRulesUrl: `${process.env.NEXTAUTH_URL}/exams/rules`,
-            supportEmail: EMAIL_CONFIG.supportEmail,
-            currentYear,
-          });
-        }
       }
-    } catch (emailError) {
-      console.error("Failed to send transactional email:", emailError);
-      // Do not fail the webhook on email errors — log and continue
+    } else if (result.paymentPurpose === "EXAMINATION_FEE" && result.programme) {
+      const registration = await prisma.examRegistration.findFirst({
+        where: { paymentId: payment.id },
+        include: { window: true, exam: true },
+      });
+
+      if (registration) {
+        const examDurationStr = registration.exam?.durationMinutes ? `${registration.exam.durationMinutes} minutes` : "TBD";
+
+        await sendTransactionalEmailByTemplate("exam-registration-confirmed", result.candidate.email, {
+          firstName: getFirstName(result.candidate.firstName),
+          programmeName: result.programme.title,
+          tier: result.programme.tier,
+          examDate: registration.window?.opensAt?.toLocaleDateString() || "TBD",
+          examDuration: examDurationStr,
+          admissionSlipUrl: `${process.env.NEXTAUTH_URL}/exams/${registration.id}/admission-slip`,
+          examRulesUrl: `${process.env.NEXTAUTH_URL}/exams/rules`,
+          supportEmail: EMAIL_CONFIG.supportEmail,
+          currentYear,
+        });
+      }
     }
-  })();
+  } catch (emailError) {
+    console.error("Failed to send transactional email:", emailError);
+    // Do not fail the webhook on email errors — log and continue
+  }
 }
 
 async function handlePaymentFailure(payment: Payment, provider: string, failureReason: string | null) {

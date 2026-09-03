@@ -82,20 +82,22 @@ export async function requestRegistrationOtp(
   const code = await createOtpChallenge(email);
   logOtpEmail(email, code);
 
-  // Send email verification OTP asynchronously
-  (async () => {
-    try {
-      await sendTransactionalEmailByTemplate("email-verification-otp", email, {
-        firstName: "there",
-        otpCode: code,
-        otpExpiryMinutes: 48,
-        currentYear: new Date().getFullYear(),
-      });
-    } catch (emailError) {
-      console.error("Failed to send email-verification-otp:", emailError);
-      // Do not fail the OTP request on email errors
-    }
-  })();
+  // Awaited, not a detached IIFE — on the serverless runtime the response
+  // can go out (and the instance be frozen/recycled) before an un-awaited
+  // promise ever reaches sendEmail, so the OTP would silently never send.
+  // This is the code a new candidate needs to complete registration, so
+  // it matters more than most: no email means no way in at all outside dev.
+  try {
+    await sendTransactionalEmailByTemplate("email-verification-otp", email, {
+      firstName: "there",
+      otpCode: code,
+      otpExpiryMinutes: 48,
+      currentYear: new Date().getFullYear(),
+    });
+  } catch (emailError) {
+    console.error("Failed to send email-verification-otp:", emailError);
+    // Do not fail the OTP request on email errors
+  }
 
   // In development, include the code in response for testing without email
   const devCode = process.env.NODE_ENV !== "production" ? code : undefined;
@@ -316,22 +318,22 @@ export async function resendVerification(): Promise<FormActionState> {
   const token = await createVerificationTokenRecord(prisma, candidate.id);
   logVerificationEmail(candidate.email, token);
 
-  // Send email-verification-otp email asynchronously
-  (async () => {
-    try {
-      const verifyUrl = `${process.env.NEXTAUTH_URL}/api/auth/verify-email?token=${token}`;
-      await sendTransactionalEmailByTemplate("email-verification-otp", candidate.email, {
-        firstName: getFirstName(candidate.firstName),
-        verificationUrl: verifyUrl,
-        expiryHours: Math.floor(48),
-        supportEmail: EMAIL_CONFIG.supportEmail,
-        currentYear: new Date().getFullYear(),
-      });
-    } catch (emailError) {
-      console.error("Failed to send email-verification-otp:", emailError);
-      // Do not fail the resend on email errors
-    }
-  })();
+  // Awaited, not a detached IIFE — see requestRegistrationOtp above for why.
+  // This is the recovery path when the first verification email didn't
+  // arrive, so it especially can't be the one that silently drops too.
+  try {
+    const verifyUrl = `${process.env.NEXTAUTH_URL}/api/auth/verify-email?token=${token}`;
+    await sendTransactionalEmailByTemplate("email-verification-otp", candidate.email, {
+      firstName: getFirstName(candidate.firstName),
+      verificationUrl: verifyUrl,
+      expiryHours: Math.floor(48),
+      supportEmail: EMAIL_CONFIG.supportEmail,
+      currentYear: new Date().getFullYear(),
+    });
+  } catch (emailError) {
+    console.error("Failed to send email-verification-otp:", emailError);
+    // Do not fail the resend on email errors
+  }
 
   return { ok: true };
 }
@@ -371,21 +373,23 @@ export async function requestPasswordResetOtp(
     const code = await createPasswordResetOtpChallenge(candidate.id);
     logPasswordResetOtpEmail(email, code);
 
-    // Send password-reset-request email asynchronously
-    (async () => {
-      try {
-        const resetUrl = `${process.env.NEXTAUTH_URL}/reset-password?email=${encodeURIComponent(email)}`;
-        await sendTransactionalEmailByTemplate("password-reset-request", email, {
-          firstName: getFirstName(candidate.firstName),
-          resetPasswordUrl: resetUrl,
-          supportEmail: EMAIL_CONFIG.supportEmail,
-          currentYear: new Date().getFullYear(),
-        });
-      } catch (emailError) {
-        console.error("Failed to send password-reset-request:", emailError);
-        // Do not fail the reset request on email errors
-      }
-    })();
+    // Awaited, not a detached IIFE — same failure mode as
+    // requestRegistrationOtp above (killed before it ever reaches
+    // sendEmail on the serverless runtime). Response shape/timing is
+    // unchanged either way — a failed send still can't disclose whether
+    // the account exists (see the doc comment on this function).
+    try {
+      const resetUrl = `${process.env.NEXTAUTH_URL}/reset-password?email=${encodeURIComponent(email)}`;
+      await sendTransactionalEmailByTemplate("password-reset-request", email, {
+        firstName: getFirstName(candidate.firstName),
+        resetPasswordUrl: resetUrl,
+        supportEmail: EMAIL_CONFIG.supportEmail,
+        currentYear: new Date().getFullYear(),
+      });
+    } catch (emailError) {
+      console.error("Failed to send password-reset-request:", emailError);
+      // Do not fail the reset request on email errors
+    }
 
     const devCode = process.env.NODE_ENV !== "production" ? code : undefined;
     return { ok: true, data: { otpSent: true, ...(devCode ? { devCode } : {}) } };

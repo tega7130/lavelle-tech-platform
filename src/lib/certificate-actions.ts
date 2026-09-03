@@ -233,31 +233,31 @@ export async function issueCertificate(sittingId: string, mintedByStaffId: strin
     return cert;
   });
 
-  // Send certificate-issued email asynchronously — do not block the transaction
+  // Send certificate-issued email — awaited, not a detached IIFE (see
+  // exam-builder-actions.ts's createExamWindow for why). Still never
+  // fails the issuance itself on an email error.
   if (emailData) {
     const data: CertificateEmailData = emailData;
-    (async () => {
-      try {
-        const certificateDownloadUrl = `${process.env.NEXTAUTH_URL}/portal/credentials/${data.certificateId}/download`;
-        const certificateVerificationUrl = `${process.env.NEXTAUTH_URL}/verify/${data.certificateNumber}`;
+    try {
+      const certificateDownloadUrl = `${process.env.NEXTAUTH_URL}/portal/credentials/${data.certificateId}/download`;
+      const certificateVerificationUrl = `${process.env.NEXTAUTH_URL}/verify/${data.certificateNumber}`;
 
-        await sendTransactionalEmailByTemplate("certificate-issued", data.email, {
-          firstName: getFirstName(data.firstName),
-          programmeName: data.programmeTitle,
-          tier: data.tier,
-          grade: BAND_LABEL[data.band],
-          certificateId: data.certificateNumber,
-          issueDate: data.issuedAt.toLocaleDateString(),
-          certificateDownloadUrl,
-          certificateVerificationUrl,
-          supportEmail: EMAIL_CONFIG.supportEmail,
-          currentYear: new Date().getFullYear(),
-        });
-      } catch (emailError) {
-        console.error("Failed to send certificate-issued email:", emailError);
-        // Do not fail the certificate issuance on email errors
-      }
-    })();
+      await sendTransactionalEmailByTemplate("certificate-issued", data.email, {
+        firstName: getFirstName(data.firstName),
+        programmeName: data.programmeTitle,
+        tier: data.tier,
+        grade: BAND_LABEL[data.band],
+        certificateId: data.certificateNumber,
+        issueDate: data.issuedAt.toLocaleDateString(),
+        certificateDownloadUrl,
+        certificateVerificationUrl,
+        supportEmail: EMAIL_CONFIG.supportEmail,
+        currentYear: new Date().getFullYear(),
+      });
+    } catch (emailError) {
+      console.error("Failed to send certificate-issued email:", emailError);
+      // Do not fail the certificate issuance on email errors
+    }
   }
 
   return certificate;
@@ -577,33 +577,33 @@ export async function revokeCertificate(id: string, reason: string, staffId: str
     return { certificate, result };
   });
 
-  // Send certificate-revoked email asynchronously — do not block the revocation
-  (async () => {
-    try {
-      const candidate = await prisma.candidate.findUniqueOrThrow({
-        where: { id: updated.certificate.candidateId },
-      });
+  // Send certificate-revoked email — awaited, not a detached IIFE (see
+  // exam-builder-actions.ts's createExamWindow for why). Still never
+  // fails the revocation itself on an email error.
+  try {
+    const candidate = await prisma.candidate.findUniqueOrThrow({
+      where: { id: updated.certificate.candidateId },
+    });
 
-      const appealDeadlineDate = new Date();
-      appealDeadlineDate.setDate(appealDeadlineDate.getDate() + EMAIL_CONFIG.appealDeadlineDays);
+    const appealDeadlineDate = new Date();
+    appealDeadlineDate.setDate(appealDeadlineDate.getDate() + EMAIL_CONFIG.appealDeadlineDays);
 
-      await sendTransactionalEmailByTemplate("certificate-revoked", candidate.email, {
-        firstName: getFirstName(candidate.firstName),
-        programmeName: updated.certificate.programmeTitle,
-        tier: updated.certificate.tier,
-        certificateId: updated.certificate.certificateNumber,
-        revocationReason: trimmedReason,
-        appealDeadlineDate: appealDeadlineDate.toLocaleDateString(),
-        appealInstructionsUrl: `${process.env.NEXTAUTH_URL}/appeals/new`,
-        supportEmail: EMAIL_CONFIG.supportEmail,
-        securityContactEmail: EMAIL_CONFIG.securityContactEmail,
-        currentYear: new Date().getFullYear(),
-      });
-    } catch (emailError) {
-      console.error("Failed to send certificate-revoked email:", emailError);
-      // Do not fail the revocation on email errors
-    }
-  })();
+    await sendTransactionalEmailByTemplate("certificate-revoked", candidate.email, {
+      firstName: getFirstName(candidate.firstName),
+      programmeName: updated.certificate.programmeTitle,
+      tier: updated.certificate.tier,
+      certificateId: updated.certificate.certificateNumber,
+      revocationReason: trimmedReason,
+      appealDeadlineDate: appealDeadlineDate.toLocaleDateString(),
+      appealInstructionsUrl: `${process.env.NEXTAUTH_URL}/appeals/new`,
+      supportEmail: EMAIL_CONFIG.supportEmail,
+      securityContactEmail: EMAIL_CONFIG.securityContactEmail,
+      currentYear: new Date().getFullYear(),
+    });
+  } catch (emailError) {
+    console.error("Failed to send certificate-revoked email:", emailError);
+    // Do not fail the revocation on email errors
+  }
 
   return updated.result;
 }

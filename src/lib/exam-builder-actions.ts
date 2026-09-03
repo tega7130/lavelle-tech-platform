@@ -376,27 +376,33 @@ export async function createExamWindow(examId: string, input: ExamWindowInput, s
     ipAddress,
   });
 
-  // Send exam-scheduled emails to eligible candidates asynchronously
-  (async () => {
-    try {
-      const exam = await prisma.exam.findUniqueOrThrow({
-        where: { id: examId },
-        include: { programme: true },
-      });
+  // Awaited, not a detached IIFE — on the serverless runtime the response
+  // can go out (and the instance be frozen/recycled) before an un-awaited
+  // promise ever reaches sendEmail, so these emails would silently never
+  // send. Per-candidate sends run in parallel (not a sequential loop) so
+  // awaiting here doesn't turn a large enrolment list into a slow chain
+  // that risks the action itself timing out; one candidate's failure still
+  // can't stop the others (own try/catch each) or fail the window creation.
+  try {
+    const exam = await prisma.exam.findUniqueOrThrow({
+      where: { id: examId },
+      include: { programme: true },
+    });
 
-      // Find all candidates eligible for this exam (enrolled in the programme)
-      const enrolments = await prisma.enrolment.findMany({
-        where: {
-          programmeId: exam.programmeId,
-          status: { in: ["ACTIVE", "COMPLETED"] },
-        },
-        include: { candidate: true },
-        distinct: ["candidateId"],
-      });
+    // Find all candidates eligible for this exam (enrolled in the programme)
+    const enrolments = await prisma.enrolment.findMany({
+      where: {
+        programmeId: exam.programmeId,
+        status: { in: ["ACTIVE", "COMPLETED"] },
+      },
+      include: { candidate: true },
+      distinct: ["candidateId"],
+    });
 
-      const currentYear = new Date().getFullYear();
+    const currentYear = new Date().getFullYear();
 
-      for (const enrolment of enrolments) {
+    await Promise.all(
+      enrolments.map(async (enrolment) => {
         try {
           await sendTransactionalEmailByTemplate("exam-scheduled", enrolment.candidate.email, {
             firstName: getFirstName(enrolment.candidate.firstName),
@@ -420,12 +426,12 @@ export async function createExamWindow(examId: string, input: ExamWindowInput, s
           );
           // Continue with next candidate if one fails
         }
-      }
-    } catch (emailError) {
-      console.error("Failed to send exam-scheduled emails:", emailError);
-      // Do not fail the window creation on email errors
-    }
-  })();
+      })
+    );
+  } catch (emailError) {
+    console.error("Failed to send exam-scheduled emails:", emailError);
+    // Do not fail the window creation on email errors
+  }
 
   return window;
 }

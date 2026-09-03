@@ -112,21 +112,23 @@ export async function requestStaffLoginOtpCore(email: string, ip: string | null)
 
   const code = await createStaffLoginOtpChallenge(staff.id);
 
-  // Fire-and-forget, same discipline as requestStaffPasswordResetCore's
-  // email send — a provider hiccup must not fail (or reveal anything
-  // about) the request itself.
-  (async () => {
-    try {
-      await sendTransactionalEmailByTemplate("email-verification-otp", staff.email, {
-        firstName: getFirstName(staff.name),
-        otpCode: code,
-        otpExpiryMinutes: STAFF_LOGIN_OTP_EXPIRY_MINUTES,
-        currentYear: new Date().getFullYear(),
-      });
-    } catch (emailError) {
-      console.error("Failed to send staff login OTP email:", emailError);
-    }
-  })();
+  // Awaited, not a detached IIFE. This used to say "fire-and-forget, same
+  // discipline as requestStaffPasswordResetCore's email send" — that
+  // discipline turned out to be the bug: on the serverless runtime an
+  // un-awaited promise can be killed before it ever reaches sendEmail, so
+  // the OTP silently never sends. Response contract is unchanged either
+  // way — a provider hiccup still can't fail or reveal anything about the
+  // request itself.
+  try {
+    await sendTransactionalEmailByTemplate("email-verification-otp", staff.email, {
+      firstName: getFirstName(staff.name),
+      otpCode: code,
+      otpExpiryMinutes: STAFF_LOGIN_OTP_EXPIRY_MINUTES,
+      currentYear: new Date().getFullYear(),
+    });
+  } catch (emailError) {
+    console.error("Failed to send staff login OTP email:", emailError);
+  }
 
   await recordAuditEvent(prisma, {
     subjectType: "staff",
