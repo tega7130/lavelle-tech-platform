@@ -1501,7 +1501,7 @@ function StandaloneExamForm({ onClose, onCreated }: { onClose: () => void; onCre
   const [topics, setTopics] = React.useState<{ id: string; name: string }[] | null>(null);
   const [title, setTitle] = React.useState("");
   const [code, setCode] = React.useState("");
-  const [tier, setTier] = React.useState<"FOUNDATION" | "SPECIALIST">("SPECIALIST");
+  const [tier, setTier] = React.useState<"FOUNDATION" | "SPECIALIST" | "ADVANCED_PRACTITIONER">("SPECIALIST");
   const [topicId, setTopicId] = React.useState<string>("__new__");
   const [newTopicName, setNewTopicName] = React.useState("");
   const [busy, setBusy] = React.useState(false);
@@ -1556,11 +1556,9 @@ function StandaloneExamForm({ onClose, onCreated }: { onClose: () => void; onCre
           options={[
             { value: "FOUNDATION", label: "Foundation" },
             { value: "SPECIALIST", label: "Specialist" },
+            { value: "ADVANCED_PRACTITIONER", label: "Advanced Practitioner" },
           ]}
         />
-        <p className="text-neutral-500 text-[11.5px] mt-1">
-          Advanced Practitioner isn&apos;t available for standalone exams — it requires a completed Specialist enrolment in the same category, which only a linked programme provides.
-        </p>
       </div>
       <div>
         <Label>Topic / specialization</Label>

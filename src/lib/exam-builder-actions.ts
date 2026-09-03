@@ -61,7 +61,11 @@ export async function createExam(programmeId: string, staffId: string, ipAddress
 export interface CreateStandaloneExamInput {
   title: string;
   code: string;
-  tier: "FOUNDATION" | "SPECIALIST"; // ADVANCED_PRACTITIONER deliberately excluded — its prerequisite (exam-eligibility.ts) requires a completed Specialist enrolment in the same category, a ladder concept a standalone exam never participates in.
+  // ADVANCED_PRACTITIONER is allowed here — checkExamEligibility (exam-eligibility.ts)
+  // gates it on a completed Specialist enrolment anywhere in the exam's category, not
+  // on the exam's own (shell) programme, so a standalone exam participates in that
+  // ladder exactly like a linked one.
+  tier: "FOUNDATION" | "SPECIALIST" | "ADVANCED_PRACTITIONER";
   categoryId?: string | null;
   newCategoryName?: string | null;
 }
@@ -86,9 +90,6 @@ export async function createStandaloneExam(input: CreateStandaloneExamInput, sta
   if (!title) throw new Error("Examination title is required.");
   const code = input.code.trim().toUpperCase();
   if (!code) throw new Error("Examination code is required.");
-  if (input.tier !== "FOUNDATION" && input.tier !== "SPECIALIST") {
-    throw new Error("A standalone examination must be Foundation or Specialist level.");
-  }
 
   const exam = await prisma.$transaction(async (tx) => {
     let categoryId = input.categoryId ?? null;

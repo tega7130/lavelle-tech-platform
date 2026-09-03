@@ -771,12 +771,20 @@ describe("exam-builder-actions — lifecycle and validation additions", () => {
 });
 
 describe("standalone exams and optional eligibility requirements", () => {
-  it("createStandaloneExam creates an invisible shell programme, restricted to Foundation/Specialist tier", async () => {
+  it("createStandaloneExam creates an invisible shell programme, and allows any tier including Advanced Practitioner", async () => {
     const { staff, category } = await seedStaffAndCategory();
 
-    await expect(
-      createStandaloneExam({ title: "Advanced Marketing Examination", code: `MKT-${crypto.randomUUID().slice(0, 6)}`, tier: "ADVANCED_PRACTITIONER" as never }, staff.id, null)
-    ).rejects.toThrow("Foundation or Specialist");
+    const advCode = `MKT-${crypto.randomUUID().slice(0, 6)}`;
+    const advExam = await createStandaloneExam(
+      { title: "Advanced Practice Examination", code: advCode, tier: "ADVANCED_PRACTITIONER", newCategoryName: `Marketing ${crypto.randomUUID()}` },
+      staff.id,
+      null
+    );
+    const advShell = await testPrisma.programme.findUniqueOrThrow({ where: { id: advExam.programmeId } });
+    expect(advShell.tier).toBe("ADVANCED_PRACTITIONER");
+    await testPrisma.exam.delete({ where: { id: advExam.id } });
+    await testPrisma.programme.delete({ where: { id: advShell.id } });
+    await testPrisma.programmeCategory.delete({ where: { id: advShell.categoryId } });
 
     const code = `MKT-${crypto.randomUUID().slice(0, 6)}`;
     const exam = await createStandaloneExam({ title: "Advanced Marketing Examination", code, tier: "SPECIALIST", newCategoryName: `Marketing ${crypto.randomUUID()}` }, staff.id, null);
