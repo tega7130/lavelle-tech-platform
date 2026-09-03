@@ -302,23 +302,28 @@ export async function requestStaffPasswordResetCore(email: string, ip: string | 
   // /api/staff/activate (the invitation path), not /staff/reset-password.
   // The real send below already carries the correct resetPasswordUrl.
 
-  // Send admin-password-reset-request email asynchronously
-  (async () => {
-    try {
-      const resetPasswordUrl = `${process.env.NEXTAUTH_URL}/staff/reset-password?token=${token}`;
-      await sendTransactionalEmailByTemplate("admin-password-reset-request", staff.email, {
-        firstName: getFirstName(staff.name),
-        role: staff.role,
-        resetPasswordUrl,
-        expiryMinutes: PASSWORD_RESET_TOKEN_TTL_MS / 60_000,
-        supportEmail: "support@lavelle.ng", // Use a sensible default
-        currentYear: new Date().getFullYear(),
-      });
-    } catch (emailError) {
-      console.error("Failed to send admin-password-reset-request:", emailError);
-      // Do not fail the password reset request on email errors
-    }
-  })();
+  // Awaited, not a detached IIFE (that was the actual bug: on a serverless
+  // runtime the function's response can go out — and the instance can be
+  // frozen or recycled — before a fire-and-forget promise ever reaches
+  // sendEmail, so the send silently never happens at all: no EmailLog row,
+  // no console.error, nothing. staff-invite.ts's inviteStaff hit the exact
+  // same failure mode and was fixed the same way). Still never throws past
+  // this point and never changes what the caller sees either way (README
+  // A4) — a provider failure must stay indistinguishable from "no such
+  // account", so it's caught and logged, not surfaced.
+  try {
+    const resetPasswordUrl = `${process.env.NEXTAUTH_URL}/staff/reset-password?token=${token}`;
+    await sendTransactionalEmailByTemplate("admin-password-reset-request", staff.email, {
+      firstName: getFirstName(staff.name),
+      role: staff.role,
+      resetPasswordUrl,
+      expiryMinutes: PASSWORD_RESET_TOKEN_TTL_MS / 60_000,
+      supportEmail: "support@lavelle.ng", // Use a sensible default
+      currentYear: new Date().getFullYear(),
+    });
+  } catch (emailError) {
+    console.error("Failed to send admin-password-reset-request:", emailError);
+  }
 
   await recordAuditEvent(prisma, {
     subjectType: "staff",
