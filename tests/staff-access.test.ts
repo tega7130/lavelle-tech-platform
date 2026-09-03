@@ -8,12 +8,13 @@ import {
   staffSignInCore,
   setStaffPasswordCore,
   resendStaffInvitationCore,
+  requestStaffPasswordResetCore,
   requestStaffLoginOtpCore,
   verifyStaffLoginOtpCore,
   GENERIC_SIGNIN_ERROR,
   LOCKOUT_MESSAGE,
 } from "@/lib/staff-auth-actions";
-import { createInvitationTokenRecord, previewInvitationToken, consumeInvitationToken } from "@/lib/staff-invitation";
+import { createInvitationTokenRecord, previewInvitationToken, consumeInvitationToken, PASSWORD_RESET_TOKEN_TTL_MS } from "@/lib/staff-invitation";
 import { createStaffLoginOtpChallenge } from "@/lib/staff-login-otp";
 import { deactivateStaff } from "@/lib/rbac";
 import { resolveRequest, assignRequest } from "@/lib/support";
@@ -229,6 +230,59 @@ describe("invitation tokens — hashed, single use, 48-hour expiry (README A2)",
   });
 });
 
+describe("requestStaffPasswordResetCore — admin password reset request (silent, ACTIVE-only, short-lived token)", () => {
+  it("issues a token only for an ACTIVE account, silently no-ops for INVITED, SUSPENDED, DEACTIVATED and unknown addresses", async () => {
+    const active = await makeStaff("ACTIVE");
+    const invited = await makeStaff("INVITED");
+    const suspended = await makeStaff("SUSPENDED");
+    const deactivated = await makeStaff("DEACTIVATED");
+    const ip = () => `203.0.113.${crypto.randomInt(2, 254)}`;
+
+    await requestStaffPasswordResetCore(active.email, ip());
+    const activeToken = await testPrisma.staffInvitationToken.findFirst({ where: { staffId: active.id, consumedAt: null } });
+    expect(activeToken).not.toBeNull();
+
+    for (const staff of [invited, suspended, deactivated]) {
+      await requestStaffPasswordResetCore(staff.email, ip());
+      const token = await testPrisma.staffInvitationToken.findFirst({ where: { staffId: staff.id } });
+      expect(token).toBeNull();
+    }
+
+    // Unknown address — resolves without throwing, no row created for anyone.
+    await expect(requestStaffPasswordResetCore(`no-such-staff-${crypto.randomUUID()}@example.com`, ip())).resolves.not.toThrow();
+
+    await cleanupStaff(active.id, invited.id, suspended.id, deactivated.id);
+  });
+
+  it("the issued token expires in ~30 minutes, not the 48-hour invitation window", async () => {
+    const active = await makeStaff("ACTIVE");
+    await requestStaffPasswordResetCore(active.email, `203.0.113.${crypto.randomInt(2, 254)}`);
+
+    const token = await testPrisma.staffInvitationToken.findFirstOrThrow({ where: { staffId: active.id, consumedAt: null } });
+    const ttlMs = token.expiresAt.getTime() - Date.now();
+    expect(ttlMs).toBeGreaterThan(0);
+    expect(ttlMs).toBeLessThanOrEqual(PASSWORD_RESET_TOKEN_TTL_MS);
+    expect(ttlMs).toBeGreaterThan(PASSWORD_RESET_TOKEN_TTL_MS - 60_000); // within a minute of the expected 30-minute TTL
+
+    await cleanupStaff(active.id);
+  });
+
+  it("a second request invalidates the first token — only one live reset link per account (README A2)", async () => {
+    const active = await makeStaff("ACTIVE");
+    const ip = () => `203.0.113.${crypto.randomInt(2, 254)}`;
+
+    await requestStaffPasswordResetCore(active.email, ip());
+    const first = await testPrisma.staffInvitationToken.findFirstOrThrow({ where: { staffId: active.id, consumedAt: null } });
+
+    await requestStaffPasswordResetCore(active.email, ip());
+    const stillLive = await testPrisma.staffInvitationToken.findMany({ where: { staffId: active.id, consumedAt: null } });
+    expect(stillLive).toHaveLength(1);
+    expect(stillLive[0]!.id).not.toBe(first.id);
+
+    await cleanupStaff(active.id);
+  });
+});
+
 describe("setStaffPasswordCore — activation is one transaction (README A5 rule 3)", () => {
   it("a valid token sets the password, activates the account, consumes the token and creates a session together", async () => {
     const invited = await makeStaff("INVITED");
@@ -247,7 +301,10 @@ describe("setStaffPasswordCore — activation is one transaction (README A5 rule
     expect(tokenRow?.consumedAt).not.toBeNull();
 
     if (result.ok) {
-      const resolved = await resolveStaffFromToken(result.sessionToken);
+      // First-time activation always returns a session token (unlike a
+      // password reset, which returns null so the admin is not auto-signed in).
+      expect(result.sessionToken).not.toBeNull();
+      const resolved = await resolveStaffFromToken(result.sessionToken!);
       expect(resolved?.id).toBe(invited.id);
     }
 
@@ -295,6 +352,36 @@ describe("setStaffPasswordCore — activation is one transaction (README A5 rule
     expect(after.passwordHash).toBeNull();
 
     await cleanupStaff(invited.id, inviter.id);
+  });
+
+  it("a password-reset token (account already ACTIVE) sets the new password but does NOT auto-sign the admin in, and revokes every session already live on the account", async () => {
+    const active = await makeStaff("ACTIVE");
+
+    // A session that existed before the reset — must not survive it.
+    const oldSessionToken = await createStaffSessionRecord(testPrisma, active.id, { userAgent: null, ipAddress: null });
+    expect((await resolveStaffFromToken(oldSessionToken))?.id).toBe(active.id);
+
+    const resetToken = await createInvitationTokenRecord(testPrisma, active.id, undefined, PASSWORD_RESET_TOKEN_TTL_MS);
+    const result = await setStaffPasswordCore(resetToken, "Br4nd-New-Pw!", "203.0.113.60", "test-agent");
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      // The whole point of a reset (vs. first-time activation): no session handed back.
+      expect(result.sessionToken).toBeNull();
+    }
+
+    const after = await testPrisma.staff.findUniqueOrThrow({ where: { id: active.id } });
+    expect(after.status).toBe("ACTIVE");
+    expect(after.passwordHash).not.toBeNull();
+
+    // The pre-existing session is now dead.
+    expect(await resolveStaffFromToken(oldSessionToken)).toBeNull();
+
+    const resetEvent = await testPrisma.auditEvent.findFirst({
+      where: { subjectType: "staff", subjectId: active.id, action: "staff.password_reset.completed" },
+    });
+    expect(resetEvent).not.toBeNull();
+
+    await cleanupStaff(active.id);
   });
 });
 

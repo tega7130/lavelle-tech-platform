@@ -68,7 +68,10 @@ export async function setStaffPassword(_prev: FormActionState, formData: FormDat
   const result = await core.setStaffPasswordCore(parsed.data.token, parsed.data.password, ip, userAgent);
   if (!result.ok) return { message: "This link has expired or was already used." };
 
-  await setStaffSessionCookie(result.sessionToken);
+  // sessionToken is null for a password reset (see setStaffPasswordCore) —
+  // that path deliberately does not sign the admin in; they return to
+  // /staff/sign-in and authenticate normally with the new password.
+  if (result.sessionToken) await setStaffSessionCookie(result.sessionToken);
   // Not a redirect() — the set-password page shows an activation
   // confirmation (role, who invited them) before the staff member moves
   // on themselves; the session cookie is already live.

@@ -2,8 +2,8 @@ import { prisma } from "@/lib/prisma";
 import { StaffStatus } from "@/generated/prisma/client";
 import { hashPassword, verifyPassword } from "@/lib/password";
 import { enforceRateLimit, RateLimitError } from "@/lib/rate-limit";
-import { createStaffSessionRecord } from "@/lib/staff-session";
-import { createInvitationTokenRecord, logStaffInvitationEmail, invalidateOutstandingStaffTokens, consumeInvitationToken } from "@/lib/staff-invitation";
+import { createStaffSessionRecord, revokeAllStaffSessions } from "@/lib/staff-session";
+import { createInvitationTokenRecord, logStaffInvitationEmail, invalidateOutstandingStaffTokens, consumeInvitationToken, PASSWORD_RESET_TOKEN_TTL_MS } from "@/lib/staff-invitation";
 import { recordAuditEvent } from "@/lib/audit";
 import { sendTransactionalEmailByTemplate } from "@/lib/send-transactional-email";
 import { getFirstName } from "@/lib/email-utils";
@@ -182,7 +182,7 @@ export async function verifyStaffLoginOtpCore(email: string, code: string, ip: s
 }
 
 export type SetStaffPasswordResult =
-  | { ok: true; sessionToken: string; name: string; role: string }
+  | { ok: true; sessionToken: string | null; name: string; role: string }
   | { ok: false };
 
 /**
@@ -192,6 +192,12 @@ export type SetStaffPasswordResult =
  * account was suspended in between), the password is set, and the
  * session is created — all together or none of it, so a partial failure
  * can never consume the token without setting the password.
+ *
+ * sessionToken is null for a password reset (wasInvited false — a reset
+ * token, per requestStaffPasswordResetCore's own guard, only ever exists
+ * for an already-ACTIVE account) so the caller does not auto-sign the
+ * admin in; it stays non-null for first-time invitation activation, which
+ * keeps its existing "set password and land in the console" behaviour.
  */
 export async function setStaffPasswordCore(token: string, password: string, ip: string | null, userAgent: string | null): Promise<SetStaffPasswordResult> {
   const passwordHash = await hashPassword(password);
@@ -222,7 +228,17 @@ export async function setStaffPasswordCore(token: string, password: string, ip: 
       ipAddress: ip,
     });
 
-    const sessionToken = await createStaffSessionRecord(tx, staff.id, { userAgent, ipAddress: ip });
+    // A password reset (not a first-time activation, which has no prior
+    // sessions to speak of) revokes every session live before the reset —
+    // a stolen/forgotten password shouldn't leave an old session usable
+    // after the account holder locks it down with a new one.
+    if (!wasInvited) await revokeAllStaffSessions(staff.id, tx);
+
+    // Only a first-time activation signs the admin straight in — a
+    // password reset returns to the normal sign-in page instead (README
+    // H3-style rule: resetting an existing account's credential should
+    // not itself be a way in).
+    const sessionToken = wasInvited ? await createStaffSessionRecord(tx, staff.id, { userAgent, ipAddress: ip }) : null;
     return { sessionToken, name: staff.name, role: staff.role };
   });
 
@@ -266,18 +282,20 @@ export async function requestStaffPasswordResetCore(email: string, ip: string | 
   if (!staff || staff.status !== StaffStatus.ACTIVE) return;
 
   await invalidateOutstandingStaffTokens(staff.id);
-  const token = await createInvitationTokenRecord(prisma, staff.id);
-  logStaffInvitationEmail(staff.email, token);
+  const token = await createInvitationTokenRecord(prisma, staff.id, undefined, PASSWORD_RESET_TOKEN_TTL_MS);
+  // Not logStaffInvitationEmail — that helper's dev-log URL points at
+  // /api/staff/activate (the invitation path), not /staff/reset-password.
+  // The real send below already carries the correct resetPasswordUrl.
 
   // Send admin-password-reset-request email asynchronously
   (async () => {
     try {
-      const resetPasswordUrl = `${process.env.NEXTAUTH_URL}/staff/set-password?token=${token}`;
+      const resetPasswordUrl = `${process.env.NEXTAUTH_URL}/staff/reset-password?token=${token}`;
       await sendTransactionalEmailByTemplate("admin-password-reset-request", staff.email, {
         firstName: getFirstName(staff.name),
         role: staff.role,
         resetPasswordUrl,
-        expiryMinutes: 30,
+        expiryMinutes: PASSWORD_RESET_TOKEN_TTL_MS / 60_000,
         supportEmail: "support@lavelle.ng", // Use a sensible default
         currentYear: new Date().getFullYear(),
       });
