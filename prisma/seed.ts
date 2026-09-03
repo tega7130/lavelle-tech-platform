@@ -773,64 +773,7 @@ async function main() {
   // programme behind each rather than a fabricated one. The rest stay
   // DRAFT — a programme with zero modules cannot legitimately be ACTIVE
   // Test programmes removed — only user-created programmes via admin UI should be displayed.
-  const draftSeeds = [] as const;
-
   const programmes: Record<string, Awaited<ReturnType<typeof prisma.programme.upsert>>> = { "ELR-201": elr };
-  for (const p of draftSeeds) {
-    const publishable = "publishable" in p && p.publishable;
-    programmes[p.code] = await prisma.programme.upsert({
-      where: { code: p.code },
-      // Explicit (not {}): this row may already exist DRAFT from a run
-      // before this programme was promoted to publishable — without
-      // re-asserting status/summary here, upsert's update:{} would leave
-      // a stale DRAFT row in place forever on repeat seeds.
-      update: publishable
-        ? { status: ProgrammeStatus.ACTIVE, summary: "summary" in p ? p.summary : undefined }
-        : {},
-      create: {
-        code: p.code,
-        title: p.title,
-        categoryId: categories[p.category]!.id,
-        tier: p.tier,
-        status: publishable ? ProgrammeStatus.ACTIVE : ProgrammeStatus.DRAFT,
-        summary: "summary" in p ? p.summary : `${p.title} — programme details to be completed by faculty.`,
-        feeMinor: p.feeMinor,
-        prerequisiteTier: "prerequisiteTier" in p ? p.prerequisiteTier : undefined,
-        createdByStaffId: academicAdmin.id,
-        ...TIER_DEFAULTS[p.tier],
-      },
-    });
-    if (publishable) {
-      const mod = await prisma.module.upsert({
-        where: { programmeId_weekNumber: { programmeId: programmes[p.code]!.id, weekNumber: 1 } },
-        update: {},
-        create: { programmeId: programmes[p.code]!.id, weekNumber: 1, title: "Week 1", orderIndex: 0 },
-      });
-      const existingLecture = await prisma.lecture.findFirst({ where: { moduleId: mod.id } });
-      if (!existingLecture) {
-        await prisma.lecture.create({
-          data: { moduleId: mod.id, orderIndex: 0, title: "Introduction", mediaKind: LectureMediaKind.SLIDES },
-        });
-      }
-      // These three have no certifying Exam record (only ELR-201 does) —
-      // weight just Quiz + Drafting, the two assessments they actually have.
-      // Clear any stale EXAMINATION row from an earlier seed run so a
-      // re-seed doesn't leave weights totalling more than 100%.
-      await prisma.assessmentWeighting.deleteMany({
-        where: { programmeId: programmes[p.code]!.id, kind: AssessmentKind.EXAMINATION },
-      });
-      for (const [kind, weightPercent] of [
-        [AssessmentKind.QUIZ, 40],
-        [AssessmentKind.DRAFTING, 60],
-      ] as const) {
-        await prisma.assessmentWeighting.upsert({
-          where: { programmeId_kind: { programmeId: programmes[p.code]!.id, kind } },
-          update: { weightPercent },
-          create: { programmeId: programmes[p.code]!.id, kind, weightPercent },
-        });
-      }
-    }
-  }
 
   // ── Candidates ──
   // No seeded candidates — only Tega Odia (registered via the application flow) is present.
