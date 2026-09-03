@@ -772,37 +772,8 @@ async function main() {
   // published listings matching the seeded programmes") have a real
   // programme behind each rather than a fabricated one. The rest stay
   // DRAFT — a programme with zero modules cannot legitimately be ACTIVE
-  // (rule 2) — which also gives the admin publish-checks something real
-  // to refuse (CCP-101 demonstrates "programme is DRAFT" live).
-  const draftSeeds = [
-    {
-      code: "TLC-201", title: "Tax Law & Compliance", tier: ProgrammeTier.SPECIALIST, category: "Tax & Revenue", feeMinor: 45_000_000,
-      publishable: true,
-      summary: "Revenue practice, assessment disputes and advisory work before the tax authorities, taught by practitioners who appear before them.",
-    },
-    {
-      code: "MAL-201", title: "Maritime & Admiralty Law", tier: ProgrammeTier.SPECIALIST, category: "Maritime & Admiralty", feeMinor: 45_000_000,
-      publishable: true,
-      summary: "Carriage, charterparties, cargo claims and admiralty jurisdiction in Nigerian waters.",
-    },
-    {
-      code: "RCF-101", title: "Regulatory Compliance Foundations", tier: ProgrammeTier.FOUNDATION, category: "Regulatory Compliance", feeMinor: 28_000_000,
-      publishable: true,
-      summary: "The regulator's framework, filing obligations and the compliance advisory role, for graduates and non-lawyers in regulated industries.",
-    },
-    { code: "CCP-101", title: "Corporate & Commercial Practice", tier: ProgrammeTier.FOUNDATION, category: "Corporate & Commercial", feeMinor: 28_000_000 },
-    {
-      code: "AEP-301",
-      title: "Advanced Energy Practice",
-      tier: ProgrammeTier.ADVANCED_PRACTITIONER,
-      category: "Energy & Natural Resources",
-      feeMinor: 68_000_000,
-      prerequisiteTier: ProgrammeTier.SPECIALIST,
-    },
-    // Back the Verify-portal sample register faithfully (Handoff 00's "verify" reference data).
-    { code: "FCE-101", title: "Foundation Certificate in Energy Law", tier: ProgrammeTier.FOUNDATION, category: "Energy & Natural Resources", feeMinor: 28_000_000 },
-    { code: "IRP-101", title: "Introduction to Regulatory Practice", tier: ProgrammeTier.FOUNDATION, category: "Regulatory Compliance", feeMinor: 28_000_000 },
-  ] as const;
+  // Test programmes removed — only user-created programmes via admin UI should be displayed.
+  const draftSeeds = [] as const;
 
   const programmes: Record<string, Awaited<ReturnType<typeof prisma.programme.upsert>>> = { "ELR-201": elr };
   for (const p of draftSeeds) {
@@ -865,7 +836,8 @@ async function main() {
   // No seeded candidates — only Tega Odia (registered via the application flow) is present.
 
   // ── Slice 09: public website & publishing ───────────────────────────
-  const PUBLISHED_CODES = ["ELR-201", "TLC-201", "MAL-201", "RCF-101"] as const;
+  // Only user-created programmes are published; test seed data removed.
+  const PUBLISHED_CODES = [] as const;
   for (const [i, code] of PUBLISHED_CODES.entries()) {
     const programme = programmes[code]!;
     await prisma.programmeListing.upsert({
