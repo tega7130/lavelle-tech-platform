@@ -22,9 +22,12 @@ export function ContactForm({ listings }: { listings: { code: string; title: str
         <div className="w-[50px] h-[50px] mx-auto rounded-full bg-accent-2-100 border border-accent-2-300 flex items-center justify-center text-accent-2-800 text-[20px] font-bold">
           ✓
         </div>
-        <h3 className="font-heading font-semibold text-[20px] mt-[18px]">Thank you. That is with us</h3>
-        <p className="text-[13.5px] leading-[1.68] text-neutral-700 mt-[10px] mx-auto max-w-[38ch]">
-          Your enquiry is logged as <strong className="text-text">{state.reference}</strong>. A representative will reply within one working day.
+        <h3 className="font-heading font-semibold text-[20px] mt-[18px]">Your enquiry is with us</h3>
+        <p className="text-[13.5px] leading-[1.68] text-neutral-700 mt-[10px] mx-auto max-w-[48ch]">
+          Thank you for reaching out to Lavelle. Our team will review your enquiry and be in touch within one working day.
+        </p>
+        <p className="text-[13.5px] leading-[1.68] text-neutral-700 mt-[12px] mx-auto max-w-[48ch]">
+          We look forward to speaking with you.
         </p>
       </Reveal>
     );
