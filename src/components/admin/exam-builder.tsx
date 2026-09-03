@@ -1542,15 +1542,25 @@ function StandaloneExamForm({ onClose, onCreated }: { onClose: () => void; onCre
         <Label>Examination title</Label>
         <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Advanced Marketing Examination" />
       </div>
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <Label>Examination code</Label>
-          <Input value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="MKT-401" />
-        </div>
-        <div>
-          <Label>Level</Label>
-          <Segmented name="new-exam-tier" value={tier} onChange={(v) => setTier(v as typeof tier)} options={[{ value: "FOUNDATION", label: "Foundation" }, { value: "SPECIALIST", label: "Specialist" }]} />
-        </div>
+      <div>
+        <Label>Examination code</Label>
+        <Input value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="MKT-401" />
+      </div>
+      <div>
+        <Label>Level</Label>
+        <Segmented
+          name="new-exam-tier"
+          className="w-full [&>label]:flex-1 [&>label]:justify-center"
+          value={tier}
+          onChange={(v) => setTier(v as typeof tier)}
+          options={[
+            { value: "FOUNDATION", label: "Foundation" },
+            { value: "SPECIALIST", label: "Specialist" },
+          ]}
+        />
+        <p className="text-neutral-500 text-[11.5px] mt-1">
+          Advanced Practitioner isn&apos;t available for standalone exams — it requires a completed Specialist enrolment in the same category, which only a linked programme provides.
+        </p>
       </div>
       <div>
         <Label>Topic / specialization</Label>
