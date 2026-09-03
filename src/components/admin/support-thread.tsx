@@ -124,6 +124,18 @@ export function SupportThread({ request }: { request: Thread }) {
         </div>
       )}
 
+      {!request.candidate && request.enquiry && (
+        <div className="px-4 py-3 rounded-md bg-neutral-50 border border-divider mb-[var(--space-4)]">
+          <div className="text-[11px] text-neutral-500 tracking-[0.1em] uppercase mb-2">Enquiry Details</div>
+          <div className="text-[12.5px] text-neutral-700 space-y-1">
+            <div><strong>Name:</strong> {request.guestName}</div>
+            <div><strong>Email:</strong> {request.guestEmail}</div>
+            {request.enquiry.phone && <div><strong>Phone:</strong> {request.enquiry.phone}</div>}
+            {request.enquiry.programmeOfInterest && <div><strong>Programme:</strong> {request.enquiry.programmeOfInterest.title}</div>}
+          </div>
+        </div>
+      )}
+
       <div className="flex flex-col gap-2 mb-[var(--space-4)]">
         {!request.candidate && (
           <div className="self-start max-w-[70%]">
