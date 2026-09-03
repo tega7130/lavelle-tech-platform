@@ -7,7 +7,7 @@ import { submitEnquiryCore } from "@/lib/enquiry";
 const enquirySchema = z.object({
   name: z.string().trim().min(1, { error: "Enter your full name." }),
   email: z.email({ error: "Enter a valid email address." }),
-  phone: z.string().trim().optional(),
+  phone: z.string().trim().min(1, { error: "Enter your phone number." }),
   programmeOfInterestCode: z.string().trim().optional(),
   message: z.string().trim().min(1, { error: "Let us know what you'd like to ask." }),
   // Honeypot — a real visitor never sees or fills this field (hidden by CSS

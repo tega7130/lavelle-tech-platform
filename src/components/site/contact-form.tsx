@@ -48,8 +48,8 @@ export function ContactForm({ listings }: { listings: { code: string; title: str
 
       <Reveal delay={170} threshold={0.05} className="grid grid-cols-1 sm:grid-cols-2 gap-[13px] mt-[14px]">
         <div>
-          <label className="lv-lab block text-[12px] font-medium text-neutral-700 mb-[6px]">Phone (optional)</label>
-          <input name="phone" className={FIELD} placeholder="+234 803 552 8841" />
+          <label className="lv-lab block text-[12px] font-medium text-neutral-700 mb-[6px]">Phone</label>
+          <input name="phone" required className={FIELD} placeholder="+234 803 552 8841" />
         </div>
         <div>
           <label className="lv-lab block text-[12px] font-medium text-neutral-700 mb-[6px]">Years in practice</label>
