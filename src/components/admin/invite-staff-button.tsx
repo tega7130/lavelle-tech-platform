@@ -27,6 +27,10 @@ export function InviteStaffButton() {
   const [role, setRole] = React.useState<StaffRole>("SUPPORT" as StaffRole);
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  // Set right before closing the dialog, so the warning survives into the
+  // list view — an admin needs to see this, not just glimpse it for a
+  // moment inside the dialog they're about to dismiss.
+  const [emailWarning, setEmailWarning] = React.useState<string | null>(null);
 
   async function submit() {
     setError(null);
@@ -36,8 +40,11 @@ export function InviteStaffButton() {
     }
     setBusy(true);
     try {
-      await inviteStaffAction({ name, email, role });
+      const result = await inviteStaffAction({ name, email, role });
       setOpen(false);
+      if (!result.emailSent) {
+        setEmailWarning(`${name}'s account was created, but the invitation email could not be sent to ${email}. Use "Resend invitation" from the staff list to try again.`);
+      }
       setName("");
       setEmail("");
       router.refresh();
@@ -50,6 +57,12 @@ export function InviteStaffButton() {
 
   return (
     <>
+      {emailWarning && (
+        <div className="mb-3 flex items-start gap-2.5 rounded-md border border-warning-border bg-warning-bg px-3.5 py-2.5 text-[12.5px] text-warning-text">
+          <span className="flex-none font-bold">!</span>
+          <span>{emailWarning}</span>
+        </div>
+      )}
       <Button variant="primary" onClick={() => setOpen(true)}>
         Invite staff
       </Button>

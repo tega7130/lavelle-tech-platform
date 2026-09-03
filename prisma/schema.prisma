@@ -300,7 +300,14 @@ model Staff {
   // every existing display site (all seven prior slices) already reads
   // it this way. Documented deviation, not an oversight.
   name       String
-  email      String  @unique // the login
+  // Citext (not plain String, unlike this field's original declaration) —
+  // matches Candidate.email. Every lookup in this codebase lowercases the
+  // typed address first (staffSignInCore, OTP, password reset), so a
+  // case-sensitive column silently orphans any row whose stored email
+  // isn't already all-lowercase (e.g. a manually-inserted row) — sign-in,
+  // OTP and password reset all fail closed with no error, since a
+  // case-mismatched row is indistinguishable from "no such account".
+  email      String  @unique @db.Citext // the login
   phone      String?
   jobTitle   String?
   department String?

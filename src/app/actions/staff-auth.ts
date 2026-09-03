@@ -78,9 +78,9 @@ export async function setStaffPassword(_prev: FormActionState, formData: FormDat
   return { ok: true, data: { name: result.name, role: result.role } };
 }
 
-export async function resendStaffInvitation(staffId: string) {
+export async function resendStaffInvitation(staffId: string): Promise<{ emailSent: boolean }> {
   const actor = await requireStaffPermission(Permission.MANAGE_STAFF);
-  await core.resendStaffInvitationCore(staffId, actor.id);
+  return core.resendStaffInvitationCore(staffId, actor.id);
 }
 
 export async function requestStaffPasswordReset(email: string): Promise<void> {

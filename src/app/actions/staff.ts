@@ -11,9 +11,9 @@ export async function inviteStaffAction(params: { name: string; email: string; r
   const name = params.name.trim();
   const email = params.email.trim().toLowerCase();
   if (!name || !email) throw new Error("Name and email are required.");
-  const created = await inviteStaff({ invitedByStaffId: staff.id, name, email, role: params.role, jobTitle: params.jobTitle, department: params.department });
+  const { staff: created, emailSent } = await inviteStaff({ invitedByStaffId: staff.id, name, email, role: params.role, jobTitle: params.jobTitle, department: params.department });
   revalidatePath("/admin/staff");
-  return created;
+  return { staff: created, emailSent };
 }
 
 export async function applyRolePresetAction(targetStaffId: string, role: StaffRole) {

@@ -4,6 +4,7 @@ import { hashPassword, verifyPassword } from "@/lib/password";
 import { enforceRateLimit, RateLimitError } from "@/lib/rate-limit";
 import { createStaffSessionRecord, revokeAllStaffSessions } from "@/lib/staff-session";
 import { createInvitationTokenRecord, logStaffInvitationEmail, invalidateOutstandingStaffTokens, consumeInvitationToken, PASSWORD_RESET_TOKEN_TTL_MS } from "@/lib/staff-invitation";
+import { sendStaffInvitationEmail } from "@/lib/staff-invite";
 import { recordAuditEvent } from "@/lib/audit";
 import { sendTransactionalEmailByTemplate } from "@/lib/send-transactional-email";
 import { getFirstName } from "@/lib/email-utils";
@@ -246,13 +247,25 @@ export async function setStaffPasswordCore(token: string, password: string, ip: 
   return { ok: true, ...result };
 }
 
-/** Requires manage_staff (checked by the caller). Resending invalidates every outstanding token first — two live links for one account is a security hole (README A2). */
-export async function resendStaffInvitationCore(staffId: string, actingStaffId: string) {
+/**
+ * Requires manage_staff (checked by the caller). Resending invalidates
+ * every outstanding token first — two live links for one account is a
+ * security hole (README A2).
+ *
+ * Actually sends the staff-invitation email (via the same
+ * sendStaffInvitationEmail used by the original invite) — this
+ * previously only regenerated the token and logged a dev-console URL,
+ * so clicking "Resend invitation" silently sent nothing, which is
+ * exactly the wrong failure mode for the one button a staff member's
+ * missing invite is supposed to be fixed with.
+ */
+export async function resendStaffInvitationCore(staffId: string, actingStaffId: string): Promise<{ emailSent: boolean }> {
   const staff = await prisma.staff.findUniqueOrThrow({ where: { id: staffId } });
 
   await invalidateOutstandingStaffTokens(staffId);
   const token = await createInvitationTokenRecord(prisma, staffId, actingStaffId);
   logStaffInvitationEmail(staff.email, token);
+  const emailSent = await sendStaffInvitationEmail(staff, token);
 
   await recordAuditEvent(prisma, {
     actorStaffId: actingStaffId,
@@ -261,6 +274,8 @@ export async function resendStaffInvitationCore(staffId: string, actingStaffId: 
     action: "staff.invitation.resent",
     description: `Resent the invitation to ${staff.email}`,
   });
+
+  return { emailSent };
 }
 
 /**
