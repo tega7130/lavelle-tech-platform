@@ -45,7 +45,7 @@ function CarouselCard({ p, index }: { p: CarouselListing; index: number }) {
       <h3 className="font-heading font-semibold text-[19px] leading-[1.28] mt-5">
         {p.title}
       </h3>
-      <p className="text-[13px] leading-[1.62] text-neutral-600 mt-[9px] min-h-[63px]">
+      <p className="text-[13px] leading-[1.62] text-neutral-600 mt-[9px] line-clamp-3">
         {p.blurb}
       </p>
       <div className="flex gap-5 mt-5 pt-4 border-t border-dashed border-neutral-300 text-[11.5px] text-neutral-600">
