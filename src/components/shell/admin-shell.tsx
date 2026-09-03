@@ -37,7 +37,7 @@ export const ADMIN_NAV: AdminNavGroup[] = [
   {
     label: "Assessment",
     items: [
-      { key: "marking", label: "Marking queue", href: "/admin/marking", badge: "12" },
+      { key: "marking", label: "Marking queue", href: "/admin/marking" },
       { key: "exambuilder", label: "Exam builder", href: "/admin/exam-builder" },
       { key: "invigilation", label: "Invigilation", href: "/admin/invigilation" },
     ],
@@ -46,7 +46,7 @@ export const ADMIN_NAV: AdminNavGroup[] = [
     label: "People",
     items: [
       { key: "candidates", label: "Candidates", href: "/admin/candidates" },
-      { key: "support", label: "Support desk", href: "/admin/support", badge: "5" },
+      { key: "support", label: "Support desk", href: "/admin/support" },
     ],
   },
   {
@@ -88,6 +88,8 @@ export interface AdminShellProps {
   /** Overrides the breadcrumb derived from the active nav item's group/label. */
   crumb?: { section: string; title: string };
   headerTag?: string;
+  /** Badge counts keyed by nav item key (e.g., { marking: "5", support: "2" }) */
+  badges?: Record<string, string>;
   initialNotifications?: { unreadCount: number; items: StaffNotificationItem[] };
   children: React.ReactNode;
 }
@@ -102,7 +104,7 @@ function relativeTime(d: Date) {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
-export function AdminShell({ staff, crumb, headerTag, initialNotifications, children }: AdminShellProps) {
+export function AdminShell({ staff, crumb, headerTag, badges, initialNotifications, children }: AdminShellProps) {
   const router = useRouter();
   const pathname = usePathname();
   const [railOpen, setRailOpen] = React.useState(true);
@@ -221,6 +223,7 @@ export function AdminShell({ staff, crumb, headerTag, initialNotifications, chil
               )}
               {group.items.map((item) => {
                 const active = pathname?.startsWith(item.href);
+                const badgeValue = badges?.[item.key] ?? item.badge;
                 return (
                   <Link
                     key={item.key}
@@ -236,14 +239,14 @@ export function AdminShell({ staff, crumb, headerTag, initialNotifications, chil
                     {railOpen && (
                       <>
                         <span className="flex-1 min-w-0">{item.label}</span>
-                        {item.badge && (
+                        {badgeValue && (
                           <span className="inline-flex items-center rounded-full text-[10px] font-medium px-[7px] py-[2px] bg-accent-100 text-accent-700">
-                            {item.badge}
+                            {badgeValue}
                           </span>
                         )}
                       </>
                     )}
-                    {!railOpen && item.badge && (
+                    {!railOpen && badgeValue && (
                       <span className="absolute top-[5px] right-[5px] w-[7px] h-[7px] rounded-full bg-accent" />
                     )}
                   </Link>

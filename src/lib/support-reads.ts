@@ -76,6 +76,10 @@ export async function listMyRequests(candidateId: string) {
   });
 }
 
+export async function countOpenSupportRequests() {
+  return prisma.supportRequest.count({ where: { status: RequestStatus.OPEN } });
+}
+
 /**
  * README F rule 2: never accept a request id alone — a mismatched
  * candidateId returns null exactly like a request that doesn't exist,
