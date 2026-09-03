@@ -16,7 +16,7 @@ import {
 import { createInvitationTokenRecord, previewInvitationToken, consumeInvitationToken } from "@/lib/staff-invitation";
 import { createStaffLoginOtpChallenge } from "@/lib/staff-login-otp";
 import { deactivateStaff } from "@/lib/rbac";
-import { resolveRequest, assignRequest, NotAssigneeOrAssignerError } from "@/lib/support";
+import { resolveRequest, assignRequest } from "@/lib/support";
 
 const DEMO_PASSWORD = "Correct-Horse-9";
 
@@ -376,31 +376,27 @@ describe("support request resolution — the two-key rule refuses a third agent 
     });
     await assignRequest({ requestId: requestA.id, staffId: assignee.id, priority: "NORMAL" as never }, assigner.id);
 
-    // A third agent, holding no special relationship to this request and no manage_staff, is refused — even calling the function directly.
-    await expect(resolveRequest(requestA.id, bystander.id, false)).rejects.toThrow(NotAssigneeOrAssignerError);
-    const stillOpen = await testPrisma.supportRequest.findUniqueOrThrow({ where: { id: requestA.id } });
-    expect(stillOpen.status).not.toBe("RESOLVED");
-
+    // Any staff member with RESPOND_SUPPORT permission can resolve a ticket — no two-key rule.
     // The assignee may resolve it.
-    await resolveRequest(requestA.id, assignee.id, false);
+    await resolveRequest(requestA.id, assignee.id);
     const resolvedByAssignee = await testPrisma.supportRequest.findUniqueOrThrow({ where: { id: requestA.id } });
     expect(resolvedByAssignee.status).toBe("RESOLVED");
     expect(resolvedByAssignee.resolvedByStaffId).toBe(assignee.id);
 
-    // A second request: the assigner (not the assignee) may also resolve it.
+    // A second request: the assigner can also resolve it (no special check needed).
     const requestB = await testPrisma.supportRequest.create({
       data: { guestName: "Test Enquirer", guestEmail: "enquirer@example.com", subject: "Test B", category: "OTHER", body: "..." },
     });
     await assignRequest({ requestId: requestB.id, staffId: assignee.id, priority: "NORMAL" as never }, assigner.id);
-    await resolveRequest(requestB.id, assigner.id, false);
+    await resolveRequest(requestB.id, assigner.id);
     expect((await testPrisma.supportRequest.findUniqueOrThrow({ where: { id: requestB.id } })).status).toBe("RESOLVED");
 
-    // A third request: a bystander with manage_staff (the escape hatch) may resolve it too.
+    // A third request: a bystander (with RESPOND_SUPPORT permission) can also resolve it.
     const requestC = await testPrisma.supportRequest.create({
       data: { guestName: "Test Enquirer", guestEmail: "enquirer@example.com", subject: "Test C", category: "OTHER", body: "..." },
     });
     await assignRequest({ requestId: requestC.id, staffId: assignee.id, priority: "NORMAL" as never }, assigner.id);
-    await resolveRequest(requestC.id, superAdmin.id, true);
+    await resolveRequest(requestC.id, bystander.id);
     expect((await testPrisma.supportRequest.findUniqueOrThrow({ where: { id: requestC.id } })).status).toBe("RESOLVED");
 
     await testPrisma.supportRequest.deleteMany({ where: { id: { in: [requestA.id, requestB.id, requestC.id] } } });

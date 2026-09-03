@@ -67,27 +67,14 @@ export async function assignRequest(input: AssignRequestInput, actingStaffId: st
   });
 }
 
-export class NotAssigneeOrAssignerError extends Error {
-  constructor() {
-    super("Only the assignee, the person who assigned this request, or a staff member with manage_staff may resolve it.");
-    this.name = "NotAssigneeOrAssignerError";
-  }
-}
-
 /**
- * The two-key resolution rule, enforced HERE server-side (README B3/B5
- * rule 2), not by hiding the button: the assignee closes it because they
- * did the work; the assigner can close it because they may have handled
- * it another way and shouldn't have to chase someone to tidy the queue;
- * manage_staff is the escape hatch. Everyone else is refused, even
- * calling this function directly. `actingHasManageStaff` is resolved by
- * the caller from the already-loaded session (README A: "read the
- * permission set from the staff session"), not re-queried here.
+ * Resolve a support request. Any staff member with RESPOND_SUPPORT permission
+ * can resolve any ticket they view — no two-key approval required.
+ * Permission check is done by the caller (see requireStaffPermission in
+ * the Server Action wrapper).
  */
-export async function resolveRequest(requestId: string, actingStaffId: string, actingHasManageStaff: boolean) {
+export async function resolveRequest(requestId: string, actingStaffId: string) {
   const request = await prisma.supportRequest.findUniqueOrThrow({ where: { id: requestId } });
-  const allowed = request.assignedStaffId === actingStaffId || request.assignedByStaffId === actingStaffId || actingHasManageStaff;
-  if (!allowed) throw new NotAssigneeOrAssignerError();
 
   await prisma.$transaction(async (tx) => {
     await tx.supportRequest.update({
