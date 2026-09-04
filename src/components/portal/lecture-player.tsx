@@ -206,6 +206,15 @@ export function LecturePlayer({ enrolmentId, data }: { enrolmentId: string; data
   // candidate report: button must not show while the quiz form is still up).
   const [quizResultVisible, setQuizResultVisible] = React.useState(completed.has("quiz"));
   const readyToFinish = lectureFullyComplete && (!steps.includes("quiz") || (quizResultVisible && quizPassed));
+  // "quiz" only ever appears as a step on a module's last-authored lecture
+  // (deriveLectureSteps), so reaching this state always means: every other
+  // step of this lecture is done, and the one thing standing between here
+  // and the next module (or Complete Programme) is an unpassed quiz. The
+  // bottom nav renders a disabled CTA + explanation for this case instead
+  // of silently showing nothing, which is what a candidate who fails the
+  // quiz used to see.
+  const nonQuizStepsComplete = steps.filter((s) => s !== "quiz").every((s) => completed.has(s));
+  const quizGateBlocking = steps.includes("quiz") && nonQuizStepsComplete && !(quizResultVisible && quizPassed);
   // Every module that carries a quiz must have that quiz passed before the
   // programme can be marked complete — checking only the current lecture
   // isn't enough, since a candidate could reach the final lecture while an
@@ -567,7 +576,31 @@ export function LecturePlayer({ enrolmentId, data }: { enrolmentId: string; data
                 <Button onClick={handleCompleteProgramme} disabled={completingProgramme}>
                   {completingProgramme ? "Completing…" : "Complete Programme"}
                 </Button>
+              ) : quizGateBlocking ? (
+                <div className="flex flex-col items-end gap-1.5">
+                  <Button disabled>Complete Programme</Button>
+                  <span className="text-[12px] text-neutral-500 text-right max-w-[280px]">
+                    Pass this module&rsquo;s quiz to complete the programme.
+                  </span>
+                </div>
+              ) : readyToFinish ? (
+                // This lecture's own quiz is passed, but an earlier module's
+                // never was — allModuleQuizzesPassed reads that from `modules`
+                // (server-derived), not this lecture's own local quiz state.
+                <div className="flex flex-col items-end gap-1.5">
+                  <Button disabled>Complete Programme</Button>
+                  <span className="text-[12px] text-neutral-500 text-right max-w-[280px]">
+                    Pass every module&rsquo;s quiz to complete the programme.
+                  </span>
+                </div>
               ) : null
+            ) : quizGateBlocking ? (
+              <div className="flex flex-col items-end gap-1.5">
+                <Button disabled>Next module →</Button>
+                <span className="text-[12px] text-neutral-500 text-right max-w-[280px]">
+                  Pass this module&rsquo;s quiz to move to the next module.
+                </span>
+              </div>
             ) : readyToFinish && nextLectureId ? (
               // The quiz result (if any) stays on screen until the candidate
               // clicks through — this doesn't auto-advance, it just points
