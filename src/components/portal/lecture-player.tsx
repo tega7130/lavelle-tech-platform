@@ -41,6 +41,16 @@ const STEP_LABEL: Record<LectureStep, string> = {
   quiz: "Quiz",
 };
 
+// What to tell the candidate when they've reached the end of a lecture but
+// one authored step still isn't done — shown next to the disabled
+// Next-module/Complete-Programme button so that state is never silent.
+const STEP_BLOCK_MESSAGE: Record<LectureStep, (isLastLectureInProgramme: boolean) => string> = {
+  content: (isLast) => `Finish this lecture's content to ${isLast ? "complete the programme" : "move to the next module"}.`,
+  scenario: (isLast) => `Complete the scenario step to ${isLast ? "complete the programme" : "move to the next module"}.`,
+  drafting: (isLast) => `Submit the drafting exercise to ${isLast ? "complete the programme" : "move to the next module"}.`,
+  quiz: (isLast) => `Pass this module's quiz to ${isLast ? "complete the programme" : "move to the next module"}.`,
+};
+
 const POSITION_SAVE_INTERVAL_MS = 10_000;
 
 function draftLocalStorageKey(enrolmentId: string, lectureId: string) {
@@ -195,26 +205,23 @@ export function LecturePlayer({ enrolmentId, data }: { enrolmentId: string; data
   // when the attempt passes, so a failed/un-taken quiz blocks "Next module"
   // and "Complete Programme" until the candidate passes it.
   const [quizPassed, setQuizPassed] = React.useState(quizAttempt?.passed === true);
-  // Gated on every authored step of THIS lecture being done, not merely
-  // stepIndex reaching the last page — reaching the quiz page doesn't mean
-  // the quiz was submitted (QuizPlayer marks "quiz" complete on a PASS only).
-  const lectureFullyComplete = steps.every((s) => completed.has(s));
   // A quiz that was already passed in an earlier session (data.stepsCompleted)
   // stays "complete" while the candidate retakes it — quizResultVisible tracks
   // whether the CURRENT attempt has a result on screen, so the finishing CTA
   // doesn't appear mid-retake, before "Submit quiz" is clicked (rule from
   // candidate report: button must not show while the quiz form is still up).
   const [quizResultVisible, setQuizResultVisible] = React.useState(completed.has("quiz"));
-  const readyToFinish = lectureFullyComplete && (!steps.includes("quiz") || (quizResultVisible && quizPassed));
-  // "quiz" only ever appears as a step on a module's last-authored lecture
-  // (deriveLectureSteps), so reaching this state always means: every other
-  // step of this lecture is done, and the one thing standing between here
-  // and the next module (or Complete Programme) is an unpassed quiz. The
-  // bottom nav renders a disabled CTA + explanation for this case instead
-  // of silently showing nothing, which is what a candidate who fails the
-  // quiz used to see.
-  const nonQuizStepsComplete = steps.filter((s) => s !== "quiz").every((s) => completed.has(s));
-  const quizGateBlocking = steps.includes("quiz") && nonQuizStepsComplete && !(quizResultVisible && quizPassed);
+  // Which authored step (if any) is still standing between here and the
+  // next module / Complete Programme — not just "quiz". "content" is the
+  // one step whose own Next button was never gated on it being marked done
+  // (only scenario/drafting block advancing), so a candidate can reach the
+  // quiz having skipped past an unfinished/unwatched content step — most
+  // visibly when the video itself was broken and never fired onEnded. If
+  // this is left undetected, the candidate can pass the quiz repeatedly and
+  // still see nothing at the end, with no indication why. Checked in
+  // authored order so the message always names the step actually blocking.
+  const firstMissingOwnStep = steps.find((s) => (s === "quiz" ? !(quizResultVisible && quizPassed) : !completed.has(s)));
+  const readyToFinish = !firstMissingOwnStep;
   // Every module that carries a quiz must have that quiz passed before the
   // programme can be marked complete — checking only the current lecture
   // isn't enough, since a candidate could reach the final lecture while an
@@ -571,19 +578,24 @@ export function LecturePlayer({ enrolmentId, data }: { enrolmentId: string; data
               <Button onClick={goNextStep} disabled={isCurrentStepBlocking}>
                 Next
               </Button>
+            ) : firstMissingOwnStep ? (
+              // Something authored on THIS lecture isn't done yet (most often
+              // an unpassed quiz, but occasionally a skipped-past "content"
+              // step — see the comment on firstMissingOwnStep). Always show
+              // the CTA the candidate is working toward, disabled, naming
+              // what's actually blocking it — never render nothing here.
+              <div className="flex flex-col items-end gap-1.5">
+                <Button disabled>{isLastLectureInProgramme ? "Complete Programme" : "Next module →"}</Button>
+                <span className="text-[12px] text-neutral-500 text-right max-w-[280px]">
+                  {STEP_BLOCK_MESSAGE[firstMissingOwnStep](isLastLectureInProgramme)}
+                </span>
+              </div>
             ) : isLastLectureInProgramme ? (
-              readyToFinish && allModuleQuizzesPassed ? (
+              allModuleQuizzesPassed ? (
                 <Button onClick={handleCompleteProgramme} disabled={completingProgramme}>
                   {completingProgramme ? "Completing…" : "Complete Programme"}
                 </Button>
-              ) : quizGateBlocking ? (
-                <div className="flex flex-col items-end gap-1.5">
-                  <Button disabled>Complete Programme</Button>
-                  <span className="text-[12px] text-neutral-500 text-right max-w-[280px]">
-                    Pass this module&rsquo;s quiz to complete the programme.
-                  </span>
-                </div>
-              ) : readyToFinish ? (
+              ) : (
                 // This lecture's own quiz is passed, but an earlier module's
                 // never was — allModuleQuizzesPassed reads that from `modules`
                 // (server-derived), not this lecture's own local quiz state.
@@ -593,24 +605,17 @@ export function LecturePlayer({ enrolmentId, data }: { enrolmentId: string; data
                     Pass every module&rsquo;s quiz to complete the programme.
                   </span>
                 </div>
-              ) : null
-            ) : quizGateBlocking ? (
-              <div className="flex flex-col items-end gap-1.5">
-                <Button disabled>Next module →</Button>
-                <span className="text-[12px] text-neutral-500 text-right max-w-[280px]">
-                  Pass this module&rsquo;s quiz to move to the next module.
-                </span>
-              </div>
-            ) : readyToFinish && nextLectureId ? (
+              )
+            ) : nextLectureId ? (
               // The quiz result (if any) stays on screen until the candidate
               // clicks through — this doesn't auto-advance, it just points
               // at wherever nextLectureId actually is, in or out of module.
               <Link href={`/learn/${enrolmentId}/${nextLectureId}`} className="inline-flex">
                 <Button>{nextLectureCrossesModule ? "Next module →" : "Complete Lecture →"}</Button>
               </Link>
-            ) : readyToFinish ? (
+            ) : (
               <LockIcon width={14} height={14} className="text-neutral-400" />
-            ) : null}
+            )}
           </div>
           {completeError && <div className="text-[12px] text-[#b91c1c]">{completeError}</div>}
         </div>
