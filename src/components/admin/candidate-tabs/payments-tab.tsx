@@ -14,6 +14,7 @@ interface PaymentRow {
   provider: string;
   status: string;
   amountMinor: number;
+  initiatedAt: Date;
   enrolment: { programme: { title: string; code: string } } | null;
   receiptUrl: string | null;
 }
@@ -68,6 +69,7 @@ export function CandidatePaymentsTab({
                 <Th>Amount</Th>
                 <Th>Provider</Th>
                 <Th>Reference</Th>
+                <Th>Initiated</Th>
                 <Th>Status</Th>
                 <Th className="text-right pr-[var(--space-4)]">Actions</Th>
               </Tr>
@@ -79,6 +81,11 @@ export function CandidatePaymentsTab({
                   <Td className="tabular-nums">{formatNaira(p.amountMinor)}</Td>
                   <Td>{p.provider}</Td>
                   <Td className="text-[12px] text-neutral-600">{p.internalReference}</Td>
+                  <Td className="text-[12px] text-neutral-600">
+                    {p.initiatedAt.toLocaleDateString("en-NG", { year: "numeric", month: "short", day: "numeric" })}
+                    <br />
+                    {p.initiatedAt.toLocaleTimeString("en-NG", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+                  </Td>
                   <Td>
                     <Tag variant={PAYMENT_TAG[p.status] as TagVariant}>{p.status}</Tag>
                   </Td>
