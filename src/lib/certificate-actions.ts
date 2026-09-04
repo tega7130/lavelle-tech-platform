@@ -29,7 +29,7 @@ async function uploadCertificatePdfToCloudinary(
     const uploadStream = cloudinary.uploader.upload_stream(
       {
         folder: "lavelle/certificates",
-        resource_type: "auto",
+        resource_type: "raw",
         original_filename: `${certificateNumber}.pdf`,
         type: "authenticated",
       },

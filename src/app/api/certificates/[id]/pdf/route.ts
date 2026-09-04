@@ -28,6 +28,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     secure: true,
     sign_url: true,
     type: "authenticated",
+    resource_type: "raw",
     expiration: Math.floor(Date.now() / 1000) + 3600,
   });
 
