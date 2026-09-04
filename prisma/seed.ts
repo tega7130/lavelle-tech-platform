@@ -38,7 +38,6 @@ import { generateDeadlinesForEnrolment } from "../src/lib/deadline-generation";
 import { recomputeProgrammeResult } from "../src/lib/programme-result";
 import { resolveGradeBand } from "../src/lib/grading";
 import { renderCertificatePdf } from "../src/lib/certificate-pdf";
-import { tierLabel } from "../src/lib/format";
 
 // storage.ts is marked "server-only", which throws unconditionally
 // outside Next's own bundler (there is no such build step for this
@@ -94,16 +93,10 @@ async function seedCertificatePdf(input: {
   signatoryBlock: string;
   staffId: string;
 }) {
-  const bandLabel = { DISTINCTION: "Distinction", MERIT: "Merit", PASS: "Pass", REFER: "Refer" }[input.band];
   const pdfBytes = await renderCertificatePdf({
     certificateNumber: input.certificateNumber,
     holderName: input.holderName,
     programmeTitle: input.programmeTitle,
-    tierLabel: tierLabel(input.tier),
-    bandLabel,
-    pathway: input.pathway,
-    issuedAt: input.issuedAt,
-    signatoryBlock: input.signatoryBlock,
   });
   const storageKey = `certificates/${input.certificateNumber}.pdf`;
   await writeSeedBlob(storageKey, pdfBytes);

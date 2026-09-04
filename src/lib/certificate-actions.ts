@@ -8,7 +8,6 @@ cloudinary.config({
   api_key: process.env.CLOUDINARY_API_KEY,
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
-import { tierLabel } from "@/lib/format";
 import { sendTransactionalEmailByTemplate } from "@/lib/send-transactional-email";
 import { getFirstName } from "@/lib/email-utils";
 import { EMAIL_CONFIG } from "@/lib/email-config";
@@ -155,16 +154,7 @@ export async function issueCertificate(sittingId: string, mintedByStaffId: strin
     const issuedAt = new Date();
     const certBand = certificateBandFor(sitting.totalPercent);
 
-    const pdfBytes = await renderCertificatePdf({
-      certificateNumber,
-      holderName,
-      programmeTitle: programme.title,
-      tierLabel: tierLabel(programme.tier),
-      bandLabel: BAND_LABEL[certBand],
-      pathway,
-      issuedAt,
-      signatoryBlock: template.signatoryBlock,
-    });
+    const pdfBytes = await renderCertificatePdf({ certificateNumber, holderName, programmeTitle: programme.title });
 
     const storageKey = await uploadCertificatePdfToCloudinary(pdfBytes, certificateNumber);
     const pdfAsset = await tx.mediaAsset.create({
@@ -240,7 +230,7 @@ export async function issueCertificate(sittingId: string, mintedByStaffId: strin
     const data: CertificateEmailData = emailData;
     try {
       const certificateDownloadUrl = `${process.env.NEXTAUTH_URL}/portal/credentials/${data.certificateId}/download`;
-      const certificateVerificationUrl = `${process.env.NEXTAUTH_URL}/verify/${data.certificateNumber}`;
+      const certificateVerificationUrl = `${process.env.NEXTAUTH_URL}/verify?number=${encodeURIComponent(data.certificateNumber)}`;
 
       await sendTransactionalEmailByTemplate("certificate-issued", data.email, {
         firstName: getFirstName(data.firstName),
@@ -333,16 +323,7 @@ export async function issueCertificateForCourseCompletion(enrolmentId: string) {
     const holderName = `${candidate.firstName} ${candidate.lastName}`;
     const issuedAt = new Date();
 
-    const pdfBytes = await renderCertificatePdf({
-      certificateNumber,
-      holderName,
-      programmeTitle: programme.title,
-      tierLabel: tierLabel(programme.tier),
-      bandLabel: BAND_LABEL[band],
-      pathway: "PATHWAY",
-      issuedAt,
-      signatoryBlock: template.signatoryBlock,
-    });
+    const pdfBytes = await renderCertificatePdf({ certificateNumber, holderName, programmeTitle: programme.title });
     const storageKey = await uploadCertificatePdfToCloudinary(pdfBytes, certificateNumber);
     const pdfAsset = await tx.mediaAsset.create({
       data: {
@@ -465,16 +446,7 @@ export async function issueCertificateManually(input: ManualIssueInput, staffId:
     const holderName = `${candidate.firstName} ${candidate.lastName}`;
     const issuedAt = new Date();
 
-    const pdfBytes = await renderCertificatePdf({
-      certificateNumber,
-      holderName,
-      programmeTitle: programme.title,
-      tierLabel: tierLabel(programme.tier),
-      bandLabel: BAND_LABEL[input.band],
-      pathway,
-      issuedAt,
-      signatoryBlock: template.signatoryBlock,
-    });
+    const pdfBytes = await renderCertificatePdf({ certificateNumber, holderName, programmeTitle: programme.title });
     const storageKey = await uploadCertificatePdfToCloudinary(pdfBytes, certificateNumber);
     const pdfAsset = await tx.mediaAsset.create({
       data: {
@@ -637,11 +609,6 @@ export async function reissueCertificate(id: string, reason: string, staffId: st
       certificateNumber,
       holderName: original.holderName,
       programmeTitle: original.programmeTitle,
-      tierLabel: tierLabel(original.tier),
-      bandLabel: BAND_LABEL[original.band],
-      pathway: original.pathway,
-      issuedAt,
-      signatoryBlock: template.signatoryBlock,
     });
     const storageKey = await uploadCertificatePdfToCloudinary(pdfBytes, certificateNumber);
     const pdfAsset = await tx.mediaAsset.create({
