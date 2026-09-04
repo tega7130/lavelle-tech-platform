@@ -32,6 +32,7 @@ export function QuizPlayer({
   const [answers, setAnswers] = React.useState<Record<string, string>>({});
   const [result, setResult] = React.useState<SubmitResult | null>(null);
   const [busy, setBusy] = React.useState(false);
+  const [expandedQuestionId, setExpandedQuestionId] = React.useState<string | null>(null);
 
   async function start() {
     setBusy(true);
@@ -61,6 +62,12 @@ export function QuizPlayer({
   }
 
   if (result) {
+    // A one-card-per-question list turns unreadable once a quiz has 20-50
+    // questions — this shows a compact numbered grid (colored by correct/
+    // incorrect) that fits without scrolling, and reveals one question's
+    // explanation at a time on click, instead of a wall of expanded cards.
+    const expandedIndex = result.results.findIndex((r) => r.questionId === expandedQuestionId);
+    const expanded = expandedIndex === -1 ? null : result.results[expandedIndex]!;
     const grade = gradeTag(result.scorePercent, result.passMarkPercent);
     return (
       <Card elev="sm" className="text-center py-[var(--space-6)]">
@@ -75,15 +82,36 @@ export function QuizPlayer({
         </div>
         <div className="text-left mt-[var(--space-6)] flex flex-col gap-3 max-w-[520px] mx-auto">
           <CardKicker>Answer review</CardKicker>
-          {result.results.map((r, i) => (
-            <div key={r.questionId} className="border border-divider rounded-md p-3 text-[13px]">
+          <div className="flex flex-wrap gap-2">
+            {result.results.map((r, i) => {
+              const isExpanded = r.questionId === expandedQuestionId;
+              return (
+                <button
+                  key={r.questionId}
+                  type="button"
+                  onClick={() => setExpandedQuestionId(isExpanded ? null : r.questionId)}
+                  title={`Question ${i + 1}: ${r.isCorrect ? "Correct" : "Incorrect"}`}
+                  aria-pressed={isExpanded}
+                  className={`w-8 h-8 rounded-md flex items-center justify-center text-xs font-semibold shrink-0 cursor-pointer ${
+                    r.isCorrect
+                      ? "bg-[#e7f6ed] text-[#15803d] border border-[#bfe3cd]"
+                      : "bg-[#fdecec] text-[#b42318] border border-[#f3c4bf]"
+                  } ${isExpanded ? "ring-2 ring-offset-1 ring-accent" : ""}`}
+                >
+                  {i + 1}
+                </button>
+              );
+            })}
+          </div>
+          {expanded && (
+            <div className="border border-divider rounded-md p-3 text-[13px]">
               <div className="flex items-center gap-2">
-                <Tag variant={r.isCorrect ? "success" : "danger"}>{r.isCorrect ? "Correct" : "Incorrect"}</Tag>
-                <span className="text-neutral-500 text-xs">Question {i + 1}</span>
+                <Tag variant={expanded.isCorrect ? "success" : "danger"}>{expanded.isCorrect ? "Correct" : "Incorrect"}</Tag>
+                <span className="text-neutral-500 text-xs">Question {expandedIndex + 1}</span>
               </div>
-              {r.explanation && <p className="text-neutral-600 mt-1.5 mb-0">{r.explanation}</p>}
+              <p className="text-neutral-600 mt-1.5 mb-0">{expanded.explanation || "No explanation provided."}</p>
             </div>
-          ))}
+          )}
         </div>
       </Card>
     );
