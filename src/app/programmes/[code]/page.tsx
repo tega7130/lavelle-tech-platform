@@ -19,7 +19,13 @@ function ProgrammeVideo({ video, title }: { video: { embedUrl: string | null; di
         />
       ) : (
         // eslint-disable-next-line jsx-a11y/media-has-caption
-        <video src={video.directVideoUrl!} controls className="h-full w-full" />
+        <video
+          src={video.directVideoUrl!}
+          controls
+          controlsList="nodownload noremoteplayback"
+          disablePictureInPicture
+          className="h-full w-full"
+        />
       )}
     </div>
   );

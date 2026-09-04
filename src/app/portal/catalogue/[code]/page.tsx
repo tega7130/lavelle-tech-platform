@@ -44,7 +44,13 @@ export default async function ProgrammeDetailPage({ params }: { params: Promise<
             />
           ) : (
             // eslint-disable-next-line jsx-a11y/media-has-caption
-            <video src={directVideoUrl!} controls className="h-full w-full" />
+            <video
+              src={directVideoUrl!}
+              controls
+              controlsList="nodownload noremoteplayback"
+              disablePictureInPicture
+              className="h-full w-full"
+            />
           )}
         </div>
       )}

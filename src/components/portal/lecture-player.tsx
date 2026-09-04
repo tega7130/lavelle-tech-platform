@@ -408,6 +408,9 @@ export function LecturePlayer({ enrolmentId, data }: { enrolmentId: string; data
                       ref={videoRef}
                       src={lecture.videoUrl ?? undefined}
                       controls
+                      controlsList="nodownload noremoteplayback"
+                      disablePictureInPicture
+                      onContextMenu={(e) => e.preventDefault()}
                       className="w-full aspect-video"
                       onCanPlay={() => setMediaBuffering(false)}
                       onWaiting={() => setMediaBuffering(true)}
