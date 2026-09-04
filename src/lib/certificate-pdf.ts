@@ -181,7 +181,8 @@ export async function renderCertificatePdf(input: CertificatePdfInput): Promise<
   // ── Body sentence — the source design's fixed wording, programme
   // name substituted in; wraps and shrinks to stay within the space the
   // source design leaves before the signature block ──
-  const sentence = `has successfully completed the ${input.programmeTitle} Programme delivered by Lavelle Development Technologies Limited`;
+  const programmeTitle = /^the\s/i.test(input.programmeTitle) ? input.programmeTitle : `the ${input.programmeTitle}`;
+  const sentence = `has successfully completed ${programmeTitle} Programme delivered by Lavelle Development Technologies Limited`;
   const bodyMaxWidth = CONTENT_RIGHT - CONTENT_LEFT;
   let bodySize = 14.5;
   let bodyLines = wrapText(sentence, body, bodySize, bodyMaxWidth);
