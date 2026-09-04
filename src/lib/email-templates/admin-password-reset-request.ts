@@ -3,8 +3,8 @@ import { renderTemplate } from "@/lib/email-utils";
 export interface AdminPasswordResetRequestVariables {
   firstName: string;
   role: string;
-  resetPasswordUrl: string;
-  expiryMinutes: number;
+  otpCode: string;
+  otpExpiryMinutes: number;
   supportEmail: string;
   currentYear: number;
 }
@@ -24,8 +24,8 @@ export function generateAdminPasswordResetRequestEmail(variables: AdminPasswordR
     .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 8px 8px 0 0; text-align: center; }
     .header h1 { margin: 0; font-size: 24px; }
     .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 8px 8px; }
-    .info-box { background: white; padding: 20px; border-radius: 6px; margin: 20px 0; border-left: 4px solid #667eea; }
-    .action-button { display: inline-block; background: #667eea; color: white; padding: 12px 28px; border-radius: 4px; text-decoration: none; font-weight: 600; margin: 20px 0; }
+    .otp-box { background: white; padding: 20px; border-radius: 6px; margin: 20px 0; border-left: 4px solid #667eea; text-align: center; }
+    .otp-code { font-size: 32px; font-weight: bold; letter-spacing: 4px; color: #667eea; font-family: 'Courier New', monospace; margin: 15px 0; }
     .expiry-warning { background: #fff3cd; padding: 15px; border-radius: 6px; margin: 20px 0; border-left: 4px solid #ffc107; color: #856404; }
     .security-tips { background: #e8f4f8; padding: 20px; border-radius: 6px; margin: 20px 0; }
     .security-tips h3 { margin-top: 0; color: #0c5460; }
@@ -43,12 +43,16 @@ export function generateAdminPasswordResetRequestEmail(variables: AdminPasswordR
     <div class="content">
       <p>Hi {{firstName}},</p>
 
-      <p>You requested to reset your password for your {{role}} account at Lavelle Institute. Click the button below to create a new password.</p>
+      <p>You requested to reset your password for your {{role}} account at Lavelle Institute. Use the code below to verify your email and set a new password.</p>
 
-      <a href="{{resetPasswordUrl}}" class="action-button">Reset Password</a>
+      <div class="otp-box">
+        <p><strong>Your verification code is:</strong></p>
+        <div class="otp-code">{{otpCode}}</div>
+        <p style="margin: 10px 0; color: #666; font-size: 14px;">Enter this code in the password reset form</p>
+      </div>
 
       <div class="expiry-warning">
-        <strong>⏰ This link expires in {{expiryMinutes}} minutes</strong>
+        <strong>⏰ This code expires in {{otpExpiryMinutes}} minutes</strong>
         <p>If you didn't request this reset, you can safely ignore this email. Your account remains secure with your current password.</p>
       </div>
 
@@ -79,9 +83,13 @@ Hi {{firstName}},
 
 You requested to reset your password for your {{role}} account at Lavelle Institute.
 
-Reset Password: {{resetPasswordUrl}}
+Your verification code is:
 
-⏰ IMPORTANT: This link expires in {{expiryMinutes}} minutes
+  {{otpCode}}
+
+Enter this code in the password reset form.
+
+⏰ IMPORTANT: This code expires in {{otpExpiryMinutes}} minutes
 
 If you didn't request this reset, you can safely ignore this email. Your account remains secure with your current password.
 

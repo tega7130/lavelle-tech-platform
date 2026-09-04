@@ -78,6 +78,37 @@ export async function setStaffPassword(_prev: FormActionState, formData: FormDat
   return { ok: true, data: { name: result.name, role: result.role } };
 }
 
+/** Verify OTP for password reset. Silent response (returns error only if > 5 bad attempts). */
+export async function verifyStaffPasswordResetOtp(email: string, code: string): Promise<{ ok: boolean }> {
+  const result = await core.verifyStaffPasswordResetOtpCore(email.trim().toLowerCase(), code.trim());
+  // Return silent response for UX consistency: only the too_many_attempts failure is user-facing
+  return { ok: result === "ok" };
+}
+
+/** Set password after OTP verification in password reset flow. */
+export async function setStaffPasswordAfterOtpReset(
+  _prev: FormActionState,
+  formData: FormData
+): Promise<FormActionState> {
+  const raw = formToObject(formData);
+  const email = (raw.email || "").trim().toLowerCase();
+  const code = (raw.code || "").trim();
+  const password = raw.password || "";
+
+  if (!email || !code || !password) {
+    return { values: raw, message: "Email, code, and password are required" };
+  }
+
+  const ip = await getClientIp();
+  const userAgent = await getUserAgent();
+  const result = await core.setStaffPasswordAfterOtpResetCore(email, code, password, ip, userAgent);
+
+  if (!result.ok) return { values: raw, message: "Password reset failed. Code may have expired or already been used." };
+
+  // Don't auto-login for password reset — user goes to /staff/sign-in
+  return { ok: true, data: { message: "Password updated successfully. Please sign in with your new password." } };
+}
+
 export async function resendStaffInvitation(staffId: string): Promise<{ emailSent: boolean }> {
   const actor = await requireStaffPermission(Permission.MANAGE_STAFF);
   return core.resendStaffInvitationCore(staffId, actor.id);

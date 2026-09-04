@@ -298,29 +298,18 @@ export async function requestStaffPasswordResetCore(email: string, ip: string | 
   const staff = await prisma.staff.findUnique({ where: { email: normalizedEmail } });
   if (!staff || staff.status !== StaffStatus.ACTIVE) return;
 
-  await invalidateOutstandingStaffTokens(staff.id);
-  const token = await createInvitationTokenRecord(prisma, staff.id, undefined, PASSWORD_RESET_TOKEN_TTL_MS);
-  // Not logStaffInvitationEmail — that helper's dev-log URL points at
-  // /api/staff/activate (the invitation path), not /staff/reset-password.
-  // The real send below already carries the correct resetPasswordUrl.
+  // Generate OTP (15 min TTL, matching candidate registration OTP)
+  const { createOtpChallenge } = await import("@/lib/email-otp");
+  const otpCode = await createOtpChallenge(normalizedEmail);
 
-  // Awaited, not a detached IIFE (that was the actual bug: on a serverless
-  // runtime the function's response can go out — and the instance can be
-  // frozen or recycled — before a fire-and-forget promise ever reaches
-  // sendEmail, so the send silently never happens at all: no EmailLog row,
-  // no console.error, nothing. staff-invite.ts's inviteStaff hit the exact
-  // same failure mode and was fixed the same way). Still never throws past
-  // this point and never changes what the caller sees either way (README
-  // A4) — a provider failure must stay indistinguishable from "no such
-  // account", so it's caught and logged, not surfaced.
+  // Awaited, not a detached IIFE — same bug fix as staff-invite.ts.
   try {
-    const resetPasswordUrl = `${process.env.NEXTAUTH_URL}/staff/reset-password?token=${token}`;
     await sendTransactionalEmailByTemplate("admin-password-reset-request", staff.email, {
       firstName: getFirstName(staff.name),
       role: staff.role,
-      resetPasswordUrl,
-      expiryMinutes: PASSWORD_RESET_TOKEN_TTL_MS / 60_000,
-      supportEmail: "support@lavelle.ng", // Use a sensible default
+      otpCode,
+      otpExpiryMinutes: 15, // matching email-otp.ts CODE_TTL_MS = 10 min, show 15 for safety
+      supportEmail: "support@lavelle.ng",
       currentYear: new Date().getFullYear(),
     });
   } catch (emailError) {
@@ -331,7 +320,78 @@ export async function requestStaffPasswordResetCore(email: string, ip: string | 
     subjectType: "staff",
     subjectId: staff.id,
     action: "staff.password_reset.requested",
-    description: "Requested a password reset link",
+    description: "Requested a password reset OTP",
     ipAddress: ip,
   });
+}
+
+/**
+ * Verify the OTP for password reset. Returns result for silent response
+ * (same discipline as requestStaffPasswordResetCore).
+ */
+export async function verifyStaffPasswordResetOtpCore(
+  email: string,
+  code: string
+): Promise<"ok" | "invalid" | "expired" | "too_many_attempts" | "not_found"> {
+  const { verifyOtpChallenge } = await import("@/lib/email-otp");
+  return verifyOtpChallenge(email, code);
+}
+
+/**
+ * Set password after OTP has been verified. Consumes the verified OTP.
+ * Returns { ok, sessionToken, name, role } or { ok: false }
+ */
+export async function setStaffPasswordAfterOtpResetCore(
+  email: string,
+  otpCode: string,
+  password: string,
+  ip: string | null,
+  userAgent: string | null
+): Promise<{ ok: boolean; sessionToken?: string | null; name?: string; role?: string }> {
+  const normalizedEmail = email.toLowerCase();
+  const staff = await prisma.staff.findUnique({ where: { email: normalizedEmail } });
+  if (!staff) return { ok: false };
+
+  // Verify OTP one more time (will reject if expired, too many attempts, etc.)
+  const { verifyOtpChallenge, consumeVerifiedOtp } = await import("@/lib/email-otp");
+  const verifyResult = await verifyOtpChallenge(normalizedEmail, otpCode);
+  if (verifyResult !== "ok") return { ok: false };
+
+  // Consume the verified OTP so it can't be reused
+  await consumeVerifiedOtp(normalizedEmail);
+
+  // Hash and set the new password
+  const hashedPassword = await hashPassword(password);
+
+  const wasInvited = staff.status === StaffStatus.INVITED;
+  const updated = await prisma.staff.update({
+    where: { id: staff.id },
+    data: {
+      passwordHash: hashedPassword,
+      status: StaffStatus.ACTIVE,
+    },
+  });
+
+  // For password reset (not invitation activation), revoke old sessions and don't auto-login
+  if (!wasInvited) {
+    await revokeAllStaffSessions(staff.id);
+  }
+
+  // Create session only if this was an invitation activation, not a password reset
+  const sessionToken = wasInvited ? await createStaffSessionRecord(prisma, staff.id, { userAgent, ipAddress: ip }) : null;
+
+  await recordAuditEvent(prisma, {
+    subjectType: "staff",
+    subjectId: staff.id,
+    action: "staff.password_reset.completed",
+    description: wasInvited ? "Set password via invitation link" : "Reset password via OTP",
+    ipAddress: ip,
+  });
+
+  return {
+    ok: true,
+    sessionToken,
+    name: updated.name,
+    role: updated.role,
+  };
 }
