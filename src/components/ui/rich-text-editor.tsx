@@ -33,6 +33,7 @@ export interface RichTextEditorProps {
 export function RichTextEditor({ value, onChange, placeholder, className, minHeightPx = 96 }: RichTextEditorProps) {
   const ref = React.useRef<HTMLDivElement>(null);
   const [empty, setEmpty] = React.useState(!value);
+  const [activeCommands, setActiveCommands] = React.useState<Record<string, boolean>>({});
 
   // Hydrate once on mount only — this is the uncontrolled half of the
   // contentEditable workaround described above. Remount (key by lectureId
@@ -41,6 +42,32 @@ export function RichTextEditor({ value, onChange, placeholder, className, minHei
     if (ref.current) ref.current.innerHTML = markupToEditableHtml(value ?? "");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Reflects the caret's current formatting on each toolbar button — so
+  // typing inside bold text shows "Bold" pressed, and clicking it again
+  // (execCommand toggles natively) turns both the formatting and the
+  // indicator off. selectionchange is the only event that fires for a
+  // caret move with no visible DOM mutation (e.g. arrowing out of bold
+  // text), so it's the source of truth; mouseup/keyup on the editor just
+  // catch the common cases sooner without waiting for that event to settle.
+  const updateActiveStates = React.useCallback(() => {
+    const el = ref.current;
+    if (!el) return;
+    const selection = document.getSelection();
+    const anchor = selection?.anchorNode;
+    if (!anchor || !el.contains(anchor)) return;
+    setActiveCommands({
+      bold: document.queryCommandState("bold"),
+      italic: document.queryCommandState("italic"),
+      insertUnorderedList: document.queryCommandState("insertUnorderedList"),
+      insertOrderedList: document.queryCommandState("insertOrderedList"),
+    });
+  }, []);
+
+  React.useEffect(() => {
+    document.addEventListener("selectionchange", updateActiveStates);
+    return () => document.removeEventListener("selectionchange", updateActiveStates);
+  }, [updateActiveStates]);
 
   function emitChange() {
     if (!ref.current) return;
@@ -59,6 +86,7 @@ export function RichTextEditor({ value, onChange, placeholder, className, minHei
       ref.current?.focus();
       document.execCommand(command);
       emitChange();
+      updateActiveStates();
     };
   }
 
@@ -72,28 +100,36 @@ export function RichTextEditor({ value, onChange, placeholder, className, minHei
     const text = e.clipboardData.getData("text/plain");
     document.execCommand("insertText", false, text);
     emitChange();
+    updateActiveStates();
   }
 
   return (
     <div className={cn("rounded-md border border-neutral-300 bg-bg", className)}>
       <div className="flex items-center gap-1 border-b border-neutral-200 px-2 py-1.5">
-        {TOOLBAR_ITEMS.map((item, i) => (
-          <React.Fragment key={item.command}>
-            {i === 2 && <div className="mx-1 h-4 w-px bg-neutral-200" />}
-            <button
-              type="button"
-              title={item.label}
-              aria-label={item.label}
-              onMouseDown={runCommand(item.command)}
-              className="flex h-7 items-center gap-1.5 rounded px-2 text-[12px] text-neutral-700 hover:bg-neutral-100 active:bg-neutral-200"
-            >
-              <span aria-hidden="true" className={cn("text-[13px] font-semibold", item.glyphClassName)}>
-                {item.glyph}
-              </span>
-              <span>{item.label}</span>
-            </button>
-          </React.Fragment>
-        ))}
+        {TOOLBAR_ITEMS.map((item, i) => {
+          const isActive = !!activeCommands[item.command];
+          return (
+            <React.Fragment key={item.command}>
+              {i === 2 && <div className="mx-1 h-4 w-px bg-neutral-200" />}
+              <button
+                type="button"
+                title={item.label}
+                aria-label={item.label}
+                aria-pressed={isActive}
+                onMouseDown={runCommand(item.command)}
+                className={cn(
+                  "flex h-7 items-center gap-1.5 rounded px-2 text-[12px] hover:bg-neutral-100 active:bg-neutral-200",
+                  isActive ? "bg-accent-100 text-accent-900" : "text-neutral-700"
+                )}
+              >
+                <span aria-hidden="true" className={cn("text-[13px] font-semibold", item.glyphClassName)}>
+                  {item.glyph}
+                </span>
+                <span>{item.label}</span>
+              </button>
+            </React.Fragment>
+          );
+        })}
       </div>
       <div className="relative">
         {empty && placeholder && (
@@ -107,6 +143,9 @@ export function RichTextEditor({ value, onChange, placeholder, className, minHei
           aria-multiline="true"
           onInput={emitChange}
           onPaste={handlePaste}
+          onKeyUp={updateActiveStates}
+          onMouseUp={updateActiveStates}
+          onFocus={updateActiveStates}
           className="w-full box-border font-body text-sm text-text outline-none px-3 py-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5"
           style={{ minHeight: minHeightPx }}
         />
