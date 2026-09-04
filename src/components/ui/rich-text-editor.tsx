@@ -96,9 +96,29 @@ export function RichTextEditor({ value, onChange, placeholder, className, minHei
     // that into our constrained markup vocabulary anyway (only
     // bold/italic/list survive serialization), so the pasted content
     // would visually lie about what's actually going to be saved.
+    //
+    // Line breaks are rebuilt manually via the Range API rather than
+    // document.execCommand("insertText", false, text) — that command's
+    // handling of embedded "\n" characters is inconsistent across
+    // browsers, and a paste whose newlines silently get swallowed
+    // collapses a numbered list (or any multi-line prompt) into one
+    // unreadable run-on paragraph with nothing to signal that to the
+    // author before they save it.
     e.preventDefault();
     const text = e.clipboardData.getData("text/plain");
-    document.execCommand("insertText", false, text);
+    const selection = document.getSelection();
+    if (!selection || selection.rangeCount === 0) return;
+    const range = selection.getRangeAt(0);
+    range.deleteContents();
+    const fragment = document.createDocumentFragment();
+    text.split(/\r\n|\r|\n/).forEach((line, i) => {
+      if (i > 0) fragment.appendChild(document.createElement("br"));
+      if (line) fragment.appendChild(document.createTextNode(line));
+    });
+    range.insertNode(fragment);
+    range.collapse(false);
+    selection.removeAllRanges();
+    selection.addRange(range);
     emitChange();
     updateActiveStates();
   }
