@@ -32,6 +32,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   });
 
   const response = await fetch(secureUrl);
+  if (!response.ok) {
+    console.error(`Cloudinary fetch failed for certificate ${certificate.id} (${response.status}): ${await response.text()}`);
+    return NextResponse.json({ error: "pdf_unavailable" }, { status: 502 });
+  }
   const bytes = await response.arrayBuffer();
 
   return new NextResponse(new Uint8Array(bytes), {
