@@ -41,15 +41,12 @@ const STEP_LABEL: Record<LectureStep, string> = {
   quiz: "Quiz",
 };
 
-// What to tell the candidate when they've reached the end of a lecture but
-// one authored step still isn't done — shown next to the disabled
-// Next-module/Complete-Programme button so that state is never silent.
-const STEP_BLOCK_MESSAGE: Record<LectureStep, (isLastLectureInProgramme: boolean) => string> = {
-  content: (isLast) => `Finish this lecture's content to ${isLast ? "complete the programme" : "move to the next module"}.`,
-  scenario: (isLast) => `Complete the scenario step to ${isLast ? "complete the programme" : "move to the next module"}.`,
-  drafting: (isLast) => `Submit the drafting exercise to ${isLast ? "complete the programme" : "move to the next module"}.`,
-  quiz: (isLast) => `Pass this module's quiz to ${isLast ? "complete the programme" : "move to the next module"}.`,
-};
+// Shown next to the disabled Next-module/Complete-Programme button when this
+// lecture has an authored quiz that hasn't been passed yet — the only thing
+// that can hold that CTA back (see readyToFinish below).
+function quizBlockMessage(isLastLectureInProgramme: boolean) {
+  return `Pass this module's quiz to ${isLastLectureInProgramme ? "complete the programme" : "move to the next module"}.`;
+}
 
 const POSITION_SAVE_INTERVAL_MS = 10_000;
 
@@ -211,17 +208,16 @@ export function LecturePlayer({ enrolmentId, data }: { enrolmentId: string; data
   // doesn't appear mid-retake, before "Submit quiz" is clicked (rule from
   // candidate report: button must not show while the quiz form is still up).
   const [quizResultVisible, setQuizResultVisible] = React.useState(completed.has("quiz"));
-  // Which authored step (if any) is still standing between here and the
-  // next module / Complete Programme — not just "quiz". "content" is the
-  // one step whose own Next button was never gated on it being marked done
-  // (only scenario/drafting block advancing), so a candidate can reach the
-  // quiz having skipped past an unfinished/unwatched content step — most
-  // visibly when the video itself was broken and never fired onEnded. If
-  // this is left undetected, the candidate can pass the quiz repeatedly and
-  // still see nothing at the end, with no indication why. Checked in
-  // authored order so the message always names the step actually blocking.
-  const firstMissingOwnStep = steps.find((s) => (s === "quiz" ? !(quizResultVisible && quizPassed) : !completed.has(s)));
-  const readyToFinish = !firstMissingOwnStep;
+  // The finishing CTA (Next module / Complete Programme) is gated on the
+  // quiz alone, when this lecture has one — scenario/drafting are already
+  // enforced on the way here (isCurrentStepBlocking stops "Next" from
+  // advancing past them), and "content" is deliberately NOT a gate: a
+  // candidate who read the content and clicked straight through to the quiz
+  // has still done the work, so a passed quiz is sufficient on its own. If
+  // this lecture has no authored quiz at all, there's nothing left to check
+  // once its steps are exhausted — the CTA is unconditionally ready.
+  const hasQuiz = steps.includes("quiz");
+  const readyToFinish = !hasQuiz || (quizResultVisible && quizPassed);
   // Every module that carries a quiz must have that quiz passed before the
   // programme can be marked complete — checking only the current lecture
   // isn't enough, since a candidate could reach the final lecture while an
@@ -578,16 +574,14 @@ export function LecturePlayer({ enrolmentId, data }: { enrolmentId: string; data
               <Button onClick={goNextStep} disabled={isCurrentStepBlocking}>
                 Next
               </Button>
-            ) : firstMissingOwnStep ? (
-              // Something authored on THIS lecture isn't done yet (most often
-              // an unpassed quiz, but occasionally a skipped-past "content"
-              // step — see the comment on firstMissingOwnStep). Always show
+            ) : !readyToFinish ? (
+              // This lecture's own quiz hasn't been passed yet — always show
               // the CTA the candidate is working toward, disabled, naming
-              // what's actually blocking it — never render nothing here.
+              // what's blocking it — never render nothing here.
               <div className="flex flex-col items-end gap-1.5">
                 <Button disabled>{isLastLectureInProgramme ? "Complete Programme" : "Next module →"}</Button>
                 <span className="text-[12px] text-neutral-500 text-right max-w-[280px]">
-                  {STEP_BLOCK_MESSAGE[firstMissingOwnStep](isLastLectureInProgramme)}
+                  {quizBlockMessage(isLastLectureInProgramme)}
                 </span>
               </div>
             ) : isLastLectureInProgramme ? (
