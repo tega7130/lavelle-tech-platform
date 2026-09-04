@@ -352,13 +352,11 @@ export async function setStaffPasswordAfterOtpResetCore(
   const staff = await prisma.staff.findUnique({ where: { email: normalizedEmail } });
   if (!staff) return { ok: false };
 
-  // Verify OTP one more time (will reject if expired, too many attempts, etc.)
-  const { verifyOtpChallenge, consumeVerifiedOtp } = await import("@/lib/email-otp");
-  const verifyResult = await verifyOtpChallenge(normalizedEmail, otpCode);
-  if (verifyResult !== "ok") return { ok: false };
-
-  // Consume the verified OTP so it can't be reused
-  await consumeVerifiedOtp(normalizedEmail);
+  // Consume the already-verified OTP (verified in the previous step)
+  // consumeVerifiedOtp checks that it was verified recently and hasn't expired
+  const { consumeVerifiedOtp } = await import("@/lib/email-otp");
+  const consumed = await consumeVerifiedOtp(normalizedEmail);
+  if (!consumed) return { ok: false };
 
   // Hash and set the new password
   const hashedPassword = await hashPassword(password);

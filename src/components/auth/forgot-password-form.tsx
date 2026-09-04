@@ -22,6 +22,8 @@ export function ForgotPasswordForm() {
   const [passwordConfirm, setPasswordConfirm] = React.useState("");
   const [isLoading, setIsLoading] = React.useState(false);
   const [errorMsg, setErrorMsg] = React.useState("");
+  const [showPassword, setShowPassword] = React.useState(false);
+  const [showPasswordConfirm, setShowPasswordConfirm] = React.useState(false);
 
   async function handleEmailSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -221,10 +223,19 @@ export function ForgotPasswordForm() {
 
             <div className="flex flex-col gap-4">
               <div>
-                <Label htmlFor="new-password">New password</Label>
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="new-password">New password</Label>
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="text-[12.5px] text-neutral-600 hover:text-neutral-900"
+                  >
+                    {showPassword ? "Hide" : "Show"}
+                  </button>
+                </div>
                 <Input
                   id="new-password"
-                  type="password"
+                  type={showPassword ? "text" : "password"}
                   placeholder="••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -233,10 +244,19 @@ export function ForgotPasswordForm() {
               </div>
 
               <div>
-                <Label htmlFor="confirm-password">Confirm password</Label>
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="confirm-password">Confirm password</Label>
+                  <button
+                    type="button"
+                    onClick={() => setShowPasswordConfirm(!showPasswordConfirm)}
+                    className="text-[12.5px] text-neutral-600 hover:text-neutral-900"
+                  >
+                    {showPasswordConfirm ? "Hide" : "Show"}
+                  </button>
+                </div>
                 <Input
                   id="confirm-password"
-                  type="password"
+                  type={showPasswordConfirm ? "text" : "password"}
                   placeholder="••••••••"
                   value={passwordConfirm}
                   onChange={(e) => setPasswordConfirm(e.target.value)}
