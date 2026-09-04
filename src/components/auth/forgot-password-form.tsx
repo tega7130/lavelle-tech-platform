@@ -62,6 +62,20 @@ export function ForgotPasswordForm() {
     }
   }
 
+  async function handleResendCode() {
+    setIsLoading(true);
+    setErrorMsg("");
+    try {
+      await requestStaffPasswordReset(email.trim());
+      setOtpCode("");
+      setErrorMsg("");
+    } catch (err) {
+      setErrorMsg("Failed to resend code. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
   async function handlePasswordSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (password !== passwordConfirm) {
@@ -206,9 +220,17 @@ export function ForgotPasswordForm() {
               </Button>
             </div>
 
-            <div className="mt-3.5 text-center">
+            <div className="mt-3.5 flex flex-col gap-2 text-center">
               <button type="button" onClick={() => setView("otp-sent")} className="text-[12.5px] text-neutral-600">
                 ← Back
+              </button>
+              <button
+                type="button"
+                onClick={handleResendCode}
+                disabled={isLoading}
+                className="text-[12.5px] text-neutral-600 hover:text-neutral-900 disabled:opacity-50"
+              >
+                {isLoading ? "Sending…" : "Resend code"}
               </button>
             </div>
           </form>
