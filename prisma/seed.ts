@@ -382,12 +382,15 @@ async function main() {
     for (const [li, title] of mod.lectures.entries()) {
       const existing = await prisma.lecture.findFirst({ where: { moduleId: moduleRow.id, title } });
       if (!existing) {
+        // Only Module 1 gets VIDEO mediaKind with real video URLs;
+        // other modules use SLIDES to avoid players getting stuck on missing videos.
+        const isModule1 = mod.week === 1;
         await prisma.lecture.create({
           data: {
             moduleId: moduleRow.id,
             orderIndex: li,
             title,
-            mediaKind: flatIdx < 9 ? LectureMediaKind.VIDEO : LectureMediaKind.SLIDES,
+            mediaKind: isModule1 ? LectureMediaKind.VIDEO : LectureMediaKind.SLIDES,
           },
         });
       }
