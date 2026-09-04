@@ -19,6 +19,11 @@ import { consumeVerifiedOtp } from "@/lib/email-otp";
 import crypto from "node:crypto";
 import type { FormActionState } from "@/lib/action-state";
 
+function getPaymentProvider(): string {
+  const provider = process.env.PAYMENT_PROVIDER || "nomba";
+  return provider.toLowerCase();
+}
+
 /** Thin Server Action wrapper so the checkout return page's client-side poll can call the server function (rule 6 — this, not the redirect URL, is the authority). */
 export async function pollPaymentStatus(internalReference: string) {
   return getPaymentStatus(internalReference);
@@ -54,7 +59,7 @@ async function createPendingPaymentAndEnrolment(candidateId: string, programmeId
             purpose: PaymentPurpose.PROGRAMME_FEE,
             enrolmentId: enrolment.id,
             amountMinor: feeMinor,
-            provider: "paystack",
+            provider: getPaymentProvider(),
             internalReference,
             status: PaymentStatus.PENDING,
           },
@@ -105,7 +110,7 @@ async function createRetryPayment(enrolmentId: string, candidateId: string, feeM
           purpose: PaymentPurpose.PROGRAMME_FEE,
           enrolmentId,
           amountMinor: feeMinor,
-          provider: "paystack",
+          provider: getPaymentProvider(),
           internalReference,
           status: PaymentStatus.PENDING,
         },
@@ -201,7 +206,7 @@ export async function initiateGuestCheckout(_prev: FormActionState, formData: Fo
           data: {
             purpose: PaymentPurpose.PROGRAMME_FEE,
             amountMinor: programme.feeMinor,
-            provider: "paystack",
+            provider: getPaymentProvider(),
             internalReference,
             status: PaymentStatus.PENDING,
           },
