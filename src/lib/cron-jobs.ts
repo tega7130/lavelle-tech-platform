@@ -60,6 +60,7 @@ export async function sendProfileCompletionReminders() {
  * Sends to candidates who haven't engaged with lectures in 3+ days.
  * Runs daily to catch candidates who hit the 3-day mark.
  * Only sends for published programmes to prevent emails about unavailable courses.
+ * Newly-enrolled candidates (within 3 days) are not considered inactive.
  */
 export async function sendReEngagementReminder3day() {
   try {
@@ -67,6 +68,7 @@ export async function sendReEngagementReminder3day() {
     const threeDaysAgo = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000);
 
     // Find enrolments with lecture progress older than 3 days
+    // Also ensure the candidate has been enrolled for at least 3 days (not newly enrolled)
     const inactiveProgress = await prisma.lectureProgress.findMany({
       where: {
         lastSeenAt: {
@@ -76,6 +78,9 @@ export async function sendReEngagementReminder3day() {
           status: { in: ["ACTIVE", "COMPLETED"] },
           programme: {
             status: "ACTIVE", // Only active programmes
+          },
+          enrolledAt: {
+            lte: threeDaysAgo, // Candidate must be enrolled for at least 3 days
           },
         },
       },
@@ -125,6 +130,7 @@ export async function sendReEngagementReminder3day() {
  * Sends to candidates who haven't engaged with lectures in 7+ days (and didn't respond to 3-day reminder).
  * Runs daily to catch candidates who hit the 7-day mark.
  * Only sends for published programmes to prevent emails about unavailable courses.
+ * Newly-enrolled candidates (within 7 days) are not considered inactive.
  */
 export async function sendReEngagementReminder7day() {
   try {
@@ -132,6 +138,7 @@ export async function sendReEngagementReminder7day() {
     const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
     // Find enrolments with lecture progress older than 7 days
+    // Also ensure the candidate has been enrolled for at least 7 days (not newly enrolled)
     const inactiveProgress = await prisma.lectureProgress.findMany({
       where: {
         lastSeenAt: {
@@ -141,6 +148,9 @@ export async function sendReEngagementReminder7day() {
           status: { in: ["ACTIVE", "COMPLETED"] },
           programme: {
             status: "ACTIVE", // Only active programmes
+          },
+          enrolledAt: {
+            lte: sevenDaysAgo, // Candidate must be enrolled for at least 7 days
           },
         },
       },
