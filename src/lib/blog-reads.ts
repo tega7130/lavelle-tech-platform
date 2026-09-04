@@ -21,7 +21,7 @@ export async function getPublishedBlogPosts() {
     tags: (p.tags as string[] | null) ?? [],
     authorName: p.authorName,
     publishedAt: p.publishedAt!,
-    heroImageUrl: p.heroAsset ? getSignedAssetUrl(p.heroAsset.storageKey) : null,
+    heroImageUrl: p.heroAsset ? getSignedAssetUrl(p.heroAsset.storageKey, "image") : null,
   }));
 }
 
@@ -41,6 +41,6 @@ export async function getPublishedBlogPost(slug: string) {
     tags: (post.tags as string[] | null) ?? [],
     authorName: post.authorName,
     publishedAt: post.publishedAt!,
-    heroImageUrl: post.heroAsset ? getSignedAssetUrl(post.heroAsset.storageKey) : null,
+    heroImageUrl: post.heroAsset ? getSignedAssetUrl(post.heroAsset.storageKey, "image") : null,
   };
 }

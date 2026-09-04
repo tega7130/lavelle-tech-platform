@@ -61,7 +61,7 @@ export async function unpublishBlogPostAction(id: string, reason: string) {
 /** A fresh signed URL for a hero image, so the editor's Preview dialog can show it before the post is ever saved or published. */
 export async function getBlogHeroPreviewUrlAction(storageKey: string) {
   await requireStaffPermission(Permission.MANAGE_BLOG);
-  return getSignedAssetUrl(storageKey);
+  return getSignedAssetUrl(storageKey, "image");
 }
 
 export async function deleteBlogPostAction(id: string) {

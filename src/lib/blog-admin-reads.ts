@@ -32,6 +32,6 @@ export async function getBlogPostForEditor(id: string) {
   });
   return {
     ...post,
-    heroImageUrl: post.heroAsset ? getSignedAssetUrl(post.heroAsset.storageKey) : null,
+    heroImageUrl: post.heroAsset ? getSignedAssetUrl(post.heroAsset.storageKey, "image") : null,
   };
 }

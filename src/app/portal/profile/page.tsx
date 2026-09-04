@@ -12,7 +12,7 @@ export default async function Page() {
   const cohortStatus = await getCandidateCohortStatus(candidate.id, idCard?.tier);
   // Regenerated fresh on every render, never persisted — a signed GET URL
   // expires in minutes (src/lib/storage.ts).
-  const photoUrl = candidate.profile?.photoUrl ? getSignedAssetUrl(candidate.profile.photoUrl) : null;
+  const photoUrl = candidate.profile?.photoUrl ? getSignedAssetUrl(candidate.profile.photoUrl, "image") : null;
 
   return (
     <ProfilePage

@@ -79,7 +79,7 @@ function effectiveVideo(
   if (!url && !asset) return null;
 
   const embedUrl = url ? youtubeEmbedUrl(url) : null;
-  const directVideoUrl = asset ? getSignedAssetUrl(asset.storageKey) : !embedUrl ? url : null;
+  const directVideoUrl = asset ? getSignedAssetUrl(asset.storageKey, "video") : !embedUrl ? url : null;
   if (!embedUrl && !directVideoUrl) return null;
   return { embedUrl, directVideoUrl };
 }

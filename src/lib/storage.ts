@@ -47,11 +47,31 @@ export function createPresignedUpload(params: { kind: string; mimeType: string; 
   };
 }
 
-export function getSignedAssetUrl(storageKey: string, ttlSeconds = 300): string {
+export type CloudinaryResourceType = "image" | "video" | "raw";
+
+// MediaAsset.kind ("audio" | "image" | "video" | "document") to Cloudinary's
+// own resource_type ("image" | "video" | "raw") — Cloudinary has no
+// separate "audio" resource type; audio files live under "video".
+export function resourceTypeForKind(kind: string): CloudinaryResourceType {
+  if (kind === "video" || kind === "audio") return "video";
+  if (kind === "document") return "raw";
+  return "image";
+}
+
+/**
+ * type: "upload" here must match the delivery type actually used at
+ * upload time (uploadToCloudinary / /api/uploads/cloudinary, which don't
+ * set `type`, so Cloudinary defaults new uploads to "upload"). Signing
+ * this as "authenticated" instead — a different delivery type, not just a
+ * stricter mode of the same one — points at a resource Cloudinary can't
+ * find, which is why every uploaded video got stuck "loading" forever.
+ */
+export function getSignedAssetUrl(storageKey: string, resourceType: CloudinaryResourceType = "image", ttlSeconds = 300): string {
   return cloudinary.url(storageKey, {
     secure: true,
     sign_url: true,
-    type: "authenticated",
+    type: "upload",
+    resource_type: resourceType,
     expiration: Math.floor(Date.now() / 1000) + ttlSeconds,
   });
 }

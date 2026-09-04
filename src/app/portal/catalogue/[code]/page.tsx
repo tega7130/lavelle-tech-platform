@@ -15,7 +15,7 @@ export default async function ProgrammeDetailPage({ params }: { params: Promise<
 
   const embedUrl = programme.coverVideoUrl ? youtubeEmbedUrl(programme.coverVideoUrl) : null;
   const directVideoUrl = programme.coverVideoAsset
-    ? getSignedAssetUrl(programme.coverVideoAsset.storageKey)
+    ? getSignedAssetUrl(programme.coverVideoAsset.storageKey, "video")
     : !embedUrl
       ? programme.coverVideoUrl
       : null;

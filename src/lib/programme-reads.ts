@@ -150,6 +150,6 @@ export function narrationWarning(lecture: {
 }
 
 /** Fresh signed URLs for whatever assets a lecture/slide references — content is never reachable any other way. */
-export function signedUrlFor(storageKey: string | null | undefined): string | null {
-  return storageKey ? getSignedAssetUrl(storageKey) : null;
+export function signedUrlFor(storageKey: string | null | undefined, resourceType: "image" | "video" | "raw" = "image"): string | null {
+  return storageKey ? getSignedAssetUrl(storageKey, resourceType) : null;
 }

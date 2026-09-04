@@ -27,7 +27,7 @@ export default async function FinancePage() {
       amountMinor: p.amountMinor,
       status: p.status,
       ageHours,
-      receiptUrl: p.receiptAsset ? getSignedAssetUrl(p.receiptAsset.storageKey) : null,
+      receiptUrl: p.receiptAsset ? getSignedAssetUrl(p.receiptAsset.storageKey, "raw") : null,
       confirmedByName: p.confirmedByStaff?.name ?? null,
     };
   });
