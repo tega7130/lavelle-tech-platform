@@ -59,6 +59,7 @@ export async function sendProfileCompletionReminders() {
  * Re-engagement Reminder (3 days of inactivity)
  * Sends to candidates who haven't engaged with lectures in 3+ days.
  * Runs daily to catch candidates who hit the 3-day mark.
+ * Only sends for published programmes to prevent emails about unavailable courses.
  */
 export async function sendReEngagementReminder3day() {
   try {
@@ -73,6 +74,9 @@ export async function sendReEngagementReminder3day() {
         },
         enrolment: {
           status: { in: ["ACTIVE", "COMPLETED"] },
+          programme: {
+            status: "ACTIVE", // Only active programmes
+          },
         },
       },
       include: {
@@ -120,6 +124,7 @@ export async function sendReEngagementReminder3day() {
  * Re-engagement Reminder (7 days of inactivity)
  * Sends to candidates who haven't engaged with lectures in 7+ days (and didn't respond to 3-day reminder).
  * Runs daily to catch candidates who hit the 7-day mark.
+ * Only sends for published programmes to prevent emails about unavailable courses.
  */
 export async function sendReEngagementReminder7day() {
   try {
@@ -134,6 +139,9 @@ export async function sendReEngagementReminder7day() {
         },
         enrolment: {
           status: { in: ["ACTIVE", "COMPLETED"] },
+          programme: {
+            status: "ACTIVE", // Only active programmes
+          },
         },
       },
       include: {
