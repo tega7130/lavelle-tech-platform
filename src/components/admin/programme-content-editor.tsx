@@ -957,26 +957,52 @@ function SlideNarrationList({ lecture, onSaved }: { lecture: LectureData; onSave
 function ScenarioTab({ lecture, onSaved }: { lecture: LectureData; onSaved: () => void }) {
   const promptRef = React.useRef(lecture.scenarioPrompt ?? "");
   const guidanceRef = React.useRef(lecture.scenarioGuidance ?? "");
+  const [saving, setSaving] = React.useState(false);
+  const [saved, setSaved] = React.useState(false);
+
+  async function save() {
+    setSaving(true);
+    setSaved(false);
+    try {
+      await updateLecture(lecture.id, { scenarioPrompt: promptRef.current, scenarioGuidance: guidanceRef.current });
+      onSaved();
+      setSaved(true);
+    } finally {
+      setSaving(false);
+    }
+  }
 
   return (
     <div className="flex flex-col gap-4">
-      <div onBlur={() => updateLecture(lecture.id, { scenarioPrompt: promptRef.current }).then(onSaved)}>
+      <div>
         <label className="mb-1.5 block text-xs font-medium text-neutral-700">Practical scenario shown to candidates</label>
         <RichTextEditor
           key={lecture.id}
           value={lecture.scenarioPrompt ?? ""}
-          onChange={(markup) => (promptRef.current = markup)}
+          onChange={(markup) => {
+            promptRef.current = markup;
+            setSaved(false);
+          }}
           minHeightPx={140}
         />
       </div>
-      <div onBlur={() => updateLecture(lecture.id, { scenarioGuidance: guidanceRef.current }).then(onSaved)}>
+      <div>
         <label className="mb-1.5 block text-xs font-medium text-neutral-700">Guidance shown after the scenario (optional)</label>
         <RichTextEditor
           key={lecture.id}
           value={lecture.scenarioGuidance ?? ""}
-          onChange={(markup) => (guidanceRef.current = markup)}
+          onChange={(markup) => {
+            guidanceRef.current = markup;
+            setSaved(false);
+          }}
           minHeightPx={100}
         />
+      </div>
+      <div className="flex items-center gap-2">
+        <Button onClick={save} disabled={saving} className="px-[11px] py-[5px] text-xs">
+          {saving ? "Saving…" : "Save"}
+        </Button>
+        {saved && !saving && <span className="text-xs text-neutral-500">Saved</span>}
       </div>
     </div>
   );
@@ -984,15 +1010,33 @@ function ScenarioTab({ lecture, onSaved }: { lecture: LectureData; onSaved: () =
 
 function DraftingTab({ lecture, onSaved }: { lecture: LectureData; onSaved: () => void }) {
   const promptRef = React.useRef(lecture.draftingPrompt ?? "");
+  const wordLimitRef = React.useRef(lecture.draftingWordLimit ?? undefined);
+  const [saving, setSaving] = React.useState(false);
+  const [saved, setSaved] = React.useState(false);
+
+  async function save() {
+    setSaving(true);
+    setSaved(false);
+    try {
+      await updateLecture(lecture.id, { draftingPrompt: promptRef.current, draftingWordLimit: wordLimitRef.current });
+      onSaved();
+      setSaved(true);
+    } finally {
+      setSaving(false);
+    }
+  }
 
   return (
     <div className="flex flex-col gap-3">
-      <div onBlur={() => updateLecture(lecture.id, { draftingPrompt: promptRef.current }).then(onSaved)}>
+      <div>
         <label className="mb-1.5 block text-xs font-medium text-neutral-700">Exercise prompt</label>
         <RichTextEditor
           key={lecture.id}
           value={lecture.draftingPrompt ?? ""}
-          onChange={(markup) => (promptRef.current = markup)}
+          onChange={(markup) => {
+            promptRef.current = markup;
+            setSaved(false);
+          }}
           minHeightPx={100}
         />
       </div>
@@ -1001,11 +1045,18 @@ function DraftingTab({ lecture, onSaved }: { lecture: LectureData; onSaved: () =
         <input
           type="number"
           defaultValue={lecture.draftingWordLimit ?? undefined}
-          onBlur={(e) =>
-            updateLecture(lecture.id, { draftingWordLimit: e.target.value ? Number(e.target.value) : undefined }).then(onSaved)
-          }
+          onChange={(e) => {
+            wordLimitRef.current = e.target.value ? Number(e.target.value) : undefined;
+            setSaved(false);
+          }}
           className="h-9 w-full rounded-md border border-neutral-300 bg-bg px-2.5 text-sm"
         />
+      </div>
+      <div className="flex items-center gap-2">
+        <Button onClick={save} disabled={saving} className="px-[11px] py-[5px] text-xs">
+          {saving ? "Saving…" : "Save"}
+        </Button>
+        {saved && !saving && <span className="text-xs text-neutral-500">Saved</span>}
       </div>
     </div>
   );
