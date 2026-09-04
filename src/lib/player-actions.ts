@@ -17,6 +17,13 @@ export class NotYourEnrolmentError extends Error {
   }
 }
 
+export class ProgrammeNotYetCompleteError extends Error {
+  constructor() {
+    super("Not every lecture in this programme has been completed yet.");
+    this.name = "ProgrammeNotYetCompleteError";
+  }
+}
+
 async function assertOwnedEnrolment(candidateId: string, enrolmentId: string) {
   const enrolment = await prisma.enrolment.findUniqueOrThrow({ where: { id: enrolmentId } });
   if (enrolment.candidateId !== candidateId) throw new NotYourEnrolmentError();
@@ -378,7 +385,7 @@ export async function completeProgramme(candidateId: string, enrolmentId: string
     prisma.lectureProgress.count({ where: { enrolmentId, state: LectureState.COMPLETED } }),
   ]);
   if (totalPublished === 0 || completedCount < totalPublished) {
-    throw new Error("Not every lecture in this programme has been completed yet.");
+    throw new ProgrammeNotYetCompleteError();
   }
 
   const now = new Date();

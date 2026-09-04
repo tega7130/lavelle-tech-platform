@@ -264,6 +264,10 @@ export function LecturePlayer({ enrolmentId, data }: { enrolmentId: string; data
     setCompleteError(null);
     try {
       const result = await completeProgrammeAction(enrolmentId);
+      if (result.error) {
+        setCompleteError(result.error);
+        return;
+      }
       fireConfetti();
       setCompletionModal(result);
       router.refresh();
