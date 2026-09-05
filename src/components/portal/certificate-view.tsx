@@ -96,7 +96,7 @@ export function CertificateView({ certificate: c }: { certificate: Certificate }
           </div>
         ) : previewUrl ? (
           <iframe
-            src={previewUrl}
+            src={`${previewUrl}#toolbar=0&navpanes=0&scrollbar=0`}
             title={`Certificate ${c.certificateNumber}`}
             className="w-full aspect-[842/596] border-0 block"
           />
