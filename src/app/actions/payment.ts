@@ -147,19 +147,43 @@ async function createCheckoutOrMarkFailed(payment: { id: string; provider: strin
   }
 }
 
-/** Creates the PENDING payment and PENDING_PAYMENT enrolment together; rejects if a live enrolment already exists. */
-export async function initiatePayment(programmeId: string) {
+/**
+ * Creates the PENDING payment and PENDING_PAYMENT enrolment together; rejects if a live enrolment already exists.
+ *
+ * Everything past the sign-in check is wrapped in a try/catch — a thrown
+ * error crossing a Server Action boundary gets its message stripped by
+ * Next.js in production (replaced with an opaque digest, surfaced to the
+ * candidate as a bare "React error #441"), same discipline player.ts's
+ * completeProgrammeAction already uses. Unlike that case, every failure
+ * here (known or not — including the payment provider itself being down
+ * or misconfigured) is caught into one generic message: a checkout button
+ * has no legitimate "let it stay a mysterious error" case, and the real
+ * cause is still logged server-side for debugging.
+ */
+export async function initiatePayment(programmeId: string): Promise<{ checkoutUrl: string | null; internalReference: string | null; error?: string }> {
   const candidate = await getCurrentCandidate();
   if (!candidate) throw new Error("Sign in required.");
 
   const programme = await prisma.programme.findUniqueOrThrow({ where: { id: programmeId } });
-  assertProgrammeOpenForEnrolment(programme);
 
-  const { payment } = await resolveEnrolmentForPayment(candidate.id, programmeId, programme.feeMinor);
-  const checkout = await createCheckoutOrMarkFailed(payment, candidate.email);
+  try {
+    assertProgrammeOpenForEnrolment(programme);
+    const { payment } = await resolveEnrolmentForPayment(candidate.id, programmeId, programme.feeMinor);
+    const checkout = await createCheckoutOrMarkFailed(payment, candidate.email);
 
-  revalidatePath("/portal/catalogue");
-  return { internalReference: payment.internalReference, checkoutUrl: checkout.checkoutUrl };
+    revalidatePath("/portal/catalogue");
+    return { internalReference: payment.internalReference, checkoutUrl: checkout.checkoutUrl };
+  } catch (e) {
+    if (e instanceof ProgrammeNotOpenError || e instanceof LiveEnrolmentExistsError) {
+      return { checkoutUrl: null, internalReference: null, error: e.message };
+    }
+    console.error(`initiatePayment failed for candidate ${candidate.id}, programme ${programmeId}:`, e);
+    return {
+      checkoutUrl: null,
+      internalReference: null,
+      error: "We couldn't start checkout right now. Please try again in a moment, or contact support if this continues.",
+    };
+  }
 }
 
 /**
