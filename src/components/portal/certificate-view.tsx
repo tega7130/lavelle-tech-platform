@@ -5,14 +5,11 @@ import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { Tag, type TagVariant } from "@/components/ui/tag";
 import { Button, buttonClassName } from "@/components/ui/button";
-import { LogoMark } from "@/components/ui/logo-mark";
-import { tierLabel } from "@/lib/format";
 import { getCertificateDownloadUrlAction } from "@/app/actions/certificates";
 import type { getOwnCertificate } from "@/lib/certificate-candidate-reads";
 
 type Certificate = NonNullable<Awaited<ReturnType<typeof getOwnCertificate>>>;
 
-const BAND_LABEL: Record<string, string> = { DISTINCTION: "Distinction", MERIT: "Merit", PASS: "Pass", REFER: "Refer" };
 const STATUS_TAG: Record<string, TagVariant | "success" | "warning" | "danger"> = {
   ACTIVE: "accent-2",
   REVOKED: "danger",
@@ -25,10 +22,27 @@ function fmtDate(d: Date | string) {
 
 export function CertificateView({ certificate: c }: { certificate: Certificate }) {
   const [busy, setBusy] = React.useState(false);
+  const [previewUrl, setPreviewUrl] = React.useState<string | null>(null);
+  const [previewError, setPreviewError] = React.useState(false);
   const revoked = c.status === "REVOKED";
   const superseded = c.status === "SUPERSEDED";
   const isPathway = c.pathway === "PATHWAY";
   const isCourseOnly = isPathway && !c.sittingId; // no certifying exam exists for this programme at all
+
+  React.useEffect(() => {
+    if (revoked) return;
+    let cancelled = false;
+    getCertificateDownloadUrlAction(c.id)
+      .then((url) => {
+        if (!cancelled) setPreviewUrl(url);
+      })
+      .catch(() => {
+        if (!cancelled) setPreviewError(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [c.id, revoked]);
 
   async function download() {
     setBusy(true);
@@ -72,36 +86,25 @@ export function CertificateView({ certificate: c }: { certificate: Certificate }
       )}
 
       <Card elev="md" className={`p-0 overflow-hidden ${revoked ? "border-[#f3c4bf]" : superseded ? "border-neutral-300" : "border-accent-2-300"}`}>
-        <div className="border-[3px] border-double m-4 rounded-sm px-8 py-10 text-center" style={{ borderColor: "var(--color-accent-300)" }}>
-          <LogoMark size={36} className="mx-auto" />
-          <div className="font-heading font-bold text-[15px] mt-2.5 tracking-[0.01em]">LAVELLE INSTITUTE</div>
-          <div className="text-neutral-500 text-[9.5px] tracking-[0.16em] uppercase mt-0.5">Professional Specialization</div>
-
-          <div className="text-neutral-500 text-[11px] tracking-[0.08em] uppercase mt-8">This certifies that</div>
-          <div
-            className="font-heading font-bold text-[26px] mt-2"
-            style={revoked ? { textDecoration: "line-through", color: "var(--color-neutral-500)" } : undefined}
-          >
-            {c.holderName}
+        {revoked ? (
+          <div className="p-10 text-center text-neutral-500 text-[13px]">
+            This certificate has been revoked — the certificate document is no longer shown here.
           </div>
-
-          <p className="text-neutral-700 text-[13.5px] leading-[1.6] max-w-[46ch] mx-auto mt-3">
-            has satisfied the requirements of the {tierLabel(c.tier)} tier and is hereby awarded the certificate in
-          </p>
-          <div className="font-heading font-semibold text-[18px] text-accent mt-1.5">{c.programmeTitle}</div>
-
-          <div className="mt-4">
-            <Tag variant={c.band === "REFER" ? "danger" : "accent-2"} className="text-[12px] px-3 py-1">
-              Awarded with {BAND_LABEL[c.band]}
-            </Tag>
+        ) : previewError ? (
+          <div className="p-10 text-center text-neutral-500 text-[13px]">
+            Couldn&apos;t load the certificate preview. Try the download button below instead.
           </div>
+        ) : previewUrl ? (
+          <iframe
+            src={previewUrl}
+            title={`Certificate ${c.certificateNumber}`}
+            className="w-full aspect-[842/596] border-0 block"
+          />
+        ) : (
+          <div className="p-10 text-center text-neutral-500 text-[13px]">Loading certificate…</div>
+        )}
 
-          <div className="mt-8 pt-5 border-t border-dashed border-neutral-300 text-neutral-500 text-[11.5px]">
-            {c.template.signatoryBlock}
-          </div>
-        </div>
-
-        <div className="grid grid-cols-3 max-[540px]:grid-cols-1 gap-3 px-6 pb-5 -mt-1">
+        <div className="grid grid-cols-3 max-[540px]:grid-cols-1 gap-3 px-6 py-5 border-t border-neutral-200">
           <div>
             <div className="text-neutral-500 text-[9.5px] tracking-[0.1em] uppercase">Certificate ID</div>
             <div className="text-[13px] font-medium mt-0.5">{c.certificateNumber}</div>
