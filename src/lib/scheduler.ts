@@ -19,8 +19,16 @@ let scheduler: {
 /**
  * Start all scheduled email jobs.
  * Should be called once during application startup.
+ * Disabled in local/dev environments to prevent unwanted emails from seed data.
  */
 export function startScheduler() {
+  // Disable scheduler in non-production environments to prevent cron jobs
+  // from running against seed/test data (e.g., old enrolments in local dev)
+  if (process.env.NODE_ENV !== 'production') {
+    console.log('[scheduler] Cron jobs disabled (not in production)');
+    return;
+  }
+
   // Profile Completion Reminder
   // Runs hourly to catch candidates at the 24h registration mark
   scheduler.profileCompletion = cron.schedule("0 * * * *", async () => {
