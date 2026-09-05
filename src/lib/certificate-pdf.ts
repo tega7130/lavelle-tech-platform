@@ -190,8 +190,8 @@ export async function renderCertificatePdf(input: CertificatePdfInput): Promise<
     bodySize -= 0.5;
     bodyLines = wrapText(sentence, body, bodySize, bodyMaxWidth);
   }
-  page.drawRectangle({ x: 260, y: 125.5, width: 575, height: 95, color: rgb(1, 1, 1) });
-  const bodyLineHeight = 30 * (bodySize / 14.5);
+  page.drawRectangle({ x: 260, y: 150, width: 575, height: 68, color: rgb(1, 1, 1) });
+  const bodyLineHeight = 24 * (bodySize / 14.5);
   bodyLines.forEach((line, i) => {
     page.drawText(line, { x: CONTENT_LEFT, y: 195.5 - i * bodyLineHeight, size: bodySize, font: body, color: BODY_COLOR });
   });
