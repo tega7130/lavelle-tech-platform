@@ -31,7 +31,7 @@ export async function validateDiscountCodeAction(documentTemplateId: string, cod
     return { valid: false as const, reason: "This document template is no longer available." };
   }
 
-  const result = await validateAndComputeDiscount(document.priceMinor, code);
+  const result = await validateAndComputeDiscount(document.priceMinor, code, documentTemplateId);
   if (!result.valid) return { valid: false as const, reason: result.reason ?? "Invalid discount code." };
   return { valid: true as const, discountMinor: result.discountMinor!, finalAmountMinor: result.finalAmountMinor! };
 }
@@ -80,7 +80,7 @@ export async function initiateDocumentPurchaseAction(
     let discountMinor = 0;
     let discountCodeId: string | null = null;
     if (discountCode?.trim()) {
-      const discount = await validateAndComputeDiscount(document.priceMinor, discountCode);
+      const discount = await validateAndComputeDiscount(document.priceMinor, discountCode, documentTemplateId);
       if (!discount.valid) {
         return { checkoutUrl: null, internalReference: null, error: discount.reason ?? "Invalid discount code." };
       }

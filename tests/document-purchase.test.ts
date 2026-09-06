@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import crypto from "node:crypto";
 import { testPrisma } from "./db";
 import {
@@ -59,35 +59,53 @@ async function cleanup(opts: { staffId: string; candidateId: string; documentId:
 const noDiscount = (priceMinor: number) => ({ originalPriceMinor: priceMinor, discountMinor: 0, discountCodeId: null, amountMinor: priceMinor });
 
 describe("validateAndComputeDiscount", () => {
+  let staff: Awaited<ReturnType<typeof seedStaff>>;
+  let document: Awaited<ReturnType<typeof seedDocument>>;
+  let otherDocument: Awaited<ReturnType<typeof seedDocument>>;
+
+  beforeEach(async () => {
+    staff = await seedStaff();
+    document = await seedDocument(staff.id);
+    otherDocument = await seedDocument(staff.id);
+  });
+
+  afterEach(async () => {
+    for (const d of [document, otherDocument]) {
+      await testPrisma.documentTemplate.delete({ where: { id: d.id } }).catch(() => {});
+      await testPrisma.documentCategory.delete({ where: { id: d.categoryId } }).catch(() => {});
+    }
+    await testPrisma.staff.delete({ where: { id: staff.id } }).catch(() => {});
+  });
+
   it("computes a percent discount", async () => {
     const code = await testPrisma.discountCode.create({ data: { code: `PCT${crypto.randomUUID().slice(0, 6)}`, type: "PERCENT", value: 20 } });
-    const result = await validateAndComputeDiscount(1_000_000, code.code);
+    const result = await validateAndComputeDiscount(1_000_000, code.code, document.id);
     expect(result).toMatchObject({ valid: true, discountMinor: 200_000, finalAmountMinor: 800_000 });
     await testPrisma.discountCode.delete({ where: { id: code.id } });
   });
 
   it("computes a fixed discount, capped at the price so the final amount never goes negative", async () => {
     const code = await testPrisma.discountCode.create({ data: { code: `FIX${crypto.randomUUID().slice(0, 6)}`, type: "FIXED", value: 5_000_000 } });
-    const result = await validateAndComputeDiscount(1_000_000, code.code);
+    const result = await validateAndComputeDiscount(1_000_000, code.code, document.id);
     expect(result).toMatchObject({ valid: true, discountMinor: 1_000_000, finalAmountMinor: 0 });
     await testPrisma.discountCode.delete({ where: { id: code.id } });
   });
 
   it("matches the code case-insensitively (citext)", async () => {
     const code = await testPrisma.discountCode.create({ data: { code: `MiXeD${crypto.randomUUID().slice(0, 6)}`, type: "PERCENT", value: 10 } });
-    const result = await validateAndComputeDiscount(1_000_000, code.code.toLowerCase());
+    const result = await validateAndComputeDiscount(1_000_000, code.code.toLowerCase(), document.id);
     expect(result.valid).toBe(true);
     await testPrisma.discountCode.delete({ where: { id: code.id } });
   });
 
   it("rejects a nonexistent code", async () => {
-    const result = await validateAndComputeDiscount(1_000_000, `NOPE${crypto.randomUUID()}`);
+    const result = await validateAndComputeDiscount(1_000_000, `NOPE${crypto.randomUUID()}`, document.id);
     expect(result.valid).toBe(false);
   });
 
   it("rejects an inactive code", async () => {
     const code = await testPrisma.discountCode.create({ data: { code: `INACT${crypto.randomUUID().slice(0, 6)}`, type: "PERCENT", value: 10, isActive: false } });
-    expect((await validateAndComputeDiscount(1_000_000, code.code)).valid).toBe(false);
+    expect((await validateAndComputeDiscount(1_000_000, code.code, document.id)).valid).toBe(false);
     await testPrisma.discountCode.delete({ where: { id: code.id } });
   });
 
@@ -95,7 +113,7 @@ describe("validateAndComputeDiscount", () => {
     const code = await testPrisma.discountCode.create({
       data: { code: `EXP${crypto.randomUUID().slice(0, 6)}`, type: "PERCENT", value: 10, expiresAt: new Date(Date.now() - 1000) },
     });
-    expect((await validateAndComputeDiscount(1_000_000, code.code)).valid).toBe(false);
+    expect((await validateAndComputeDiscount(1_000_000, code.code, document.id)).valid).toBe(false);
     await testPrisma.discountCode.delete({ where: { id: code.id } });
   });
 
@@ -103,12 +121,37 @@ describe("validateAndComputeDiscount", () => {
     const code = await testPrisma.discountCode.create({
       data: { code: `CAP${crypto.randomUUID().slice(0, 6)}`, type: "PERCENT", value: 10, maxRedemptions: 1, redemptionCount: 1 },
     });
-    expect((await validateAndComputeDiscount(1_000_000, code.code)).valid).toBe(false);
+    expect((await validateAndComputeDiscount(1_000_000, code.code, document.id)).valid).toBe(false);
     await testPrisma.discountCode.delete({ where: { id: code.id } });
   });
 
   it("rejects an empty/whitespace code", async () => {
-    expect((await validateAndComputeDiscount(1_000_000, "   ")).valid).toBe(false);
+    expect((await validateAndComputeDiscount(1_000_000, "   ", document.id)).valid).toBe(false);
+  });
+
+  it("applies to any document when the code has no document scope (the default)", async () => {
+    const code = await testPrisma.discountCode.create({ data: { code: `ANYDOC${crypto.randomUUID().slice(0, 6)}`, type: "PERCENT", value: 10 } });
+    expect((await validateAndComputeDiscount(1_000_000, code.code, document.id)).valid).toBe(true);
+    expect((await validateAndComputeDiscount(1_000_000, code.code, otherDocument.id)).valid).toBe(true);
+    await testPrisma.discountCode.delete({ where: { id: code.id } });
+  });
+
+  it("applies when scoped to exactly this document", async () => {
+    const code = await testPrisma.discountCode.create({
+      data: { code: `SCOPED${crypto.randomUUID().slice(0, 6)}`, type: "PERCENT", value: 10, documentScopes: { create: { documentTemplateId: document.id } } },
+    });
+    expect((await validateAndComputeDiscount(1_000_000, code.code, document.id)).valid).toBe(true);
+    await testPrisma.discountCode.delete({ where: { id: code.id } });
+  });
+
+  it("rejects when scoped to a different document", async () => {
+    const code = await testPrisma.discountCode.create({
+      data: { code: `OTHERDOC${crypto.randomUUID().slice(0, 6)}`, type: "PERCENT", value: 10, documentScopes: { create: { documentTemplateId: otherDocument.id } } },
+    });
+    const result = await validateAndComputeDiscount(1_000_000, code.code, document.id);
+    expect(result.valid).toBe(false);
+    expect(result.reason).toMatch(/doesn't apply/);
+    await testPrisma.discountCode.delete({ where: { id: code.id } });
   });
 });
 

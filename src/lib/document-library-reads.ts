@@ -20,8 +20,11 @@ export async function listDocumentCategories() {
   return prisma.documentCategory.findMany({ orderBy: { name: "asc" } });
 }
 
-/** Admin: every discount code, newest first — codes are never deleted (setDiscountCodeActive only), so this is a complete history, not just the live/usable set. */
+/** Admin: every discount code, newest first — codes are never deleted (setDiscountCodeActive only), so this is a complete history, not just the live/usable set. An empty documentScopes array means the code applies to every document (see validateAndComputeDiscount). */
 export async function listDiscountCodes() {
   await requireStaffPermission(Permission.MANAGE_DOCUMENT_LIBRARY);
-  return prisma.discountCode.findMany({ orderBy: { createdAt: "desc" } });
+  return prisma.discountCode.findMany({
+    orderBy: { createdAt: "desc" },
+    include: { documentScopes: { include: { documentTemplate: { select: { id: true, title: true } } } } },
+  });
 }

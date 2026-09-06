@@ -36,7 +36,7 @@ export default async function DocumentLibraryPage() {
         <DocumentLibraryTable documents={documents} categories={categories} />
       )}
 
-      <DiscountCodesTable codes={discountCodes} now={currentTimestamp()} />
+      <DiscountCodesTable codes={discountCodes} documents={documents} now={currentTimestamp()} />
     </div>
   );
 }

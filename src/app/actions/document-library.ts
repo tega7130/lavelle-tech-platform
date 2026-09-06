@@ -101,6 +101,7 @@ export async function createDiscountCodeAction(input: unknown) {
       value,
       expiresAt: parsed.data.expiresAt ? new Date(parsed.data.expiresAt) : undefined,
       maxRedemptions: parsed.data.maxRedemptions,
+      documentTemplateIds: parsed.data.documentTemplateIds,
     },
     staff.id
   );

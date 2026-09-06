@@ -14,6 +14,10 @@ import { createDiscountCodeAction, setDiscountCodeActiveAction } from "@/app/act
 import type { listDiscountCodes } from "@/lib/document-library-reads";
 
 type DiscountCodeRow = Awaited<ReturnType<typeof listDiscountCodes>>[number];
+export interface DiscountDocumentOption {
+  id: string;
+  title: string;
+}
 
 function formatDate(d: Date) {
   return new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
@@ -23,18 +27,34 @@ function formatValue(code: Pick<DiscountCodeRow, "type" | "value">) {
   return code.type === "PERCENT" ? `${code.value}% off` : `${formatNaira(code.value)} off`;
 }
 
-function NewDiscountCodeDialog({ onClose }: { onClose: () => void }) {
+/** "All documents" when documentScopes is empty (the default — see DiscountCodeDocument's schema comment), otherwise the scoped titles. */
+function formatScope(code: Pick<DiscountCodeRow, "documentScopes">) {
+  if (code.documentScopes.length === 0) return "All documents";
+  return code.documentScopes.map((s) => s.documentTemplate.title);
+}
+
+function NewDiscountCodeDialog({ onClose, documents }: { onClose: () => void; documents: DiscountDocumentOption[] }) {
   const router = useRouter();
   const [code, setCode] = React.useState("");
   const [type, setType] = React.useState<"PERCENT" | "FIXED">("PERCENT");
   const [value, setValue] = React.useState("");
   const [expiresAt, setExpiresAt] = React.useState("");
   const [maxRedemptions, setMaxRedemptions] = React.useState("");
+  const [scope, setScope] = React.useState<"all" | "specific">("all");
+  const [selectedDocumentIds, setSelectedDocumentIds] = React.useState<string[]>([]);
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
+  function toggleDocument(id: string) {
+    setSelectedDocumentIds((ids) => (ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]));
+  }
+
   async function submit() {
     setError(null);
+    if (scope === "specific" && selectedDocumentIds.length === 0) {
+      setError("Select at least one document, or switch to All documents.");
+      return;
+    }
     setBusy(true);
     try {
       await createDiscountCodeAction({
@@ -43,6 +63,7 @@ function NewDiscountCodeDialog({ onClose }: { onClose: () => void }) {
         value,
         expiresAt: expiresAt || undefined,
         maxRedemptions: maxRedemptions || undefined,
+        documentTemplateIds: scope === "specific" ? selectedDocumentIds : undefined,
       });
       router.refresh();
       onClose();
@@ -91,6 +112,33 @@ function NewDiscountCodeDialog({ onClose }: { onClose: () => void }) {
             onChange={(e) => setValue(e.target.value)}
             placeholder={type === "PERCENT" ? "20" : "2000"}
           />
+        </Field>
+
+        <Field>
+          <Label>Applies to</Label>
+          <Segmented
+            name="discount-scope"
+            value={scope}
+            onChange={(v) => setScope(v as "all" | "specific")}
+            options={[
+              { value: "all", label: "All documents" },
+              { value: "specific", label: "Specific documents" },
+            ]}
+          />
+          {scope === "specific" && (
+            <div className="mt-2 max-h-[160px] overflow-y-auto rounded-md border border-neutral-300 p-2 flex flex-col gap-1.5">
+              {documents.length === 0 ? (
+                <div className="text-neutral-500 text-[12.5px] px-1 py-1">No documents to choose from yet.</div>
+              ) : (
+                documents.map((d) => (
+                  <label key={d.id} className="flex items-center gap-2 text-[12.5px] cursor-pointer px-1 py-0.5 rounded hover:bg-neutral-100">
+                    <input type="checkbox" checked={selectedDocumentIds.includes(d.id)} onChange={() => toggleDocument(d.id)} />
+                    {d.title}
+                  </label>
+                ))
+              )}
+            </div>
+          )}
         </Field>
 
         <Field>
@@ -144,7 +192,7 @@ function ActiveToggle({ code }: { code: DiscountCodeRow }) {
   );
 }
 
-export function DiscountCodesTable({ codes, now }: { codes: DiscountCodeRow[]; now: number }) {
+export function DiscountCodesTable({ codes, documents, now }: { codes: DiscountCodeRow[]; documents: DiscountDocumentOption[]; now: number }) {
   const [creating, setCreating] = React.useState(false);
 
   return (
@@ -173,6 +221,7 @@ export function DiscountCodesTable({ codes, now }: { codes: DiscountCodeRow[]; n
               <Tr>
                 <Th className="pl-[var(--space-4)]">Code</Th>
                 <Th>Discount</Th>
+                <Th>Applies to</Th>
                 <Th>Expires</Th>
                 <Th>Redemptions</Th>
                 <Th>Created</Th>
@@ -183,10 +232,18 @@ export function DiscountCodesTable({ codes, now }: { codes: DiscountCodeRow[]; n
               {codes.map((c) => {
                 const expired = c.expiresAt != null && new Date(c.expiresAt).getTime() < now;
                 const exhausted = c.maxRedemptions != null && c.redemptionCount >= c.maxRedemptions;
+                const scope = formatScope(c);
                 return (
                   <Tr key={c.id}>
                     <Td className="pl-[var(--space-4)] text-[13px] font-medium tracking-wide">{c.code}</Td>
                     <Td className="text-[13px]">{formatValue(c)}</Td>
+                    <Td className="text-[13px] max-w-[220px]">
+                      {scope === "All documents" ? (
+                        scope
+                      ) : (
+                        <span title={scope.join(", ")}>{scope.length === 1 ? scope[0] : `${scope.length} documents`}</span>
+                      )}
+                    </Td>
                     <Td className="text-[13px]">
                       {c.expiresAt ? formatDate(c.expiresAt) : "Never"}
                       {expired && <span className="block text-[#912019] text-[11px] mt-0.5">Expired</span>}
@@ -208,7 +265,7 @@ export function DiscountCodesTable({ codes, now }: { codes: DiscountCodeRow[]; n
         </div>
       )}
 
-      {creating && <NewDiscountCodeDialog onClose={() => setCreating(false)} />}
+      {creating && <NewDiscountCodeDialog onClose={() => setCreating(false)} documents={documents} />}
     </div>
   );
 }

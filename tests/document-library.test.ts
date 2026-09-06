@@ -322,6 +322,29 @@ describe("createDiscountCode", () => {
     await testPrisma.staff.delete({ where: { id: staff.id } }).catch(() => {});
   });
 
+  it("applies to every document when documentTemplateIds is omitted (the default)", async () => {
+    const staff = await seedStaff();
+    const created = await createDiscountCode({ code: code(), type: "PERCENT", value: 20 }, staff.id);
+    expect(created.documentScopes).toEqual([]);
+
+    await testPrisma.discountCode.delete({ where: { id: created.id } });
+    await testPrisma.staff.delete({ where: { id: staff.id } }).catch(() => {});
+  });
+
+  it("scopes a code to specific documents when documentTemplateIds is given", async () => {
+    const staff = await seedStaff();
+    const category = await seedCategory();
+    const document = await createDocumentTemplate(baseInput(category.id), staff.id);
+
+    const created = await createDiscountCode({ code: code(), type: "PERCENT", value: 20, documentTemplateIds: [document.id] }, staff.id);
+    expect(created.documentScopes).toHaveLength(1);
+    expect(created.documentScopes[0].documentTemplateId).toBe(document.id);
+
+    await testPrisma.discountCode.delete({ where: { id: created.id } });
+    await cleanup(staff.id, document.id);
+    await testPrisma.documentCategory.delete({ where: { id: category.id } });
+  });
+
   it("rejects a duplicate code, case-insensitively", async () => {
     const staff = await seedStaff();
     const c = code();

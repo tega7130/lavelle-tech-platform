@@ -50,17 +50,23 @@ export interface DiscountResult {
  * independently, again inside initiateDocumentPurchase at the moment of
  * actual charge. The frontend is never trusted for a discount amount
  * (rule 39) — every call recomputes it here, server-side, from the code's
- * live row.
+ * live row. documentTemplateId is likewise always re-checked here, never
+ * trusted from whatever the client claims it's applying the code to.
  */
-export async function validateAndComputeDiscount(priceMinor: number, codeInput: string): Promise<DiscountResult> {
+export async function validateAndComputeDiscount(priceMinor: number, codeInput: string, documentTemplateId: string): Promise<DiscountResult> {
   const trimmed = codeInput.trim();
   if (!trimmed) return { valid: false, reason: "Enter a discount code." };
 
-  const code = await prisma.discountCode.findUnique({ where: { code: trimmed } });
+  const code = await prisma.discountCode.findUnique({ where: { code: trimmed }, include: { documentScopes: true } });
   if (!code || !code.isActive) return { valid: false, reason: "Invalid discount code." };
   if (code.expiresAt && code.expiresAt < new Date()) return { valid: false, reason: "This discount code has expired." };
   if (code.maxRedemptions != null && code.redemptionCount >= code.maxRedemptions) {
     return { valid: false, reason: "This discount code has already been fully redeemed." };
+  }
+  // No scope rows = applies to every document (the default). Scope rows
+  // present = it only applies to those specific documents.
+  if (code.documentScopes.length > 0 && !code.documentScopes.some((s) => s.documentTemplateId === documentTemplateId)) {
+    return { valid: false, reason: "This discount code doesn't apply to this document." };
   }
 
   const rawDiscount = code.type === DiscountType.PERCENT ? Math.round((priceMinor * code.value) / 100) : code.value;

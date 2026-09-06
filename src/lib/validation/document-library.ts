@@ -43,6 +43,8 @@ export const createDiscountCodeSchema = z
     value: z.coerce.number().positive("Must be greater than 0"),
     expiresAt: z.string().trim().optional(),
     maxRedemptions: z.coerce.number().int().positive("Must be a whole number greater than 0").optional(),
+    // Omitted or empty = applies to every document.
+    documentTemplateIds: z.array(z.string()).optional(),
   })
   .superRefine((data, ctx) => {
     if (data.type === "PERCENT" && data.value > 100) {

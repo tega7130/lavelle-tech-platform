@@ -127,6 +127,9 @@ export interface CreateDiscountCodeInput {
   value: number;
   expiresAt?: Date;
   maxRedemptions?: number;
+  // Omitted or empty = applies to every document (the default).
+  // Non-empty = scoped to exactly these documents — see DiscountCodeDocument.
+  documentTemplateIds?: string[];
 }
 
 /**
@@ -147,7 +150,11 @@ export async function createDiscountCode(input: CreateDiscountCodeInput, staffId
       value: input.value,
       expiresAt: input.expiresAt ?? null,
       maxRedemptions: input.maxRedemptions ?? null,
+      documentScopes: input.documentTemplateIds?.length
+        ? { create: input.documentTemplateIds.map((documentTemplateId) => ({ documentTemplateId })) }
+        : undefined,
     },
+    include: { documentScopes: true },
   });
   await recordAuditEvent(prisma, {
     actorStaffId: staffId,
