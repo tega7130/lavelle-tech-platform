@@ -29,10 +29,13 @@ async function seedCandidate() {
 }
 
 async function seedDocument(staffId: string, priceMinor = 1_000_000) {
+  const category = await testPrisma.documentCategory.create({
+    data: { name: `Test Category ${crypto.randomUUID().slice(0, 8)}`, slug: `TEST_${crypto.randomUUID().slice(0, 8)}` },
+  });
   return testPrisma.documentTemplate.create({
     data: {
       title: "Test Template",
-      category: "CONTRACTS",
+      categoryId: category.id,
       priceMinor,
       storageKey: `lavelle/document_library/${crypto.randomUUID()}`,
       fileType: "application/pdf",
@@ -46,7 +49,9 @@ async function seedDocument(staffId: string, priceMinor = 1_000_000) {
 async function cleanup(opts: { staffId: string; candidateId: string; documentId: string }) {
   await testPrisma.documentPurchase.deleteMany({ where: { candidateId: opts.candidateId } });
   await testPrisma.payment.deleteMany({ where: { candidateId: opts.candidateId } });
+  const document = await testPrisma.documentTemplate.findUnique({ where: { id: opts.documentId } });
   await testPrisma.documentTemplate.delete({ where: { id: opts.documentId } }).catch(() => {});
+  if (document) await testPrisma.documentCategory.delete({ where: { id: document.categoryId } }).catch(() => {});
   await testPrisma.candidate.delete({ where: { id: opts.candidateId } }).catch(() => {});
   await testPrisma.staff.delete({ where: { id: opts.staffId } }).catch(() => {});
 }

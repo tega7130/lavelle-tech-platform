@@ -2405,11 +2405,13 @@ model DocumentTemplate {
 
   title String
 
-  // Plain string, not an enum — same discipline as Cohort.status: the
-  // initial five categories (src/lib/document-library.ts) are a starting
-  // list, not a closed set, and adding one later should never need a
-  // migration. Validated against that list at the service layer.
-  category String @db.VarChar(40)
+  // Admin-manageable, same pattern as ProgrammeCategory — an administrator
+  // picks an existing category or creates one inline while uploading
+  // (createDocumentCategory). Case-insensitive dedupe on name happens in
+  // that service, not here, same discipline as ProgrammeCategory's own
+  // createCategory.
+  categoryId String
+  category   DocumentCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
 
   description String?
 
@@ -2439,8 +2441,23 @@ model DocumentTemplate {
   favorites DocumentFavorite[]
   purchases DocumentPurchase[]
 
-  @@index([category])
+  @@index([categoryId])
   @@index([isActive, createdAt(sort: Desc)])
+}
+
+// Admin-manageable, mirrors ProgrammeCategory exactly (same dedupe
+// discipline, same slugify-on-create). Seeded with the five starting
+// categories from Phase 1's original spec (Contracts/MOUs/Agreements/
+// Employment/Other) — a starting list, not a closed set; adding one is a
+// row insert (createDocumentCategory), never a migration.
+model DocumentCategory {
+  id   String @id @default(uuid())
+  name String @unique
+  slug String @unique
+
+  createdAt DateTime @default(now())
+
+  documents DocumentTemplate[]
 }
 
 // ─── Document Library (Phase 2: candidate portal) ───────────────────────

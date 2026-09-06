@@ -1,9 +1,9 @@
-import { listDocumentTemplates } from "@/lib/document-library-reads";
+import { listDocumentTemplates, listDocumentCategories } from "@/lib/document-library-reads";
 import { UploadDocumentButton } from "@/components/admin/upload-document-button";
 import { DocumentLibraryTable } from "@/components/admin/document-library-table";
 
 export default async function DocumentLibraryPage() {
-  const documents = await listDocumentTemplates();
+  const [documents, categories] = await Promise.all([listDocumentTemplates(), listDocumentCategories()]);
 
   return (
     <div className="max-w-[1200px]">
@@ -14,7 +14,7 @@ export default async function DocumentLibraryPage() {
             Upload and manage contracts, MOUs, agreements and other legal or professional document templates.
           </div>
         </div>
-        {documents.length > 0 && <UploadDocumentButton />}
+        {documents.length > 0 && <UploadDocumentButton categories={categories} />}
       </div>
 
       {documents.length === 0 ? (
@@ -24,11 +24,11 @@ export default async function DocumentLibraryPage() {
             Upload your first document template to start building the Document Library.
           </p>
           <div className="mt-4 flex justify-center">
-            <UploadDocumentButton />
+            <UploadDocumentButton categories={categories} />
           </div>
         </div>
       ) : (
-        <DocumentLibraryTable documents={documents} />
+        <DocumentLibraryTable documents={documents} categories={categories} />
       )}
     </div>
   );

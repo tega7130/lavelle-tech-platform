@@ -8,12 +8,8 @@ import { Field, Label, Input, Textarea, FieldError } from "@/components/ui/field
 import { createDocumentTemplateAction } from "@/app/actions/document-library";
 import { finaliseUpload } from "@/app/actions/uploads";
 import { uploadToCloudinary } from "@/lib/cloudinary-upload";
-import {
-  DOCUMENT_CATEGORIES,
-  ACCEPTED_DOCUMENT_EXTENSIONS,
-  MAX_DOCUMENT_BYTES,
-  isAcceptedDocumentMimeType,
-} from "@/lib/document-library";
+import { ACCEPTED_DOCUMENT_EXTENSIONS, MAX_DOCUMENT_BYTES, isAcceptedDocumentMimeType } from "@/lib/document-library";
+import { DocumentCategoryPicker, type DocumentCategoryOption } from "@/components/admin/document-category-picker";
 
 interface UploadedDocumentFile {
   storageKey: string;
@@ -29,11 +25,18 @@ function formatBytes(bytes: number) {
 
 const ACCEPT_ATTR = ".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
-export function UploadDocumentButton({ label = "Upload Document" }: { label?: string }) {
+export function UploadDocumentButton({
+  label = "Upload Document",
+  categories: initialCategories,
+}: {
+  label?: string;
+  categories: DocumentCategoryOption[];
+}) {
   const router = useRouter();
   const [open, setOpen] = React.useState(false);
   const [title, setTitle] = React.useState("");
-  const [category, setCategory] = React.useState(DOCUMENT_CATEGORIES[0].value);
+  const [categories, setCategories] = React.useState(initialCategories);
+  const [categoryId, setCategoryId] = React.useState(initialCategories[0]?.id ?? "");
   const [description, setDescription] = React.useState("");
   const [priceNaira, setPriceNaira] = React.useState("");
   const [file, setFile] = React.useState<UploadedDocumentFile | null>(null);
@@ -45,7 +48,7 @@ export function UploadDocumentButton({ label = "Upload Document" }: { label?: st
 
   function reset() {
     setTitle("");
-    setCategory(DOCUMENT_CATEGORIES[0].value);
+    setCategoryId(initialCategories[0]?.id ?? "");
     setDescription("");
     setPriceNaira("");
     setFile(null);
@@ -98,11 +101,15 @@ export function UploadDocumentButton({ label = "Upload Document" }: { label?: st
       setError("Title is required.");
       return;
     }
+    if (!categoryId) {
+      setError("Choose a category.");
+      return;
+    }
     setBusy(true);
     try {
       await createDocumentTemplateAction({
         title,
-        category,
+        categoryId,
         description: description || undefined,
         priceNaira,
         storageKey: file.storageKey,
@@ -179,17 +186,12 @@ export function UploadDocumentButton({ label = "Upload Document" }: { label?: st
 
             <Field>
               <Label>Category</Label>
-              <select
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
-                className="h-11 w-full rounded-md border border-neutral-300 bg-bg px-3 text-sm text-text"
-              >
-                {DOCUMENT_CATEGORIES.map((c) => (
-                  <option key={c.value} value={c.value}>
-                    {c.label}
-                  </option>
-                ))}
-              </select>
+              <DocumentCategoryPicker
+                categories={categories}
+                value={categoryId}
+                onChange={setCategoryId}
+                onCategoryCreated={(created) => setCategories((cats) => (cats.some((c) => c.id === created.id) ? cats : [...cats, created]))}
+              />
             </Field>
 
             <Field>
@@ -214,7 +216,7 @@ export function UploadDocumentButton({ label = "Upload Document" }: { label?: st
               <Button variant="secondary" onClick={close}>
                 Cancel
               </Button>
-              <Button variant="primary" disabled={busy || fileUploading || !file || !title.trim() || priceNaira === ""} onClick={submit}>
+              <Button variant="primary" disabled={busy || fileUploading || !file || !title.trim() || !categoryId || priceNaira === ""} onClick={submit}>
                 {busy ? "Uploading…" : "Upload Document"}
               </Button>
             </div>

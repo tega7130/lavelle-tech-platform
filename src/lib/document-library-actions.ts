@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { recordAuditEvent } from "@/lib/audit";
+import { slugify } from "@/lib/slug";
 
 // No "server-only" / staff-auth import here, deliberately — same
 // discipline as blog-admin-actions.ts. staffId is always passed in by the
@@ -15,9 +16,28 @@ export interface DocumentTemplateFileInput {
 
 export interface DocumentTemplateMetadataInput {
   title: string;
-  category: string;
+  categoryId: string;
   description?: string;
   priceMinor: number;
+}
+
+/** Case-insensitive dedupe on name — returns the existing row on match rather than creating a near-duplicate. Mirrors app/actions/programme.ts's createCategory exactly. */
+export async function createDocumentCategory(name: string, staffId: string) {
+  const trimmed = name.trim();
+  if (!trimmed) throw new Error("Category name is required.");
+
+  const existing = await prisma.documentCategory.findFirst({ where: { name: { equals: trimmed, mode: "insensitive" } } });
+  if (existing) return existing;
+
+  const created = await prisma.documentCategory.create({ data: { name: trimmed, slug: slugify(trimmed) } });
+  await recordAuditEvent(prisma, {
+    actorStaffId: staffId,
+    subjectType: "document_category",
+    subjectId: created.id,
+    action: "document_category.created",
+    description: `Created document category "${trimmed}"`,
+  });
+  return created;
 }
 
 export async function createDocumentTemplate(
@@ -27,7 +47,7 @@ export async function createDocumentTemplate(
   const document = await prisma.documentTemplate.create({
     data: {
       title: input.title,
-      category: input.category,
+      categoryId: input.categoryId,
       description: input.description || null,
       priceMinor: input.priceMinor,
       storageKey: input.storageKey,
@@ -36,6 +56,7 @@ export async function createDocumentTemplate(
       fileBytes: input.fileBytes,
       uploadedByStaffId: staffId,
     },
+    include: { category: true },
   });
   await recordAuditEvent(prisma, {
     actorStaffId: staffId,
@@ -57,10 +78,11 @@ export async function updateDocumentTemplateMetadata(
     where: { id },
     data: {
       title: input.title,
-      category: input.category,
+      categoryId: input.categoryId,
       description: input.description || null,
       priceMinor: input.priceMinor,
     },
+    include: { category: true },
   });
   await recordAuditEvent(prisma, {
     actorStaffId: staffId,

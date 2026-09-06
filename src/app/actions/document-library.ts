@@ -9,6 +9,7 @@ import {
   updateDocumentTemplateMetadata,
   setDocumentTemplateActive,
   deleteDocumentTemplate,
+  createDocumentCategory,
 } from "@/lib/document-library-actions";
 import {
   createDocumentTemplateSchema,
@@ -28,7 +29,7 @@ export async function createDocumentTemplateAction(input: unknown) {
   const document = await createDocumentTemplate(
     {
       title: parsed.data.title,
-      category: parsed.data.category,
+      categoryId: parsed.data.categoryId,
       description: parsed.data.description,
       priceMinor: Math.round(parsed.data.priceNaira * 100),
       storageKey: parsed.data.storageKey,
@@ -51,7 +52,7 @@ export async function updateDocumentTemplateAction(id: string, input: unknown) {
     id,
     {
       title: parsed.data.title,
-      category: parsed.data.category,
+      categoryId: parsed.data.categoryId,
       description: parsed.data.description,
       priceMinor: Math.round(parsed.data.priceNaira * 100),
     },
@@ -59,6 +60,14 @@ export async function updateDocumentTemplateAction(id: string, input: unknown) {
   );
   revalidateAll();
   return document;
+}
+
+/** Inline "+ New category" creation from the Upload/Edit dialogs — mirrors createCategory (programmes) exactly. */
+export async function createDocumentCategoryAction(name: string) {
+  const staff = await requireStaffPermission(Permission.MANAGE_DOCUMENT_LIBRARY);
+  const category = await createDocumentCategory(name, staff.id);
+  revalidateAll();
+  return category;
 }
 
 export async function setDocumentTemplateActiveAction(id: string, isActive: boolean) {

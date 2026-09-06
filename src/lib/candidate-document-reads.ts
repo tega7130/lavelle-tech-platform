@@ -14,7 +14,7 @@ import type { Prisma } from "@/generated/prisma/client";
 const CANDIDATE_DOCUMENT_SELECT = {
   id: true,
   title: true,
-  category: true,
+  category: { select: { id: true, name: true } },
   description: true,
   priceMinor: true,
   currency: true,
@@ -63,8 +63,13 @@ async function annotateViewerState<T extends { id: string }>(candidateId: string
 
 export interface ListCandidateDocumentsParams {
   q?: string;
-  category?: string;
+  categoryId?: string;
   sort?: DocumentSort;
+}
+
+/** Every category — used for the browse page's filter pills, since admins can add new ones (no fixed/hardcoded list). */
+export async function listDocumentCategoriesForCandidates() {
+  return prisma.documentCategory.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } });
 }
 
 /** Browse/search/filter/sort — only ever ACTIVE templates (an inactive one is invisible here, same as an unpublished BlogPost). */
@@ -74,7 +79,7 @@ export async function listCandidateDocuments(params: ListCandidateDocumentsParam
   const documents = await prisma.documentTemplate.findMany({
     where: {
       isActive: true,
-      ...(params.category ? { category: params.category } : {}),
+      ...(params.categoryId ? { categoryId: params.categoryId } : {}),
       ...(params.q
         ? { OR: [{ title: { contains: params.q, mode: "insensitive" } }, { description: { contains: params.q, mode: "insensitive" } }] }
         : {}),
@@ -145,7 +150,9 @@ export async function listCandidatePurchases(params: ListCandidatePurchasesParam
       purchasedAt: true,
       amountMinor: true,
       currency: true,
-      documentTemplate: { select: { id: true, title: true, category: true, fileType: true, fileName: true, fileBytes: true, isActive: true } },
+      documentTemplate: {
+        select: { id: true, title: true, category: { select: { id: true, name: true } }, fileType: true, fileName: true, fileBytes: true, isActive: true },
+      },
     },
     orderBy: params.sort === "title" ? { documentTemplate: { title: "asc" } } : { purchasedAt: "desc" },
   });

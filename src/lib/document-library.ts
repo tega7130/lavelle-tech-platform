@@ -1,28 +1,8 @@
-// Document Library (Phase 1) — shared vocabulary between the admin form,
-// the table and both validation layers, so there is exactly one place a
-// new category or accepted file type gets added.
-
-export interface DocumentCategoryOption {
-  value: string;
-  label: string;
-}
-
-// A starting list, not a closed set (see DocumentTemplate.category's
-// comment in schema.prisma) — plain strings, so adding one later is a
-// one-line change here, never a migration.
-export const DOCUMENT_CATEGORIES: DocumentCategoryOption[] = [
-  { value: "CONTRACTS", label: "Contracts" },
-  { value: "MOUS", label: "MOUs" },
-  { value: "AGREEMENTS", label: "Agreements" },
-  { value: "EMPLOYMENT", label: "Employment" },
-  { value: "OTHER", label: "Other" },
-];
-
-export const DOCUMENT_CATEGORY_VALUES = DOCUMENT_CATEGORIES.map((c) => c.value) as [string, ...string[]];
-
-export function documentCategoryLabel(category: string): string {
-  return DOCUMENT_CATEGORIES.find((c) => c.value === category)?.label ?? category;
-}
+// Document Library — shared vocabulary between the admin form, the table
+// and both validation layers, so there is exactly one place an accepted
+// file type gets added. Categories are NOT here — they're admin-managed
+// rows in the DocumentCategory table (see createDocumentCategory /
+// listDocumentCategories), the same pattern as ProgrammeCategory.
 
 // PDF and DOCX only, per spec — keyed by the MIME type Cloudinary reports
 // back at upload time (never trusted from the client's <input accept>

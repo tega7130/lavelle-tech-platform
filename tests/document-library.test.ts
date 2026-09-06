@@ -6,6 +6,7 @@ import {
   updateDocumentTemplateMetadata,
   setDocumentTemplateActive,
   deleteDocumentTemplate,
+  createDocumentCategory,
 } from "@/lib/document-library-actions";
 import { createDocumentTemplateSchema, updateDocumentTemplateSchema } from "@/lib/validation/document-library";
 import { isAcceptedDocumentMimeType, MAX_DOCUMENT_BYTES } from "@/lib/document-library";
@@ -14,6 +15,10 @@ async function seedStaff() {
   return testPrisma.staff.create({
     data: { name: "Test Document Staff", email: `doc-test-${crypto.randomUUID()}@example.com`, role: "CONTENT_MANAGER", passwordHash: "not-a-real-hash" },
   });
+}
+
+async function seedCategory(name = `Test Category ${crypto.randomUUID().slice(0, 8)}`) {
+  return testPrisma.documentCategory.create({ data: { name, slug: name.toUpperCase().replace(/[^A-Z0-9]+/g, "_") } });
 }
 
 async function cleanup(staffId: string, ...documentIds: string[]) {
@@ -27,10 +32,10 @@ const baseFile = {
   fileBytes: 102_400,
 };
 
-function baseInput(overrides: { description?: string; category?: string; priceMinor?: number } = {}) {
+function baseInput(categoryId: string, overrides: { description?: string; priceMinor?: number } = {}) {
   return {
     title: "Employment Contract Template",
-    category: "EMPLOYMENT",
+    categoryId,
     priceMinor: 1_500_000, // ₦15,000
     storageKey: `lavelle/document_library/${crypto.randomUUID()}`,
     ...baseFile,
@@ -41,11 +46,13 @@ function baseInput(overrides: { description?: string; category?: string; priceMi
 describe("createDocumentTemplate", () => {
   it("creates a document template and records an audit event", async () => {
     const staff = await seedStaff();
-    const input = baseInput();
+    const category = await seedCategory();
+    const input = baseInput(category.id);
     const document = await createDocumentTemplate(input, staff.id);
 
     expect(document.title).toBe(input.title);
-    expect(document.category).toBe("EMPLOYMENT");
+    expect(document.categoryId).toBe(category.id);
+    expect(document.category.id).toBe(category.id);
     expect(document.priceMinor).toBe(1_500_000);
     expect(document.currency).toBe("NGN");
     expect(document.isActive).toBe(true);
@@ -60,33 +67,44 @@ describe("createDocumentTemplate", () => {
     expect(event?.actorStaffId).toBe(staff.id);
 
     await cleanup(staff.id, document.id);
+    await testPrisma.documentCategory.delete({ where: { id: category.id } });
   });
 
   it("stores an optional description, and null when omitted", async () => {
     const staff = await seedStaff();
-    const withDescription = await createDocumentTemplate(baseInput({ description: "A short description." }), staff.id);
+    const category = await seedCategory();
+    const withDescription = await createDocumentTemplate(baseInput(category.id, { description: "A short description." }), staff.id);
     expect(withDescription.description).toBe("A short description.");
 
-    const withoutDescription = await createDocumentTemplate(baseInput(), staff.id);
+    const withoutDescription = await createDocumentTemplate(baseInput(category.id), staff.id);
     expect(withoutDescription.description).toBeNull();
 
     await cleanup(staff.id, withDescription.id, withoutDescription.id);
+    await testPrisma.documentCategory.delete({ where: { id: category.id } });
+  });
+
+  it("rejects a categoryId that doesn't exist (foreign key constraint)", async () => {
+    const staff = await seedStaff();
+    await expect(createDocumentTemplate(baseInput(crypto.randomUUID()), staff.id)).rejects.toThrow();
+    await testPrisma.staff.delete({ where: { id: staff.id } }).catch(() => {});
   });
 });
 
 describe("updateDocumentTemplateMetadata", () => {
   it("updates title/category/description/price without touching the file", async () => {
     const staff = await seedStaff();
-    const document = await createDocumentTemplate(baseInput(), staff.id);
+    const category = await seedCategory();
+    const otherCategory = await seedCategory();
+    const document = await createDocumentTemplate(baseInput(category.id), staff.id);
 
     const updated = await updateDocumentTemplateMetadata(
       document.id,
-      { title: "Revised Employment Contract", category: "CONTRACTS", description: "Updated wording.", priceMinor: 2_000_000 },
+      { title: "Revised Employment Contract", categoryId: otherCategory.id, description: "Updated wording.", priceMinor: 2_000_000 },
       staff.id
     );
 
     expect(updated.title).toBe("Revised Employment Contract");
-    expect(updated.category).toBe("CONTRACTS");
+    expect(updated.categoryId).toBe(otherCategory.id);
     expect(updated.description).toBe("Updated wording.");
     expect(updated.priceMinor).toBe(2_000_000);
     // The file itself is never touched by a metadata-only update.
@@ -99,13 +117,15 @@ describe("updateDocumentTemplateMetadata", () => {
     expect(event).not.toBeNull();
 
     await cleanup(staff.id, document.id);
+    await testPrisma.documentCategory.deleteMany({ where: { id: { in: [category.id, otherCategory.id] } } });
   });
 });
 
 describe("setDocumentTemplateActive", () => {
   it("toggles isActive and records a matching audit event", async () => {
     const staff = await seedStaff();
-    const document = await createDocumentTemplate(baseInput(), staff.id);
+    const category = await seedCategory();
+    const document = await createDocumentTemplate(baseInput(category.id), staff.id);
 
     const deactivated = await setDocumentTemplateActive(document.id, false, staff.id);
     expect(deactivated.isActive).toBe(false);
@@ -122,13 +142,15 @@ describe("setDocumentTemplateActive", () => {
     expect(activatedEvent).not.toBeNull();
 
     await cleanup(staff.id, document.id);
+    await testPrisma.documentCategory.delete({ where: { id: category.id } });
   });
 });
 
 describe("deleteDocumentTemplate", () => {
   it("records an audit event before removing the row", async () => {
     const staff = await seedStaff();
-    const document = await createDocumentTemplate(baseInput(), staff.id);
+    const category = await seedCategory();
+    const document = await createDocumentTemplate(baseInput(category.id), staff.id);
 
     await deleteDocumentTemplate(document.id, staff.id);
 
@@ -141,13 +163,53 @@ describe("deleteDocumentTemplate", () => {
     expect(event).not.toBeNull();
 
     await testPrisma.staff.delete({ where: { id: staff.id } }).catch(() => {});
+    await testPrisma.documentCategory.delete({ where: { id: category.id } });
+  });
+});
+
+describe("createDocumentCategory", () => {
+  it("creates a category, slugified, and records an audit event", async () => {
+    const staff = await seedStaff();
+    const name = `Non-Disclosure ${crypto.randomUUID().slice(0, 6)}`;
+    const category = await createDocumentCategory(name, staff.id);
+
+    expect(category.name).toBe(name);
+    expect(category.slug).toBeTruthy();
+
+    const event = await testPrisma.auditEvent.findFirst({
+      where: { subjectType: "document_category", subjectId: category.id, action: "document_category.created" },
+    });
+    expect(event).not.toBeNull();
+
+    await testPrisma.documentCategory.delete({ where: { id: category.id } });
+    await testPrisma.staff.delete({ where: { id: staff.id } }).catch(() => {});
+  });
+
+  it("is case-insensitively deduped — a near-duplicate name returns the existing row instead of creating one", async () => {
+    const staff = await seedStaff();
+    const name = `Franchise Agreements ${crypto.randomUUID().slice(0, 6)}`;
+    const first = await createDocumentCategory(name, staff.id);
+    const second = await createDocumentCategory(name.toUpperCase(), staff.id);
+
+    expect(second.id).toBe(first.id);
+    const count = await testPrisma.documentCategory.count({ where: { name: { equals: name, mode: "insensitive" } } });
+    expect(count).toBe(1);
+
+    await testPrisma.documentCategory.delete({ where: { id: first.id } });
+    await testPrisma.staff.delete({ where: { id: staff.id } }).catch(() => {});
+  });
+
+  it("rejects an empty/whitespace name", async () => {
+    const staff = await seedStaff();
+    await expect(createDocumentCategory("   ", staff.id)).rejects.toThrow();
+    await testPrisma.staff.delete({ where: { id: staff.id } }).catch(() => {});
   });
 });
 
 describe("createDocumentTemplateSchema validation", () => {
   const validBase = {
     title: "Employment Contract Template",
-    category: "EMPLOYMENT",
+    categoryId: "some-category-id",
     priceNaira: "15000",
     storageKey: "lavelle/document_library/abc123",
     fileType: "application/pdf",
@@ -164,8 +226,8 @@ describe("createDocumentTemplateSchema validation", () => {
     expect(() => createDocumentTemplateSchema.parse({ ...validBase, title: "" })).toThrow();
   });
 
-  it("rejects a category outside the fixed list", () => {
-    expect(() => createDocumentTemplateSchema.parse({ ...validBase, category: "NOT_A_CATEGORY" })).toThrow();
+  it("rejects an empty categoryId", () => {
+    expect(() => createDocumentTemplateSchema.parse({ ...validBase, categoryId: "" })).toThrow();
   });
 
   it("rejects a negative price", () => {
@@ -185,7 +247,7 @@ describe("updateDocumentTemplateSchema validation", () => {
   it("does not require file fields", () => {
     const result = updateDocumentTemplateSchema.parse({
       title: "Renamed",
-      category: "OTHER",
+      categoryId: "some-category-id",
       priceNaira: "500",
     });
     expect(result.title).toBe("Renamed");

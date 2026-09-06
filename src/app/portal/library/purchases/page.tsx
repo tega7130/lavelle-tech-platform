@@ -4,7 +4,6 @@ import { Tag } from "@/components/ui/tag";
 import { buttonClassName } from "@/components/ui/button";
 import { Table, Thead, Tbody, Tr, Th, Td } from "@/components/ui/table";
 import { listCandidatePurchases } from "@/lib/candidate-document-reads";
-import { documentCategoryLabel } from "@/lib/document-library";
 import { PurchasesFiltersBar } from "@/components/portal/purchases-filters-bar";
 import { FavoriteButton } from "@/components/portal/favorite-button";
 import { DownloadButton, ViewOnlineButton } from "@/components/portal/document-file-buttons";
@@ -69,7 +68,7 @@ export default async function MyPurchasesPage({ searchParams }: { searchParams: 
                       </Tag>
                     )}
                   </Td>
-                  <Td className="text-[13px]">{documentCategoryLabel(p.documentTemplate.category)}</Td>
+                  <Td className="text-[13px]">{p.documentTemplate.category.name}</Td>
                   <Td className="text-[13px] tabular-nums">{formatDateTime(p.purchasedAt!)}</Td>
                   <Td>
                     <FavoriteButton documentTemplateId={p.documentTemplate.id} initialFavorited={p.viewerFavorited} className="h-8 w-8" />

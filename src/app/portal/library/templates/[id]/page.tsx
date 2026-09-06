@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getCandidateDocumentDetail } from "@/lib/candidate-document-reads";
 import { formatNaira } from "@/lib/format";
-import { documentCategoryLabel, ACCEPTED_DOCUMENT_MIME_TYPES } from "@/lib/document-library";
+import { ACCEPTED_DOCUMENT_MIME_TYPES } from "@/lib/document-library";
 import { Card, CardKicker } from "@/components/ui/card";
 import { Tag } from "@/components/ui/tag";
 import { FavoriteButton } from "@/components/portal/favorite-button";
@@ -33,7 +33,7 @@ export default async function TemplateDetailPage({ params }: { params: Promise<{
 
       <div className="mt-[var(--space-4)] flex items-start justify-between gap-3">
         <div className="flex flex-wrap gap-1.5">
-          <Tag variant="accent">{documentCategoryLabel(document.category)}</Tag>
+          <Tag variant="accent">{document.category.name}</Tag>
           {!document.isActive && <Tag variant="danger">Unavailable</Tag>}
         </div>
         <FavoriteButton documentTemplateId={document.id} initialFavorited={document.viewerFavorited} />

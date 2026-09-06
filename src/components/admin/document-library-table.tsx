@@ -9,7 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Field, Label, Input, Textarea } from "@/components/ui/field";
 import { formatNaira } from "@/lib/format";
-import { DOCUMENT_CATEGORIES, documentCategoryLabel, ACCEPTED_DOCUMENT_MIME_TYPES } from "@/lib/document-library";
+import { ACCEPTED_DOCUMENT_MIME_TYPES } from "@/lib/document-library";
+import { DocumentCategoryPicker, type DocumentCategoryOption } from "@/components/admin/document-category-picker";
 import {
   updateDocumentTemplateAction,
   setDocumentTemplateActiveAction,
@@ -29,10 +30,19 @@ function formatBytes(bytes: number) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function EditDocumentDialog({ document, onClose }: { document: DocumentRow; onClose: () => void }) {
+function EditDocumentDialog({
+  document,
+  categories: initialCategories,
+  onClose,
+}: {
+  document: DocumentRow;
+  categories: DocumentCategoryOption[];
+  onClose: () => void;
+}) {
   const router = useRouter();
   const [title, setTitle] = React.useState(document.title);
-  const [category, setCategory] = React.useState(document.category);
+  const [categories, setCategories] = React.useState(initialCategories);
+  const [categoryId, setCategoryId] = React.useState(document.categoryId);
   const [description, setDescription] = React.useState(document.description ?? "");
   const [priceNaira, setPriceNaira] = React.useState(String(document.priceMinor / 100));
   const [busy, setBusy] = React.useState(false);
@@ -55,9 +65,13 @@ function EditDocumentDialog({ document, onClose }: { document: DocumentRow; onCl
       setError("Title is required.");
       return;
     }
+    if (!categoryId) {
+      setError("Choose a category.");
+      return;
+    }
     setBusy(true);
     try {
-      await updateDocumentTemplateAction(document.id, { title, category, description: description || undefined, priceNaira });
+      await updateDocumentTemplateAction(document.id, { title, categoryId, description: description || undefined, priceNaira });
       router.refresh();
       onClose();
     } catch (e) {
@@ -93,17 +107,12 @@ function EditDocumentDialog({ document, onClose }: { document: DocumentRow; onCl
 
         <Field>
           <Label>Category</Label>
-          <select
-            value={category}
-            onChange={(e) => setCategory(e.target.value)}
-            className="h-11 w-full rounded-md border border-neutral-300 bg-bg px-3 text-sm text-text"
-          >
-            {DOCUMENT_CATEGORIES.map((c) => (
-              <option key={c.value} value={c.value}>
-                {c.label}
-              </option>
-            ))}
-          </select>
+          <DocumentCategoryPicker
+            categories={categories}
+            value={categoryId}
+            onChange={setCategoryId}
+            onCategoryCreated={(created) => setCategories((cats) => (cats.some((c) => c.id === created.id) ? cats : [...cats, created]))}
+          />
         </Field>
 
         <Field>
@@ -123,7 +132,7 @@ function EditDocumentDialog({ document, onClose }: { document: DocumentRow; onCl
           <Button variant="secondary" onClick={onClose}>
             Cancel
           </Button>
-          <Button variant="primary" disabled={busy || !title.trim()} onClick={submit}>
+          <Button variant="primary" disabled={busy || !title.trim() || !categoryId} onClick={submit}>
             {busy ? "Saving…" : "Save changes"}
           </Button>
         </div>
@@ -219,7 +228,7 @@ function StatusToggle({ document }: { document: DocumentRow }) {
   );
 }
 
-export function DocumentLibraryTable({ documents }: { documents: DocumentRow[] }) {
+export function DocumentLibraryTable({ documents, categories }: { documents: DocumentRow[]; categories: DocumentCategoryOption[] }) {
   const [editingId, setEditingId] = React.useState<string | null>(null);
   const [analyticsId, setAnalyticsId] = React.useState<string | null>(null);
   const [deletingId, setDeletingId] = React.useState<string | null>(null);
@@ -251,7 +260,7 @@ export function DocumentLibraryTable({ documents }: { documents: DocumentRow[] }
                   <div className="text-[13px]">{d.title}</div>
                   <div className="text-[11.5px] text-neutral-500 truncate max-w-[280px]">{d.fileName}</div>
                 </Td>
-                <Td className="text-[13px]">{documentCategoryLabel(d.category)}</Td>
+                <Td className="text-[13px]">{d.category.name}</Td>
                 <Td className="text-[13px] tabular-nums">{formatNaira(d.priceMinor)}</Td>
                 <Td className="text-[13px] tabular-nums">{d.purchaseCount}</Td>
                 <Td className="text-[13px] tabular-nums">{formatNaira(d.revenueMinor)}</Td>
@@ -278,7 +287,7 @@ export function DocumentLibraryTable({ documents }: { documents: DocumentRow[] }
         </Table>
       </div>
 
-      {editing && <EditDocumentDialog document={editing} onClose={() => setEditingId(null)} />}
+      {editing && <EditDocumentDialog document={editing} categories={categories} onClose={() => setEditingId(null)} />}
       {viewingAnalytics && <AnalyticsDialog document={viewingAnalytics} onClose={() => setAnalyticsId(null)} />}
       {deleting && <DeleteDocumentDialog document={deleting} onClose={() => setDeletingId(null)} />}
     </>

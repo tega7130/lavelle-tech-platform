@@ -1,12 +1,14 @@
 import { z } from "zod";
-import { DOCUMENT_CATEGORY_VALUES } from "@/lib/document-library";
 
 // Base object kept separate from the create schema's file fields so
 // updateDocumentMetadataSchema can reuse it without pulling in
 // upload-only fields — metadata edits never re-upload the file (spec).
+// categoryId is validated for shape only here — existence is enforced by
+// the DocumentCategory foreign key at the DB layer (same discipline as
+// Programme.categoryId in validation/programme.ts).
 const documentMetadataSchema = z.object({
   title: z.string().trim().min(1, "Required").max(200),
-  category: z.enum(DOCUMENT_CATEGORY_VALUES),
+  categoryId: z.string().min(1, "Choose a category"),
   description: z.string().trim().max(2000).optional(),
   // The admin types naira (a human amount, e.g. "15000"); the server
   // converts to kobo — priceMinor itself is never entered directly, same

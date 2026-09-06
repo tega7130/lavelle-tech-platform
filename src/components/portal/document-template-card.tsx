@@ -3,7 +3,6 @@ import { Card, CardTitle, CardBody } from "@/components/ui/card";
 import { Tag } from "@/components/ui/tag";
 import { buttonClassName } from "@/components/ui/button";
 import { formatNaira } from "@/lib/format";
-import { documentCategoryLabel } from "@/lib/document-library";
 import { FavoriteButton } from "@/components/portal/favorite-button";
 import { DownloadButton } from "@/components/portal/document-file-buttons";
 import type { CandidateDocumentSummary } from "@/lib/candidate-document-reads";
@@ -22,7 +21,7 @@ export function DocumentTemplateCard({ document }: { document: TemplateCardDocum
     <Card elev="sm" className="overflow-hidden">
       <div className="flex items-start justify-between gap-2">
         <div className="flex min-w-0 flex-wrap gap-1.5">
-          <Tag variant="accent">{documentCategoryLabel(document.category)}</Tag>
+          <Tag variant="accent">{document.category.name}</Tag>
           {!document.isActive && <Tag variant="danger">Unavailable</Tag>}
         </div>
         <FavoriteButton documentTemplateId={document.id} initialFavorited={document.viewerFavorited} className="h-8 w-8" />

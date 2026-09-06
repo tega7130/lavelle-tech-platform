@@ -4,9 +4,6 @@ import * as React from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { Segmented } from "@/components/ui/segmented";
 import { Input } from "@/components/ui/field";
-import { DOCUMENT_CATEGORIES } from "@/lib/document-library";
-
-const CATEGORY_OPTIONS = [{ value: "", label: "All" }, ...DOCUMENT_CATEGORIES.map((c) => ({ value: c.value, label: c.label }))];
 
 const SORT_OPTIONS = [
   { value: "newest", label: "Newest" },
@@ -15,12 +12,29 @@ const SORT_OPTIONS = [
   { value: "popular", label: "Most Popular" },
 ];
 
+export interface DocumentCategoryOption {
+  id: string;
+  name: string;
+}
+
 /** Search-on-Enter/blur, filters commit immediately — same discipline as ProgrammesFilterBar (admin). No debounced-as-you-type search exists anywhere else in this app. */
-export function DocumentFiltersBar({ q, category, sort }: { q: string; category: string; sort: string }) {
+export function DocumentFiltersBar({
+  q,
+  categoryId,
+  sort,
+  categories,
+}: {
+  q: string;
+  categoryId: string;
+  sort: string;
+  categories: DocumentCategoryOption[];
+}) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [query, setQuery] = React.useState(q);
+
+  const categoryOptions = [{ value: "", label: "All" }, ...categories.map((c) => ({ value: c.id, label: c.name }))];
 
   function setParam(key: string, value: string) {
     const next = new URLSearchParams(searchParams.toString());
@@ -43,7 +57,7 @@ export function DocumentFiltersBar({ q, category, sort }: { q: string; category:
         className="h-11 w-full sm:max-w-[360px]"
       />
       <div className="flex flex-wrap items-center gap-3">
-        <Segmented name="category" value={category} onChange={(v) => setParam("category", v)} options={CATEGORY_OPTIONS} />
+        <Segmented name="category" value={categoryId} onChange={(v) => setParam("category", v)} options={categoryOptions} />
         <select
           value={sort}
           onChange={(e) => setParam("sort", e.target.value)}

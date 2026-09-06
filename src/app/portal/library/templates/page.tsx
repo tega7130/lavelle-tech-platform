@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { buttonClassName } from "@/components/ui/button";
-import { listCandidateDocuments, type DocumentSort } from "@/lib/candidate-document-reads";
+import { listCandidateDocuments, listDocumentCategoriesForCandidates, type DocumentSort } from "@/lib/candidate-document-reads";
 import { DocumentFiltersBar } from "@/components/portal/document-filters-bar";
 import { DocumentTemplateCard } from "@/components/portal/document-template-card";
 
@@ -11,12 +11,15 @@ export default async function BrowseTemplatesPage({
   searchParams: Promise<{ q?: string; category?: string; sort?: string }>;
 }) {
   const sp = await searchParams;
-  const documents = await listCandidateDocuments({ q: sp.q, category: sp.category, sort: sp.sort as DocumentSort | undefined });
+  const [documents, categories] = await Promise.all([
+    listCandidateDocuments({ q: sp.q, categoryId: sp.category, sort: sp.sort as DocumentSort | undefined }),
+    listDocumentCategoriesForCandidates(),
+  ]);
   const hasFilters = !!(sp.q || sp.category);
 
   return (
     <div className="max-w-[1180px]">
-      <DocumentFiltersBar q={sp.q ?? ""} category={sp.category ?? ""} sort={sp.sort ?? "newest"} />
+      <DocumentFiltersBar q={sp.q ?? ""} categoryId={sp.category ?? ""} sort={sp.sort ?? "newest"} categories={categories} />
 
       {documents.length === 0 ? (
         <Card elev="sm" className="items-center px-6 py-12 text-center">
