@@ -650,6 +650,74 @@ Server Actions are form handlers (not REST endpoints). Called via `async functio
 
 ---
 
+### Document Library (Admin)
+
+**createDocumentTemplateAction(input)**
+- Upload a new document template (file already uploaded to Cloudinary via `finaliseUpload`)
+- Input: `{ title, categoryId, description?, priceNaira, storageKey, fileType, fileName, fileBytes }`
+- Requires: `MANAGE_DOCUMENT_LIBRARY` permission
+- Returns: the created `DocumentTemplate`
+
+**updateDocumentTemplateAction(id, input)**
+- Update title/category/description/price — never the file itself (delete and re-upload for that)
+- Requires: `MANAGE_DOCUMENT_LIBRARY` permission
+
+**setDocumentTemplateActiveAction(id, isActive)**
+- Toggle candidate visibility/purchasability without deleting the listing
+- Requires: `MANAGE_DOCUMENT_LIBRARY` permission
+
+**deleteDocumentTemplateAction(id)**
+- Soft-deletes (`deletedAt` + `isActive: false`) — never a real row removal, so a candidate who
+  already purchased the template keeps permanent download/view access
+- Requires: `MANAGE_DOCUMENT_LIBRARY` permission
+
+**createDocumentCategoryAction(name)**
+- Inline "+ New category" creation from the Upload/Edit dialogs — case-insensitive dedupe
+- Requires: `MANAGE_DOCUMENT_LIBRARY` permission
+- Returns: the existing category on a name match, otherwise a newly created one
+
+**createDiscountCodeAction(input)**
+- Input: `{ code, type: "PERCENT" | "FIXED", value, expiresAt?, maxRedemptions?, documentTemplateIds? }`
+- `documentTemplateIds` omitted/empty scopes the code to every document (the default); non-empty
+  scopes it to exactly those documents
+- Requires: `MANAGE_DOCUMENT_LIBRARY` permission
+- Returns: the created `DiscountCode`
+
+**setDiscountCodeActiveAction(id, isActive)**
+- Deactivate/reactivate a code — codes are never deleted (a redeemed code's discount is already
+  snapshotted onto its `DocumentPurchase`)
+- Requires: `MANAGE_DOCUMENT_LIBRARY` permission
+
+**getDocumentFileUrlAction(storageKey)**
+- A fresh signed URL to view the underlying file from the admin Edit dialog
+- Requires: `MANAGE_DOCUMENT_LIBRARY` permission
+
+---
+
+### Document Library (Candidate)
+
+**validateDiscountCodeAction(documentTemplateId, code)**
+- Preview-only: computes the discounted price for the "Have a discount code?" field
+- Never creates a Payment — `initiateDocumentPurchaseAction` re-validates the same code
+  independently at the moment money actually moves
+- Returns: `{ valid: boolean, reason?: string, discountMinor?, finalAmountMinor? }`
+
+**initiateDocumentPurchaseAction(documentTemplateId, discountCode?)**
+- One-click purchase, no cart. Validates the document and discount code server-side, creates a
+  PENDING `Payment` + `DocumentPurchase`, and returns the Nomba checkout URL
+- Returns: `{ checkoutUrl: string | null, internalReference: string | null, error?: string }`
+
+**getDocumentFileAccessAction(documentTemplateId, mode: "download" | "view")**
+- Returns a signed, expiring Cloudinary URL — only when `purchasedAt` is set on the candidate's
+  own `DocumentPurchase` row (row existence alone is never ownership)
+- Returns: signed URL string
+
+**toggleFavoriteAction(documentTemplateId)**
+- Add/remove a document from the candidate's favorites
+- Returns: `{ favorited: boolean }`
+
+---
+
 ## Error Handling
 
 All endpoints return standard error responses:

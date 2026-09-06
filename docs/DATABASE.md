@@ -2,8 +2,8 @@
 
 **Database:** PostgreSQL 14+  
 **ORM:** Prisma 7.9.1  
-**Models:** 67  
-**Enums:** 39  
+**Models:** 73  
+**Enums:** 42  
 **Location:** `/prisma/schema.prisma`
 
 ---
@@ -1829,6 +1829,165 @@ model ProgrammeCategory {
 
 ---
 
+## Document Library
+
+Legal/professional document templates (contracts, MOUs, agreements, employment docs) that candidates purchase one-off, outside the programme/enrollment flow — its own Payment.purpose (`DOCUMENT_PURCHASE`) reusing the existing Payment/webhook machinery rather than a parallel one.
+
+### Document Template
+
+```prisma
+model DocumentTemplate {
+  id                String   @id @default(uuid())
+  title             String
+  description       String?
+
+  categoryId        String
+  category          DocumentCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  priceMinor        Int      // Kobo, same convention as Programme.feeMinor
+  currency          String   @default("NGN")
+
+  storageKey        String @unique // Cloudinary public_id
+  fileType          String   // MIME type
+  fileName          String   // Original filename, display only
+  fileBytes         Int
+
+  isActive          Boolean  @default(true) // Admin toggle — candidate visibility/purchasability
+
+  // Soft delete — never a real row removal. A candidate who already bought
+  // this template keeps permanent access to it; deleteDocumentTemplate
+  // sets this (and isActive false) instead of DELETE-ing the row.
+  deletedAt         DateTime?
+
+  purchaseCount     Int      @default(0)
+  revenueMinor      Int      @default(0)
+
+  uploadedByStaffId String
+  uploadedByStaff   Staff @relation(fields: [uploadedByStaffId], references: [id])
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  favorites         DocumentFavorite[]
+  purchases         DocumentPurchase[]
+  discountScopes    DiscountCodeDocument[]
+}
+```
+
+### Document Category
+
+Admin-manageable, mirrors ProgrammeCategory (case-insensitive dedupe on create, slugified). Seeded with five starting categories (Contracts, MOUs, Agreements, Employment, Other) — a starting list, not a closed set.
+
+```prisma
+model DocumentCategory {
+  id       String @id @default(uuid())
+  name     String @unique
+  slug     String
+
+  templates DocumentTemplate[]
+
+  createdAt DateTime @default(now())
+}
+```
+
+### Document Favorite
+
+```prisma
+model DocumentFavorite {
+  candidateId        String
+  candidate          Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  documentTemplateId String
+  documentTemplate   DocumentTemplate @relation(fields: [documentTemplateId], references: [id], onDelete: Cascade)
+
+  createdAt          DateTime @default(now())
+
+  @@id([candidateId, documentTemplateId])
+}
+```
+
+### Document Purchase
+
+Row existence is **not** ownership — `purchasedAt` is set once, only by the verified-webhook path, never by the candidate's return-page redirect. Every access check (download, view, "already purchased" state, My Purchases) filters on `purchasedAt IS NOT NULL`, never on the row merely existing, since a PENDING row is created up front (same as ExamRegistration) so a retried/failed payment has somewhere to attach a fresh Payment.
+
+```prisma
+model DocumentPurchase {
+  id                  String    @id @default(uuid())
+
+  candidateId         String
+  candidate           Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  documentTemplateId  String
+  documentTemplate    DocumentTemplate @relation(fields: [documentTemplateId], references: [id])
+
+  paymentId           String  @unique
+  payment             Payment @relation(fields: [paymentId], references: [id])
+
+  // Snapshotted at initiation, never re-derived from the live template price
+  originalPriceMinor  Int
+  discountMinor       Int      @default(0)
+  amountMinor         Int      // originalPriceMinor - discountMinor
+  currency            String   @default("NGN")
+
+  discountCodeId      String?
+  discountCode        DiscountCode? @relation(fields: [discountCodeId], references: [id])
+
+  purchasedAt         DateTime? // Set once, by confirmDocumentPurchase, on verified payment
+
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@unique([candidateId, documentTemplateId])
+}
+```
+
+### Discount Code
+
+```prisma
+model DiscountCode {
+  id              String   @id @default(uuid())
+  code            String   @unique // Citext — case-insensitive lookup
+
+  type            DiscountType // PERCENT | FIXED
+  value           Int      // 1-100 for PERCENT, kobo for FIXED
+
+  isActive        Boolean  @default(true) // Deactivated, never deleted — a redeemed code's
+                                           // discount is already snapshotted onto its purchase
+  expiresAt       DateTime?
+  maxRedemptions  Int?
+  redemptionCount Int      @default(0)
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  purchases       DocumentPurchase[]
+  documentScopes  DiscountCodeDocument[]
+}
+
+enum DiscountType {
+  PERCENT
+  FIXED
+}
+```
+
+### Discount Code Document (Scoping)
+
+No rows for a code = it applies to every document (the default, and how every code behaved before this table existed). Rows present = the code is narrowed to exactly those documents. Enforced server-side in `validateAndComputeDiscount` — never trusted from the client.
+
+```prisma
+model DiscountCodeDocument {
+  discountCodeId     String
+  discountCode       DiscountCode @relation(fields: [discountCodeId], references: [id], onDelete: Cascade)
+
+  documentTemplateId String
+  documentTemplate   DocumentTemplate @relation(fields: [documentTemplateId], references: [id], onDelete: Cascade)
+
+  @@id([discountCodeId, documentTemplateId])
+}
+```
+
+---
+
 ## Media & Assets
 
 ### Media Asset
@@ -1952,8 +2111,8 @@ model RateLimitAttempt {
 
 ## Data Model Summary
 
-**Total Models:** 67  
-**Total Enums:** 39  
+**Total Models:** 73  
+**Total Enums:** 42  
 **Relationships:** ~100+ foreign keys and relations  
 **Key Constraints:** Unique, check, partial unique indexes  
 
@@ -1968,6 +2127,7 @@ model RateLimitAttempt {
 - Enrollment (5 models: Intake, Cohort, Enrollment, Guest Checkout, Payments)
 - Support & Communication (6 models: Support Desk, Messages, Announcements, Notifications)
 - Public Content (5 models: ProgrammeListing, Review, Blog, FAQ, Category)
+- Document Library (6 models: DocumentTemplate, DocumentCategory, DocumentFavorite, DocumentPurchase, DiscountCode, DiscountCodeDocument)
 - Media & Assets (3 models: MediaAsset, VideoUpload, Audit)
 - Audit & Monitoring (4 models: AuditEvent, EmailLog, RateLimiting)
 

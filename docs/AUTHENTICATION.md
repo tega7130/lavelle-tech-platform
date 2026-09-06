@@ -243,7 +243,7 @@ Verification:
 
 | Role | Permissions | Use Case |
 |------|-----------|----------|
-| **SUPER_ADMIN** | All 17 permissions | Complete system access |
+| **SUPER_ADMIN** | All 20 permissions | Complete system access |
 | **REGISTRAR** | VIEW_CANDIDATES, EDIT_CANDIDATE_DETAILS, MANAGE_INTAKES_COHORTS | Intake & candidate management |
 | **ACADEMIC_ADMIN** | MANAGE_PROGRAMMES, MARK_SUBMISSIONS, MODERATE_GRADES | Curriculum & grading |
 | **FACULTY** | MARK_SUBMISSIONS | Grading only |
@@ -254,7 +254,7 @@ Verification:
 
 ### Granular Permissions
 
-17 permissions stored as `StaffPermission` rows (not boolean flags):
+20 permissions stored as `StaffPermission` rows (not boolean flags):
 
 ```
 Permission                   | Category | Used For
@@ -274,6 +274,7 @@ ISSUE_CERTIFICATES           | Modify   | Award credentials
 REVOKE_CERTIFICATES          | Modify   | Revoke credentials
 MANAGE_ANNOUNCEMENTS         | Modify   | Send notifications
 MANAGE_BLOG                  | Modify   | Author/publish blog
+MANAGE_DOCUMENT_LIBRARY      | Modify   | Upload/manage document templates, categories, discount codes
 RESPOND_SUPPORT              | Modify   | Handle support tickets
 MANAGE_STAFF                 | Admin    | Invite, suspend staff
 VIEW_AUDIT_LOG               | Access   | View event log
@@ -324,7 +325,7 @@ export async function requireStaffPermission(
 ### SUPER_ADMIN is Not a Bypass
 
 **Misconception:** SUPER_ADMIN role automatically bypasses permission checks.  
-**Reality:** SUPER_ADMIN explicitly holds all 17 permissions as database rows.
+**Reality:** SUPER_ADMIN explicitly holds all 20 permissions as database rows.
 
 ```typescript
 // When staff is created as SUPER_ADMIN
@@ -345,6 +346,7 @@ const permissions = [
   'REVOKE_CERTIFICATES',
   'MANAGE_ANNOUNCEMENTS',
   'MANAGE_BLOG',
+  'MANAGE_DOCUMENT_LIBRARY',
   'RESPOND_SUPPORT',
   'MANAGE_STAFF',
   'VIEW_AUDIT_LOG',

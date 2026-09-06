@@ -157,6 +157,7 @@ Optional: Verify Certificate (Public endpoint)
 | **Announcements** | Scheduled notifications (in-app, email, WhatsApp, SMS) | `/src/lib/announcement*.ts` (3 files) |
 | **Analytics** | Staff performance, candidate progress, financial reports | `/src/lib/analytics*.ts` (5 files) |
 | **Admin** | Staff management, permissions, audit logging | `/src/lib/admin*.ts` (3 files) |
+| **Document Library** | Legal/professional document templates: admin upload & category management, candidate browse/favorite/one-click purchase, discount codes (optionally scoped to specific documents) | `/src/lib/document-library*.ts`, `/src/lib/document-purchase.ts`, `/src/lib/candidate-document-reads.ts`, `/src/lib/candidate-favorites.ts` |
 
 ---
 
@@ -176,6 +177,7 @@ graph TB
         LEARN["Course Player<br/>(Lectures, Quizzes, Drafts)"]
         EXAM["Exam Sitting & Registration"]
         CRED["Credentials & Certificates"]
+        DOCLIB["Document Library<br/>(Browse, Favorite, Purchase)"]
     end
     
     subgraph "Admin Portal"
@@ -190,6 +192,7 @@ graph TB
         SUPPORT["Support Desk"]
         STAFF_MGMT["Staff & Permissions"]
         AUDIT["Audit Log"]
+        DOCLIB_ADMIN["Document Library Management<br/>(Templates, Categories, Discount Codes)"]
     end
     
     subgraph "Backend"
@@ -207,7 +210,7 @@ graph TB
     end
     
     subgraph "Storage"
-        DB["PostgreSQL<br/>(67 models)"]
+        DB["PostgreSQL<br/>(73 models)"]
     end
     
     WEB --> API
@@ -218,6 +221,7 @@ graph TB
     LEARN --> API
     EXAM --> API
     CRED --> API
+    DOCLIB --> API
     ADMIN_AUTH --> API
     ADMIN_DASH --> API
     PROG_MGMT --> API
@@ -229,6 +233,7 @@ graph TB
     SUPPORT --> API
     STAFF_MGMT --> API
     AUDIT --> API
+    DOCLIB_ADMIN --> API
     
     API --> LOGIC
     WEBHOOKS --> LOGIC
@@ -303,7 +308,7 @@ graph TB
 |------|----------|
 | **[ARCHITECTURE.md](ARCHITECTURE.md)** | Framework, request flows, server/client components, middleware, background jobs |
 | **[CODEBASE.md](CODEBASE.md)** | Repository structure, conventions, entry points, utilities, error handling |
-| **[DATABASE.md](DATABASE.md)** | 67 database models, relationships, enums, schema details, ER diagram |
+| **[DATABASE.md](DATABASE.md)** | 73 database models, relationships, enums, schema details, ER diagram |
 | **[API.md](API.md)** | All endpoints (webhooks, uploads, exams, marking, cron jobs, etc.) with params/responses |
 | **[AUTHENTICATION.md](AUTHENTICATION.md)** | Session management, password handling, OTP flows, RBAC, permission system |
 | **[FEATURES.md](FEATURES.md)** | User journeys, business rules, edge cases for each major feature |
