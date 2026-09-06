@@ -17,7 +17,7 @@ export interface CloudinaryUploadResult {
  */
 export async function uploadToCloudinary(
   file: File,
-  purpose: "programme" | "finance" | "certificate" | "blog" | "candidate_photo"
+  purpose: "programme" | "finance" | "certificate" | "blog" | "candidate_photo" | "document_library"
 ): Promise<CloudinaryUploadResult> {
   const signRes = await fetch("/api/uploads/cloudinary", {
     method: "POST",

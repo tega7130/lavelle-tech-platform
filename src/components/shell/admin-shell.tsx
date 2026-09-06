@@ -55,6 +55,7 @@ export const ADMIN_NAV: AdminNavGroup[] = [
       { key: "finance", label: "Finance", href: "/admin/finance" },
       { key: "comms", label: "Announcements", href: "/admin/announcements" },
       { key: "certs", label: "Certificates", href: "/admin/certificates" },
+      { key: "documentlibrary", label: "Document Library", href: "/admin/document-library" },
     ],
   },
   {

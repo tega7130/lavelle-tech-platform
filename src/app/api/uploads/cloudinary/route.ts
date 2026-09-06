@@ -15,6 +15,7 @@ const PERMISSION_BY_PURPOSE = {
   finance: Permission.CONFIRM_PAYMENTS,
   certificate: Permission.ISSUE_CERTIFICATES,
   blog: Permission.MANAGE_BLOG,
+  document_library: Permission.MANAGE_DOCUMENT_LIBRARY,
 } as const;
 
 /**

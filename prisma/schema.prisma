@@ -287,6 +287,7 @@ enum Permission {
   REVOKE_CERTIFICATES
   MANAGE_ANNOUNCEMENTS
   MANAGE_BLOG
+  MANAGE_DOCUMENT_LIBRARY
   RESPOND_SUPPORT
   MANAGE_STAFF
   VIEW_AUDIT_LOG
@@ -382,6 +383,7 @@ model Staff {
   blogPostsPublished   BlogPost[]               @relation("BlogPostPublishedBy")
   blogPostsCreated     BlogPost[]               @relation("BlogPostCreatedBy")
   loginOtpChallenges   StaffLoginOtpChallenge[]
+  uploadedDocumentTemplates DocumentTemplate[]  @relation("DocumentTemplateUploadedBy")
 
   @@index([role])
   @@index([status])
@@ -2381,6 +2383,53 @@ model BlogPost {
   // Ordering is chronological (publishedAt desc), not a manual orderIndex
   // like the curated FaqEntry/ProgrammeListing — nobody hand-orders a feed.
   @@index([isPublished, publishedAt(sort: Desc)])
+}
+
+// ─── Document Library (Phase 1: admin upload & management) ─────────────
+//
+// Contracts, MOUs, agreements and other legal/professional templates an
+// administrator uploads for the future candidate purchase flow (Phase 2 —
+// not built here). purchaseCount/revenueMinor exist now so that flow has
+// somewhere to write when it lands; nothing in this phase ever changes
+// them off their defaults.
+model DocumentTemplate {
+  id String @id @default(uuid())
+
+  title String
+
+  // Plain string, not an enum — same discipline as Cohort.status: the
+  // initial five categories (src/lib/document-library.ts) are a starting
+  // list, not a closed set, and adding one later should never need a
+  // migration. Validated against that list at the service layer.
+  category String @db.VarChar(40)
+
+  description String?
+
+  // Kobo — same convention as Programme.feeMinor/Payment.amountMinor.
+  // Never a float.
+  priceMinor Int
+  currency   String @default("NGN")
+
+  storageKey String @unique // Cloudinary public_id
+  fileType   String // MIME type, as reported by Cloudinary at upload time
+  fileName   String // original filename, for display only
+  fileBytes  Int
+
+  // Whether candidates can see/purchase it once Phase 2 lands. An admin
+  // toggle, distinct from deletion — see deleteDocumentTemplate.
+  isActive Boolean @default(true)
+
+  purchaseCount Int @default(0)
+  revenueMinor  Int @default(0)
+
+  uploadedByStaffId String
+  uploadedByStaff   Staff  @relation("DocumentTemplateUploadedBy", fields: [uploadedByStaffId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([category])
+  @@index([isActive, createdAt(sort: Desc)])
 }
 
 // Lands in the Slice 08 support desk as a SupportRequest with no

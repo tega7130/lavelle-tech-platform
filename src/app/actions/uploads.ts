@@ -7,6 +7,7 @@ import { Permission } from "@/generated/prisma/client";
 import { requireStaffPermission } from "@/lib/staff-auth";
 import { getCurrentCandidate } from "@/lib/candidate-session";
 import { recordAuditEvent } from "@/lib/audit";
+import { isAcceptedDocumentMimeType, ACCEPTED_DOCUMENT_MIME_TYPES, MAX_DOCUMENT_BYTES } from "@/lib/document-library";
 
 cloudinary.config({
   cloud_name: process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME,
@@ -21,7 +22,7 @@ const finaliseUploadSchema = z.object({
   originalFilename: z.string().min(1),
   bytes: z.number().int().positive(),
   durationSeconds: z.number().nonnegative().nullable(),
-  purpose: z.enum(["programme", "finance", "certificate", "blog"]).default("programme"),
+  purpose: z.enum(["programme", "finance", "certificate", "blog", "document_library"]).default("programme"),
 });
 
 const PERMISSION_BY_PURPOSE = {
@@ -29,11 +30,25 @@ const PERMISSION_BY_PURPOSE = {
   finance: Permission.CONFIRM_PAYMENTS,
   certificate: Permission.ISSUE_CERTIFICATES,
   blog: Permission.MANAGE_BLOG,
+  document_library: Permission.MANAGE_DOCUMENT_LIBRARY,
 } as const;
 
 export async function finaliseUpload(input: unknown) {
   const data = finaliseUploadSchema.parse(input);
   const staff = await requireStaffPermission(PERMISSION_BY_PURPOSE[data.purpose]);
+
+  // Server-side file-type and size validation — never trust the client's
+  // <input accept> or the file extension alone. mimeType here is what
+  // Cloudinary itself reported back at upload time (cloudinary-upload.ts),
+  // not a value the browser sent unchecked.
+  if (data.purpose === "document_library") {
+    if (!isAcceptedDocumentMimeType(data.mimeType)) {
+      throw new Error(`Unsupported file type. Accepted types: ${Object.values(ACCEPTED_DOCUMENT_MIME_TYPES).join(", ")}.`);
+    }
+    if (data.bytes > MAX_DOCUMENT_BYTES) {
+      throw new Error(`File is too large. Maximum size is ${Math.round(MAX_DOCUMENT_BYTES / (1024 * 1024))}MB.`);
+    }
+  }
 
   const asset = await prisma.mediaAsset.create({
     data: {
