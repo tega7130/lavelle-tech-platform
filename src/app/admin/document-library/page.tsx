@@ -1,9 +1,14 @@
-import { listDocumentTemplates, listDocumentCategories } from "@/lib/document-library-reads";
+import { listDocumentTemplates, listDocumentCategories, listDiscountCodes } from "@/lib/document-library-reads";
 import { UploadDocumentButton } from "@/components/admin/upload-document-button";
 import { DocumentLibraryTable } from "@/components/admin/document-library-table";
+import { DiscountCodesTable } from "@/components/admin/discount-codes-table";
+
+function currentTimestamp() {
+  return Date.now();
+}
 
 export default async function DocumentLibraryPage() {
-  const [documents, categories] = await Promise.all([listDocumentTemplates(), listDocumentCategories()]);
+  const [documents, categories, discountCodes] = await Promise.all([listDocumentTemplates(), listDocumentCategories(), listDiscountCodes()]);
 
   return (
     <div className="max-w-[1200px]">
@@ -30,6 +35,8 @@ export default async function DocumentLibraryPage() {
       ) : (
         <DocumentLibraryTable documents={documents} categories={categories} />
       )}
+
+      <DiscountCodesTable codes={discountCodes} now={currentTimestamp()} />
     </div>
   );
 }

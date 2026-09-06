@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { recordAuditEvent } from "@/lib/audit";
 import { slugify } from "@/lib/slug";
+import { DiscountType } from "@/generated/prisma/client";
 
 // No "server-only" / staff-auth import here, deliberately — same
 // discipline as blog-admin-actions.ts. staffId is always passed in by the
@@ -117,6 +118,60 @@ export async function setDocumentTemplateActive(id: string, isActive: boolean, s
  * getDocumentFileAccessAction and My Purchases keep resolving it by id
  * regardless of this column.
  */
+export interface CreateDiscountCodeInput {
+  code: string;
+  type: DiscountType;
+  // Already converted to the stored unit by the caller: a percent (1-100)
+  // for PERCENT, kobo for FIXED — see validateAndComputeDiscount, the only
+  // place this value is ever spent.
+  value: number;
+  expiresAt?: Date;
+  maxRedemptions?: number;
+}
+
+/**
+ * Unlike createDocumentCategory, a matching code is never silently reused —
+ * two codes can carry different value/expiry/limits, so a name collision is
+ * a real error rather than something to dedupe away. DiscountCode.code is
+ * citext, so the DB's own unique constraint is already case-insensitive;
+ * this check just turns that into a friendly message instead of a raw P2002.
+ */
+export async function createDiscountCode(input: CreateDiscountCodeInput, staffId: string) {
+  const existing = await prisma.discountCode.findUnique({ where: { code: input.code } });
+  if (existing) throw new Error("A discount code with this name already exists.");
+
+  const created = await prisma.discountCode.create({
+    data: {
+      code: input.code,
+      type: input.type,
+      value: input.value,
+      expiresAt: input.expiresAt ?? null,
+      maxRedemptions: input.maxRedemptions ?? null,
+    },
+  });
+  await recordAuditEvent(prisma, {
+    actorStaffId: staffId,
+    subjectType: "discount_code",
+    subjectId: created.id,
+    action: "discount_code.created",
+    description: `Created discount code "${created.code}"`,
+  });
+  return created;
+}
+
+/** Deactivating, not deleting — a code already redeemed on a confirmed DocumentPurchase must stay resolvable (same FK-restrict reasoning as DocumentTemplate), and a discount snapshot is already frozen onto that purchase, so there is nothing a real delete would protect here anyway. */
+export async function setDiscountCodeActive(id: string, isActive: boolean, staffId: string) {
+  const code = await prisma.discountCode.update({ where: { id }, data: { isActive } });
+  await recordAuditEvent(prisma, {
+    actorStaffId: staffId,
+    subjectType: "discount_code",
+    subjectId: code.id,
+    action: isActive ? "discount_code.activated" : "discount_code.deactivated",
+    description: `${isActive ? "Activated" : "Deactivated"} discount code "${code.code}"`,
+  });
+  return code;
+}
+
 export async function deleteDocumentTemplate(id: string, staffId: string) {
   const document = await prisma.documentTemplate.update({
     where: { id },

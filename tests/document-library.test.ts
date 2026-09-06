@@ -7,8 +7,10 @@ import {
   setDocumentTemplateActive,
   deleteDocumentTemplate,
   createDocumentCategory,
+  createDiscountCode,
+  setDiscountCodeActive,
 } from "@/lib/document-library-actions";
-import { createDocumentTemplateSchema, updateDocumentTemplateSchema } from "@/lib/validation/document-library";
+import { createDocumentTemplateSchema, updateDocumentTemplateSchema, createDiscountCodeSchema } from "@/lib/validation/document-library";
 import { isAcceptedDocumentMimeType, MAX_DOCUMENT_BYTES } from "@/lib/document-library";
 
 async function seedStaff() {
@@ -277,6 +279,120 @@ describe("createDocumentCategory", () => {
     const staff = await seedStaff();
     await expect(createDocumentCategory("   ", staff.id)).rejects.toThrow();
     await testPrisma.staff.delete({ where: { id: staff.id } }).catch(() => {});
+  });
+});
+
+describe("createDiscountCode", () => {
+  function code() {
+    return `DISC${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
+  }
+
+  it("creates a PERCENT code and records an audit event", async () => {
+    const staff = await seedStaff();
+    const created = await createDiscountCode({ code: code(), type: "PERCENT", value: 20 }, staff.id);
+
+    expect(created.type).toBe("PERCENT");
+    expect(created.value).toBe(20);
+    expect(created.isActive).toBe(true);
+    expect(created.redemptionCount).toBe(0);
+    expect(created.expiresAt).toBeNull();
+    expect(created.maxRedemptions).toBeNull();
+
+    const event = await testPrisma.auditEvent.findFirst({
+      where: { subjectType: "discount_code", subjectId: created.id, action: "discount_code.created" },
+    });
+    expect(event).not.toBeNull();
+    expect(event?.actorStaffId).toBe(staff.id);
+
+    await testPrisma.discountCode.delete({ where: { id: created.id } });
+    await testPrisma.staff.delete({ where: { id: staff.id } }).catch(() => {});
+  });
+
+  it("creates a FIXED code with an expiry and a redemption cap", async () => {
+    const staff = await seedStaff();
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60_000);
+    const created = await createDiscountCode({ code: code(), type: "FIXED", value: 200_000, expiresAt, maxRedemptions: 10 }, staff.id);
+
+    expect(created.type).toBe("FIXED");
+    expect(created.value).toBe(200_000);
+    expect(created.expiresAt?.getTime()).toBe(expiresAt.getTime());
+    expect(created.maxRedemptions).toBe(10);
+
+    await testPrisma.discountCode.delete({ where: { id: created.id } });
+    await testPrisma.staff.delete({ where: { id: staff.id } }).catch(() => {});
+  });
+
+  it("rejects a duplicate code, case-insensitively", async () => {
+    const staff = await seedStaff();
+    const c = code();
+    const created = await createDiscountCode({ code: c, type: "PERCENT", value: 10 }, staff.id);
+
+    await expect(createDiscountCode({ code: c.toLowerCase(), type: "PERCENT", value: 15 }, staff.id)).rejects.toThrow();
+
+    await testPrisma.discountCode.delete({ where: { id: created.id } });
+    await testPrisma.staff.delete({ where: { id: staff.id } }).catch(() => {});
+  });
+});
+
+describe("setDiscountCodeActive", () => {
+  it("deactivates and reactivates, recording an audit event each time", async () => {
+    const staff = await seedStaff();
+    const created = await createDiscountCode({ code: `DISC${crypto.randomUUID().slice(0, 8).toUpperCase()}`, type: "PERCENT", value: 25 }, staff.id);
+
+    const deactivated = await setDiscountCodeActive(created.id, false, staff.id);
+    expect(deactivated.isActive).toBe(false);
+    const deactivatedEvent = await testPrisma.auditEvent.findFirst({
+      where: { subjectType: "discount_code", subjectId: created.id, action: "discount_code.deactivated" },
+    });
+    expect(deactivatedEvent).not.toBeNull();
+
+    const reactivated = await setDiscountCodeActive(created.id, true, staff.id);
+    expect(reactivated.isActive).toBe(true);
+    const reactivatedEvent = await testPrisma.auditEvent.findFirst({
+      where: { subjectType: "discount_code", subjectId: created.id, action: "discount_code.activated" },
+    });
+    expect(reactivatedEvent).not.toBeNull();
+
+    await testPrisma.discountCode.delete({ where: { id: created.id } });
+    await testPrisma.staff.delete({ where: { id: staff.id } }).catch(() => {});
+  });
+});
+
+describe("createDiscountCodeSchema validation", () => {
+  it("accepts a valid PERCENT code", () => {
+    const result = createDiscountCodeSchema.parse({ code: "WELCOME20", type: "PERCENT", value: "20" });
+    expect(result.value).toBe(20);
+  });
+
+  it("accepts a valid FIXED code", () => {
+    const result = createDiscountCodeSchema.parse({ code: "TAKE2000", type: "FIXED", value: "2000" });
+    expect(result.value).toBe(2000);
+  });
+
+  it("rejects a percent value over 100", () => {
+    expect(() => createDiscountCodeSchema.parse({ code: "TOOMUCH", type: "PERCENT", value: "150" })).toThrow();
+  });
+
+  it("allows a fixed value over 100 (it's naira, not a percent)", () => {
+    expect(() => createDiscountCodeSchema.parse({ code: "BIGFIXED", type: "FIXED", value: "150000" })).not.toThrow();
+  });
+
+  it("rejects a non-positive value", () => {
+    expect(() => createDiscountCodeSchema.parse({ code: "FREEBIE", type: "PERCENT", value: "0" })).toThrow();
+  });
+
+  it("rejects a code with invalid characters", () => {
+    expect(() => createDiscountCodeSchema.parse({ code: "welcome 20!", type: "PERCENT", value: "20" })).toThrow();
+  });
+
+  it("rejects a code shorter than 3 characters", () => {
+    expect(() => createDiscountCodeSchema.parse({ code: "AB", type: "PERCENT", value: "20" })).toThrow();
+  });
+
+  it("does not require expiresAt or maxRedemptions", () => {
+    const result = createDiscountCodeSchema.parse({ code: "NOEXPIRY", type: "PERCENT", value: "20" });
+    expect(result.expiresAt).toBeUndefined();
+    expect(result.maxRedemptions).toBeUndefined();
   });
 });
 

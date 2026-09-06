@@ -27,6 +27,30 @@ export type CreateDocumentTemplateInput = z.infer<typeof createDocumentTemplateS
 export const updateDocumentTemplateSchema = documentMetadataSchema;
 export type UpdateDocumentTemplateInput = z.infer<typeof updateDocumentTemplateSchema>;
 
+// value is a raw human number, interpreted per type: a percent (1-100) for
+// PERCENT, or naira (converted to kobo server-side, same as priceNaira) for
+// FIXED — never the stored minor-unit integer directly, same discipline as
+// priceNaira above.
+export const createDiscountCodeSchema = z
+  .object({
+    code: z
+      .string()
+      .trim()
+      .min(3, "At least 3 characters")
+      .max(40, "Too long")
+      .regex(/^[A-Za-z0-9_-]+$/, "Letters, numbers, hyphens and underscores only"),
+    type: z.enum(["PERCENT", "FIXED"]),
+    value: z.coerce.number().positive("Must be greater than 0"),
+    expiresAt: z.string().trim().optional(),
+    maxRedemptions: z.coerce.number().int().positive("Must be a whole number greater than 0").optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.type === "PERCENT" && data.value > 100) {
+      ctx.addIssue({ code: "custom", path: ["value"], message: "A percent discount cannot exceed 100." });
+    }
+  });
+export type CreateDiscountCodeInput = z.infer<typeof createDiscountCodeSchema>;
+
 /** Flattens a Zod error into the { fieldName: message } shape the UI renders inline, per field. */
 export function fieldErrors(error: z.ZodError): Record<string, string> {
   const out: Record<string, string> = {};
