@@ -147,21 +147,95 @@ describe("setDocumentTemplateActive", () => {
 });
 
 describe("deleteDocumentTemplate", () => {
-  it("records an audit event before removing the row", async () => {
+  it("soft-deletes — sets deletedAt and isActive false, the row itself stays — and records an audit event", async () => {
     const staff = await seedStaff();
     const category = await seedCategory();
     const document = await createDocumentTemplate(baseInput(category.id), staff.id);
 
-    await deleteDocumentTemplate(document.id, staff.id);
+    const deleted = await deleteDocumentTemplate(document.id, staff.id);
+    expect(deleted.deletedAt).not.toBeNull();
+    expect(deleted.isActive).toBe(false);
 
-    const gone = await testPrisma.documentTemplate.findUnique({ where: { id: document.id } });
-    expect(gone).toBeNull();
+    const stillThere = await testPrisma.documentTemplate.findUnique({ where: { id: document.id } });
+    expect(stillThere).not.toBeNull();
+    expect(stillThere?.deletedAt).not.toBeNull();
 
     const event = await testPrisma.auditEvent.findFirst({
       where: { subjectType: "document_template", subjectId: document.id, action: "document_template.deleted" },
     });
     expect(event).not.toBeNull();
 
+    await testPrisma.documentTemplate.delete({ where: { id: document.id } }).catch(() => {});
+    await testPrisma.staff.delete({ where: { id: staff.id } }).catch(() => {});
+    await testPrisma.documentCategory.delete({ where: { id: category.id } });
+  });
+
+  it("excludes a deleted document from listDocumentTemplates", async () => {
+    const staff = await seedStaff();
+    const category = await seedCategory();
+    const document = await createDocumentTemplate(baseInput(category.id), staff.id);
+    await deleteDocumentTemplate(document.id, staff.id);
+
+    const remaining = await testPrisma.documentTemplate.findMany({ where: { deletedAt: null, id: document.id } });
+    expect(remaining).toHaveLength(0);
+
+    await testPrisma.documentTemplate.delete({ where: { id: document.id } }).catch(() => {});
+    await testPrisma.staff.delete({ where: { id: staff.id } }).catch(() => {});
+    await testPrisma.documentCategory.delete({ where: { id: category.id } });
+  });
+
+  it("a candidate who already purchased the document keeps their access after it is deleted", async () => {
+    const staff = await seedStaff();
+    const category = await seedCategory();
+    const document = await createDocumentTemplate(baseInput(category.id), staff.id);
+
+    const candidate = await testPrisma.candidate.create({
+      data: {
+        applicantNumber: `LVL-APP-TEST-${crypto.randomUUID().slice(0, 8)}`,
+        firstName: "Test",
+        lastName: "Candidate",
+        email: `doc-delete-cand-${crypto.randomUUID()}@example.com`,
+        passwordHash: "not-a-real-hash",
+        acceptedTermsAt: new Date(),
+      },
+    });
+    const payment = await testPrisma.payment.create({
+      data: {
+        candidateId: candidate.id,
+        purpose: "DOCUMENT_PURCHASE",
+        amountMinor: document.priceMinor,
+        provider: "nomba",
+        internalReference: `LVL-PAY-TEST-${crypto.randomUUID().slice(0, 8)}`,
+        status: "SUCCESS",
+        confirmedAt: new Date(),
+      },
+    });
+    const purchase = await testPrisma.documentPurchase.create({
+      data: {
+        candidateId: candidate.id,
+        documentTemplateId: document.id,
+        paymentId: payment.id,
+        originalPriceMinor: document.priceMinor,
+        amountMinor: document.priceMinor,
+        purchasedAt: new Date(),
+      },
+    });
+
+    // The delete must not throw despite the DocumentPurchase FK referencing this row.
+    await expect(deleteDocumentTemplate(document.id, staff.id)).resolves.toBeDefined();
+
+    const stillOwned = await testPrisma.documentPurchase.findUnique({ where: { id: purchase.id } });
+    expect(stillOwned).not.toBeNull();
+    expect(stillOwned?.purchasedAt).not.toBeNull();
+
+    // The file is still resolvable by id — exactly what a download/view request needs.
+    const stillResolvable = await testPrisma.documentTemplate.findUnique({ where: { id: document.id } });
+    expect(stillResolvable?.storageKey).toBe(document.storageKey);
+
+    await testPrisma.documentPurchase.delete({ where: { id: purchase.id } });
+    await testPrisma.payment.delete({ where: { id: payment.id } });
+    await testPrisma.candidate.delete({ where: { id: candidate.id } });
+    await testPrisma.documentTemplate.delete({ where: { id: document.id } }).catch(() => {});
     await testPrisma.staff.delete({ where: { id: staff.id } }).catch(() => {});
     await testPrisma.documentCategory.delete({ where: { id: category.id } });
   });

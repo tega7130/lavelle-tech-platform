@@ -204,6 +204,12 @@ function DeleteDocumentDialog({ document, onClose }: { document: DocumentRow; on
       <p>
         Are you sure you want to delete <strong>{document.title}</strong>? This action cannot be undone.
       </p>
+      {document.purchaseCount > 0 && (
+        <p className="mt-2 text-neutral-600">
+          It will be removed from the library and can no longer be purchased. Candidates who already bought it ({document.purchaseCount}) keep
+          their download and viewing access.
+        </p>
+      )}
       {error && <div className="mt-2 text-[12.5px] text-[#912019]">{error}</div>}
     </Dialog>
   );

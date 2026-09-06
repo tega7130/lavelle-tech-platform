@@ -2429,6 +2429,15 @@ model DocumentTemplate {
   // toggle, distinct from deletion — see deleteDocumentTemplate.
   isActive Boolean @default(true)
 
+  // Soft delete, not a real row removal — deleteDocumentTemplate sets this
+  // (and isActive false) instead of DELETE-ing the row. A candidate who
+  // already purchased this template must keep permanent access to it
+  // (rule: paying for something and having it vanish because an admin
+  // later deleted the listing is never acceptable), and DocumentPurchase
+  // resolves the file by looking the row up directly, ignoring this
+  // column — only listDocumentTemplates (the admin list) filters it out.
+  deletedAt DateTime?
+
   purchaseCount Int @default(0)
   revenueMinor  Int @default(0)
 
@@ -2443,6 +2452,7 @@ model DocumentTemplate {
 
   @@index([categoryId])
   @@index([isActive, createdAt(sort: Desc)])
+  @@index([deletedAt])
 }
 
 // Admin-manageable, mirrors ProgrammeCategory exactly (same dedupe

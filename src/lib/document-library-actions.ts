@@ -106,18 +106,28 @@ export async function setDocumentTemplateActive(id: string, isActive: boolean, s
   return document;
 }
 
-/** Hard delete — same discipline as deleteBlogPost: nothing references a DocumentTemplate yet (Phase 2's candidate purchase flow isn't built), so there is nothing left orphaned. */
+/**
+ * Soft delete — NOT a real row removal. A candidate who already
+ * purchased this template must keep permanent access to it (downloading
+ * and viewing it, indefinitely — same as any other confirmed purchase),
+ * so the row, its file reference and its DocumentPurchase rows all stay
+ * intact; only deletedAt/isActive change. listDocumentTemplates (the
+ * admin list) filters deletedAt out, so it disappears from the admin's
+ * working set exactly like a real delete would, while
+ * getDocumentFileAccessAction and My Purchases keep resolving it by id
+ * regardless of this column.
+ */
 export async function deleteDocumentTemplate(id: string, staffId: string) {
-  const document = await prisma.documentTemplate.findUniqueOrThrow({ where: { id } });
-  await prisma.$transaction(async (tx) => {
-    await recordAuditEvent(tx, {
-      actorStaffId: staffId,
-      subjectType: "document_template",
-      subjectId: document.id,
-      action: "document_template.deleted",
-      description: `Deleted the document template "${document.title}"`,
-    });
-    await tx.documentTemplate.delete({ where: { id } });
+  const document = await prisma.documentTemplate.update({
+    where: { id },
+    data: { deletedAt: new Date(), isActive: false },
+  });
+  await recordAuditEvent(prisma, {
+    actorStaffId: staffId,
+    subjectType: "document_template",
+    subjectId: document.id,
+    action: "document_template.deleted",
+    description: `Deleted the document template "${document.title}"`,
   });
   return document;
 }
