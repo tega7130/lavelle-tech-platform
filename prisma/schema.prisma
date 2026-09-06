@@ -98,6 +98,8 @@ model Candidate {
   reviews                    Review[]
   uploadedMediaAssets        MediaAsset[]
   videoUploads               VideoUpload[]
+  documentFavorites          DocumentFavorite[]
+  documentPurchases          DocumentPurchase[]
 
   @@index([accountStatus])
 }
@@ -1316,6 +1318,7 @@ model ProgrammeResult {
 enum PaymentPurpose {
   PROGRAMME_FEE
   EXAMINATION_FEE
+  DOCUMENT_PURCHASE
 }
 
 enum PaymentStatus {
@@ -1356,6 +1359,11 @@ model Payment {
   // (name/email/password) until confirmPayment turns them into a real
   // Candidate. Reverse back-relation only; the FK lives on GuestCheckout.
   guestCheckout    GuestCheckout?
+  // Document Library (Phase 2) — same reverse-FK shape as ExamRegistration
+  // above; the FK lives on DocumentPurchase, created at checkout initiation
+  // and only ever a real purchase once its own purchasedAt is set (see that
+  // model's comment — never this Payment's status alone).
+  documentPurchase DocumentPurchase?
 
   // Kobo. A snapshot of the fee at the time of payment — never read the
   // live programme fee when displaying a historic payment (rule 7).
@@ -2428,8 +2436,114 @@ model DocumentTemplate {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  favorites DocumentFavorite[]
+  purchases DocumentPurchase[]
+
   @@index([category])
   @@index([isActive, createdAt(sort: Desc)])
+}
+
+// ─── Document Library (Phase 2: candidate portal) ───────────────────────
+//
+// Browsing, favoriting and purchasing a DocumentTemplate. Nothing here
+// grants access on its own — see DocumentPurchase's comment for the one
+// rule that matters.
+
+// A candidate's saved-for-later list. Presence is the only state (no
+// "removed" flag) — toggling deletes the row outright, same discipline as
+// StaffPermission (rule 1 elsewhere in this schema: "the grant is the
+// authority"). The unique pair is what makes toggling safe to call
+// repeatedly without ever producing a duplicate.
+model DocumentFavorite {
+  id String @id @default(uuid())
+
+  candidateId String    @db.Uuid
+  candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  documentTemplateId String
+  documentTemplate   DocumentTemplate @relation(fields: [documentTemplateId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([candidateId, documentTemplateId])
+  @@index([documentTemplateId])
+}
+
+// One optional redeemable code, shared across all document purchases —
+// no admin authoring UI in this phase (out of scope for the candidate
+// portal); codes are inserted directly until Phase 1's admin console
+// grows one. code is citext for the same case-insensitive-lookup reason
+// as Candidate/Staff email.
+enum DiscountType {
+  PERCENT
+  FIXED
+}
+
+model DiscountCode {
+  id String @id @default(uuid())
+
+  code String @unique @db.Citext
+
+  type  DiscountType
+  // Percent (1-100) when type = PERCENT; kobo when type = FIXED. Always
+  // resolved server-side (validateAndComputeDiscount) — never trust a
+  // discount amount computed by the client.
+  value Int
+
+  isActive       Boolean   @default(true)
+  expiresAt      DateTime?
+  maxRedemptions Int?
+  redemptionCount Int      @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  purchases DocumentPurchase[]
+}
+
+// The purchase record. Created at checkout initiation (paymentId set
+// immediately, same as ExamRegistration) so a retried failed payment has
+// somewhere to attach a fresh Payment row — but ROW EXISTENCE IS NOT
+// OWNERSHIP. purchasedAt is null until confirmDocumentPurchase runs
+// inside the verified-webhook path, and every access check in this
+// phase (download, view-online, "already purchased" state, My
+// Purchases) filters on purchasedAt IS NOT NULL, never on the row's mere
+// presence — the one rule the whole purchase flow exists to enforce
+// ("do not grant access merely because the candidate was redirected back
+// from Nomba").
+model DocumentPurchase {
+  id String @id @default(uuid())
+
+  candidateId String    @db.Uuid
+  candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  documentTemplateId String
+  documentTemplate   DocumentTemplate @relation(fields: [documentTemplateId], references: [id])
+
+  // The FK lives here, not on Payment (same reverse-FK shape as
+  // ExamRegistration.paymentId) — Payment stays purpose-agnostic.
+  paymentId String  @unique
+  payment   Payment @relation(fields: [paymentId], references: [id])
+
+  // Snapshotted at initiation/retry, never re-derived from the live
+  // DocumentTemplate.priceMinor once paid — same discipline as
+  // Payment.amountMinor's own comment ("a snapshot of the fee... never
+  // read the live fee when displaying a historic payment").
+  originalPriceMinor Int
+  discountMinor      Int    @default(0)
+  amountMinor        Int // originalPriceMinor - discountMinor; what was actually charged
+  currency           String @default("NGN")
+
+  discountCodeId String?
+  discountCode   DiscountCode? @relation(fields: [discountCodeId], references: [id])
+
+  purchasedAt DateTime? // set once, by confirmDocumentPurchase, on verified payment — see model comment
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([candidateId, documentTemplateId])
+  @@index([documentTemplateId])
 }
 
 // Lands in the Slice 08 support desk as a SupportRequest with no

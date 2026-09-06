@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { Prisma, PaymentStatus, type Payment } from "@/generated/prisma/client";
 import { verifyWebhookSignature, verifyNombaWebhookSignature, type NombaWebhookPayload } from "@/lib/payment-provider";
 import { confirmPayment } from "@/lib/enrolment-transaction";
+import { confirmDocumentPurchase } from "@/lib/document-purchase";
 import { recordAuditEvent } from "@/lib/audit";
 import { sendTransactionalEmailByTemplate } from "@/lib/send-transactional-email";
 import { getFirstName } from "@/lib/email-utils";
@@ -54,6 +55,16 @@ const nombaWebhookBodySchema = z.object({
  * shape, so it only needs the already-looked-up Payment row.
  */
 async function handlePaymentSuccess(payment: Payment) {
+  // Document purchases are a separate, simpler path — no enrolment,
+  // cohort or ID-card machinery, and no email (Phase 2 rule: no email
+  // notifications for these actions) — so this branches off before ever
+  // reaching confirmPayment, rather than teaching that function a third,
+  // unrelated purpose.
+  if (payment.purpose === "DOCUMENT_PURCHASE") {
+    await confirmDocumentPurchase(payment.id);
+    return;
+  }
+
   const result = await confirmPayment(payment.id, { auditAction: "payment.confirmed" });
   if (result.alreadyConfirmed) return;
 

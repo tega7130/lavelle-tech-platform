@@ -70,6 +70,21 @@ export const BlogIcon = (p: IconProps) => (
   </Svg>
 );
 
+export const HeartIcon = ({ filled, ...p }: IconProps & { filled?: boolean }) => (
+  <Svg {...p} fill={filled ? "currentColor" : "none"}>
+    <path d="M9 15.3S2.7 11.4 2.7 6.9a3.3 3.3 0 0 1 6-1.9A3.3 3.3 0 0 1 15.3 6.9c0 4.5-6.3 8.4-6.3 8.4Z" />
+  </Svg>
+);
+
+export const LibraryIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M5.5 2.5h6l3 3v10h-9z" />
+    <path d="M11.5 2.5v3h3" />
+    <line x1="7.5" y1="9.5" x2="11.5" y2="9.5" />
+    <line x1="7.5" y1="12" x2="11.5" y2="12" />
+  </Svg>
+);
+
 export const AssessmentIcon = (p: IconProps) => (
   <Svg {...p}>
     <path d="M3 15V8" />

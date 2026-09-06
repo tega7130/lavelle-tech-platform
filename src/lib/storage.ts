@@ -66,12 +66,19 @@ export function resourceTypeForKind(kind: string): CloudinaryResourceType {
  * stricter mode of the same one — points at a resource Cloudinary can't
  * find, which is why every uploaded video got stuck "loading" forever.
  */
-export function getSignedAssetUrl(storageKey: string, resourceType: CloudinaryResourceType = "image", ttlSeconds = 300): string {
+export function getSignedAssetUrl(
+  storageKey: string,
+  resourceType: CloudinaryResourceType = "image",
+  ttlSeconds = 300,
+  /** Adds Cloudinary's `attachment` delivery flag, forcing a Content-Disposition: attachment response — used by document Download (as opposed to View Online, which wants the browser's default inline/viewer behaviour). */
+  forceDownload = false
+): string {
   return cloudinary.url(storageKey, {
     secure: true,
     sign_url: true,
     type: "upload",
     resource_type: resourceType,
     expiration: Math.floor(Date.now() / 1000) + ttlSeconds,
+    ...(forceDownload ? { flags: "attachment" } : {}),
   });
 }
