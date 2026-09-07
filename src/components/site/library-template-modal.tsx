@@ -74,7 +74,7 @@ export function LibraryTemplateModal({
         <div className="mt-5 pt-5 border-t border-divider rounded-md bg-accent-100 -mx-6 -mb-6 px-6 pb-6 pt-5">
           <div className="font-heading font-semibold text-[15px]">Sign up to download</div>
           <p className="text-[12.5px] leading-[1.6] text-neutral-700 mt-1.5">
-            Create a free Lavelle account to purchase and download this template — it&apos;s yours, unlimited downloads, forever.
+            Create a free Lavelle account to purchase and download this template.
           </p>
           <div className="flex flex-col sm:flex-row gap-2.5 mt-4">
             <Link href="/register" className={cn(buttonClassName("primary"), "h-11 flex-1 justify-center text-[13.5px]")}>
