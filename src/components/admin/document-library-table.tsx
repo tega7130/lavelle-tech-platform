@@ -16,6 +16,7 @@ import {
   setDocumentTemplateActiveAction,
   deleteDocumentTemplateAction,
   getDocumentFileUrlAction,
+  setComplementaryTemplatesAction,
 } from "@/app/actions/document-library";
 import type { listDocumentTemplates } from "@/lib/document-library-reads";
 
@@ -33,10 +34,12 @@ function formatBytes(bytes: number) {
 function EditDocumentDialog({
   document,
   categories: initialCategories,
+  allDocuments,
   onClose,
 }: {
   document: DocumentRow;
   categories: DocumentCategoryOption[];
+  allDocuments: DocumentRow[];
   onClose: () => void;
 }) {
   const router = useRouter();
@@ -45,9 +48,16 @@ function EditDocumentDialog({
   const [categoryId, setCategoryId] = React.useState(document.categoryId);
   const [description, setDescription] = React.useState(document.description ?? "");
   const [priceNaira, setPriceNaira] = React.useState(String(document.priceMinor / 100));
+  const [relatedIds, setRelatedIds] = React.useState(document.relatedTo.map((r) => r.relatedDocumentTemplateId));
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [fileUrlLoading, setFileUrlLoading] = React.useState(false);
+
+  const otherDocuments = allDocuments.filter((d) => d.id !== document.id);
+
+  function toggleRelated(id: string) {
+    setRelatedIds((ids) => (ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]));
+  }
 
   async function viewFile() {
     setFileUrlLoading(true);
@@ -72,6 +82,7 @@ function EditDocumentDialog({
     setBusy(true);
     try {
       await updateDocumentTemplateAction(document.id, { title, categoryId, description: description || undefined, priceNaira });
+      await setComplementaryTemplatesAction(document.id, relatedIds);
       router.refresh();
       onClose();
     } catch (e) {
@@ -124,6 +135,25 @@ function EditDocumentDialog({
           <Label>Price (₦)</Label>
           <Input type="number" min={0} step="0.01" value={priceNaira} onChange={(e) => setPriceNaira(e.target.value)} />
           <div className="text-neutral-500 text-[11.5px] mt-1">Amount in Nigerian Naira (NGN).</div>
+        </Field>
+
+        <Field>
+          <Label>Complementary templates (optional)</Label>
+          <div className="text-neutral-500 text-[11.5px] mb-1.5">
+            Shown as &quot;Related templates&quot; on the public Library preview. Pick 2-3 closely related templates.
+          </div>
+          <div className="max-h-[160px] overflow-y-auto rounded-md border border-neutral-300 p-2 flex flex-col gap-1.5">
+            {otherDocuments.length === 0 ? (
+              <div className="text-neutral-500 text-[12.5px] px-1 py-1">No other documents to relate yet.</div>
+            ) : (
+              otherDocuments.map((d) => (
+                <label key={d.id} className="flex items-center gap-2 text-[12.5px] cursor-pointer px-1 py-0.5 rounded hover:bg-neutral-100">
+                  <input type="checkbox" checked={relatedIds.includes(d.id)} onChange={() => toggleRelated(d.id)} />
+                  {d.title}
+                </label>
+              ))
+            )}
+          </div>
         </Field>
 
         {error && <div className="text-[12.5px] text-[#912019]">{error}</div>}
@@ -293,7 +323,7 @@ export function DocumentLibraryTable({ documents, categories }: { documents: Doc
         </Table>
       </div>
 
-      {editing && <EditDocumentDialog document={editing} categories={categories} onClose={() => setEditingId(null)} />}
+      {editing && <EditDocumentDialog document={editing} categories={categories} allDocuments={documents} onClose={() => setEditingId(null)} />}
       {viewingAnalytics && <AnalyticsDialog document={viewingAnalytics} onClose={() => setAnalyticsId(null)} />}
       {deleting && <DeleteDocumentDialog document={deleting} onClose={() => setDeletingId(null)} />}
     </>

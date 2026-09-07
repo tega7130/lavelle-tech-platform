@@ -6,7 +6,11 @@ import { Permission } from "@/generated/prisma/client";
 /** Admin: every non-deleted document template, newest first — the source for the Document Library screen. A soft-deleted row (deleteDocumentTemplate) never appears here, same as a real delete would, even though it still exists for its purchasers. */
 export async function listDocumentTemplates() {
   await requireStaffPermission(Permission.MANAGE_DOCUMENT_LIBRARY);
-  return prisma.documentTemplate.findMany({ where: { deletedAt: null }, orderBy: { createdAt: "desc" }, include: { category: true } });
+  return prisma.documentTemplate.findMany({
+    where: { deletedAt: null },
+    orderBy: { createdAt: "desc" },
+    include: { category: true, relatedTo: { select: { relatedDocumentTemplateId: true } } },
+  });
 }
 
 export async function getDocumentTemplateById(id: string) {

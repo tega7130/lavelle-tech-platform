@@ -11,6 +11,7 @@ import { Reveal, CTA_HOVER } from "@/components/site/motion";
 
 const NAV_LINKS = [
   { label: "Programmes", href: "/programmes" },
+  { label: "Library", href: "/library" },
   { label: "How it works", href: "/#how" },
   { label: "FAQ", href: "/#faq" },
 ];

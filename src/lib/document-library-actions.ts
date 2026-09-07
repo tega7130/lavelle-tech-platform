@@ -179,6 +179,36 @@ export async function setDiscountCodeActive(id: string, isActive: boolean, staff
   return code;
 }
 
+/**
+ * Replace-all semantics, not incremental add/remove — the admin picker
+ * always submits the complete desired set, same shape as
+ * createDiscountCode's documentTemplateIds. Directed only (A relates to
+ * B does not create B relates to A); the public preview modal (Phase 3)
+ * is the only place this is ever read.
+ */
+export async function setComplementaryTemplates(documentTemplateId: string, relatedIds: string[], staffId: string) {
+  const uniqueRelatedIds = [...new Set(relatedIds)].filter((id) => id !== documentTemplateId);
+
+  const document = await prisma.$transaction(async (tx) => {
+    await tx.documentTemplateRelation.deleteMany({ where: { documentTemplateId } });
+    if (uniqueRelatedIds.length > 0) {
+      await tx.documentTemplateRelation.createMany({
+        data: uniqueRelatedIds.map((relatedDocumentTemplateId) => ({ documentTemplateId, relatedDocumentTemplateId })),
+      });
+    }
+    return tx.documentTemplate.findUniqueOrThrow({ where: { id: documentTemplateId } });
+  });
+
+  await recordAuditEvent(prisma, {
+    actorStaffId: staffId,
+    subjectType: "document_template",
+    subjectId: documentTemplateId,
+    action: "document_template.complementary_updated",
+    description: `Set complementary templates for "${document.title}" (${uniqueRelatedIds.length})`,
+  });
+  return uniqueRelatedIds;
+}
+
 export async function deleteDocumentTemplate(id: string, staffId: string) {
   const document = await prisma.documentTemplate.update({
     where: { id },

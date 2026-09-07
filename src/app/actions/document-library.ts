@@ -12,6 +12,7 @@ import {
   createDocumentCategory,
   createDiscountCode,
   setDiscountCodeActive,
+  setComplementaryTemplates,
 } from "@/lib/document-library-actions";
 import {
   createDocumentTemplateSchema,
@@ -114,6 +115,13 @@ export async function setDiscountCodeActiveAction(id: string, isActive: boolean)
   const code = await setDiscountCodeActive(id, isActive, staff.id);
   revalidateAll();
   return code;
+}
+
+export async function setComplementaryTemplatesAction(documentTemplateId: string, relatedIds: string[]) {
+  const staff = await requireStaffPermission(Permission.MANAGE_DOCUMENT_LIBRARY);
+  const result = await setComplementaryTemplates(documentTemplateId, relatedIds, staff.id);
+  revalidateAll();
+  return result;
 }
 
 /** A fresh signed download URL for the underlying file — Cloudinary raw assets, same signed/expiring discipline as every other MediaAsset (storage.ts rule 10). */

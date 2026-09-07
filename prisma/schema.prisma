@@ -2450,10 +2450,30 @@ model DocumentTemplate {
   favorites      DocumentFavorite[]
   purchases      DocumentPurchase[]
   discountScopes DiscountCodeDocument[]
+  relatedTo      DocumentTemplateRelation[] @relation("RelationSource")
+  relatedFrom    DocumentTemplateRelation[] @relation("RelationTarget")
 
   @@index([categoryId])
   @@index([isActive, createdAt(sort: Desc)])
   @@index([deletedAt])
+}
+
+// Admin-curated "you might also need" pairing for the Phase 3 public
+// preview — directed (A -> B does not imply B -> A) and deliberately
+// simple: no scoring, no ML, just rows an admin picked. A -> B where B is
+// inactive/deleted is filtered out at read time (getPublicComplementaryTemplates),
+// never pruned here, so re-activating B doesn't require re-curating the pairing.
+model DocumentTemplateRelation {
+  documentTemplateId String
+  documentTemplate   DocumentTemplate @relation("RelationSource", fields: [documentTemplateId], references: [id], onDelete: Cascade)
+
+  relatedDocumentTemplateId String
+  relatedDocumentTemplate   DocumentTemplate @relation("RelationTarget", fields: [relatedDocumentTemplateId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@id([documentTemplateId, relatedDocumentTemplateId])
+  @@index([relatedDocumentTemplateId])
 }
 
 // Admin-manageable, mirrors ProgrammeCategory exactly (same dedupe
