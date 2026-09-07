@@ -161,7 +161,7 @@ function ContentStatusSelect({
 }
 
 async function uploadFile(file: File, kind: "audio" | "video" | "image" | "document") {
-  const { storageKey, bytes, durationSeconds } = await uploadToCloudinary(file, "programme");
+  const { storageKey, bytes, durationSeconds } = await uploadToCloudinary(file, "programme", kind);
   return finaliseUpload({ storageKey, kind, mimeType: file.type, originalFilename: file.name, bytes, durationSeconds });
 }
 

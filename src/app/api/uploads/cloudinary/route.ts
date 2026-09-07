@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { v2 as cloudinary } from "cloudinary";
 import { requireStaffPermission } from "@/lib/staff-auth";
 import { getCurrentCandidate } from "@/lib/candidate-session";
+import { resourceTypeForKind } from "@/lib/storage";
 import { Permission } from "@/generated/prisma/client";
 
 cloudinary.config({
@@ -19,21 +20,16 @@ const PERMISSION_BY_PURPOSE = {
 } as const;
 
 /**
- * Resource type Cloudinary is told to upload each purpose's file as.
- * Left undefined (→ "auto", Cloudinary's own content-sniffing) for
- * purposes that genuinely mix file kinds — "programme" covers lecture
- * video/image/narration uploads, each read back later with the specific
- * resourceType actually stored on that MediaAsset row, not a fixed
- * guess. "document_library" only ever accepts PDF/DOCX (see
- * upload-document-button.tsx's accept attribute) and is always read
- * back with a hardcoded resource_type: "raw" (getSignedAssetUrl calls
- * in document-purchase.ts/document-library.ts) — pinning it here, not
- * leaving it to auto-detection, is what the certificate PDF fix in
- * 9fc406e already established for exactly this failure mode: "auto"
- * guessing wrong at upload time means the signed download URL later
- * requests a resource_type the asset was never actually stored under,
- * a 404 from Cloudinary with nothing in this app's own logs to explain
- * it.
+ * Resource type Cloudinary is told to upload each purpose's file as —
+ * pinned rather than left to "auto" content-sniffing, because our
+ * Cloudinary plan enforces a *different* max file size per resource type
+ * (Free plan: 10MB image, 100MB video, 10MB raw) and "auto" appears to
+ * apply the smallest of these before it has even determined the real
+ * type, rejecting uploads that would fit comfortably once identified.
+ * Pinning also avoids the 404-on-download failure mode from 9fc406e:
+ * "auto" guessing wrong at upload time means the signed download URL
+ * later requests a resource_type the asset was never actually stored
+ * under.
  */
 const RESOURCE_TYPE_BY_PURPOSE: Record<string, "image" | "video" | "raw"> = {
   document_library: "raw",
@@ -54,6 +50,7 @@ const RESOURCE_TYPE_BY_PURPOSE: Record<string, "image" | "video" | "raw"> = {
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null);
   const purpose = body?.purpose ?? "programme";
+  const kind = typeof body?.kind === "string" ? body.kind : null;
 
   if (purpose === "candidate_photo") {
     const candidate = await getCurrentCandidate();
@@ -81,7 +78,12 @@ export async function POST(req: NextRequest) {
   const signature = cloudinary.utils.api_sign_request({ folder, timestamp }, apiSecret);
   // Not part of the signed params — resource_type is a URL path segment
   // on Cloudinary's own upload endpoint, not a signed body field.
-  const resourceType = RESOURCE_TYPE_BY_PURPOSE[purpose] ?? "auto";
+  // "programme" mixes video/audio/image/document uploads under one
+  // purpose, so it can't use a single fixed resource type the way the
+  // other purposes below do — the caller tells us the actual file kind,
+  // and resourceTypeForKind maps it the same way the download side
+  // (getSignedAssetUrl) already does, so upload and download always agree.
+  const resourceType = purpose === "programme" && kind ? resourceTypeForKind(kind) : (RESOURCE_TYPE_BY_PURPOSE[purpose] ?? "auto");
 
   return NextResponse.json({ signature, timestamp, folder, apiKey, cloudName, resourceType });
 }
