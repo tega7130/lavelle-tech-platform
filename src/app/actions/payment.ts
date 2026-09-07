@@ -133,13 +133,18 @@ async function createRetryPayment(enrolmentId: string, candidateId: string, feeM
  * blocks every future attempt until an admin fixes it by hand. Marking it
  * FAILED here lets the candidate's next attempt retry on its own.
  */
-async function createCheckoutOrMarkFailed(payment: { id: string; provider: string; internalReference: string; amountMinor: number }, candidateEmail: string) {
+async function createCheckoutOrMarkFailed(
+  payment: { id: string; provider: string; internalReference: string; amountMinor: number },
+  candidateEmail: string,
+  callbackUrl: string
+) {
   try {
     return await createProviderCheckout({
       provider: payment.provider,
       internalReference: payment.internalReference,
       amountMinor: payment.amountMinor,
       candidateEmail,
+      callbackUrl,
     });
   } catch (e) {
     await prisma.payment.update({ where: { id: payment.id }, data: { status: PaymentStatus.FAILED } });
@@ -169,7 +174,11 @@ export async function initiatePayment(programmeId: string): Promise<{ checkoutUr
   try {
     assertProgrammeOpenForEnrolment(programme);
     const { payment } = await resolveEnrolmentForPayment(candidate.id, programmeId, programme.feeMinor);
-    const checkout = await createCheckoutOrMarkFailed(payment, candidate.email);
+    const checkout = await createCheckoutOrMarkFailed(
+      payment,
+      candidate.email,
+      `${process.env.NEXTAUTH_URL}/portal/checkout/${payment.internalReference}`
+    );
 
     revalidatePath("/portal/catalogue");
     return { internalReference: payment.internalReference, checkoutUrl: checkout.checkoutUrl };
@@ -252,7 +261,11 @@ export async function initiateGuestCheckout(_prev: FormActionState, formData: Fo
         return payment;
       });
 
-      const checkout = await createCheckoutOrMarkFailed(payment, data.email);
+      const checkout = await createCheckoutOrMarkFailed(
+        payment,
+        data.email,
+        `${process.env.NEXTAUTH_URL}/checkout/return/${payment.internalReference}?token=${checkoutToken}`
+      );
       return { ok: true, data: { checkoutUrl: checkout.checkoutUrl } };
     } catch (e) {
       if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002" && p2002Target(e).includes("internalReference") && attempt < 2) {

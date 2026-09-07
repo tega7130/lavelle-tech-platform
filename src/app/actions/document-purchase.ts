@@ -43,13 +43,18 @@ export async function validateDiscountCodeAction(documentTemplateId: string, cod
  * here rather than exported/shared since it's a three-line wrapper
  * tied to that file's own Payment shape.
  */
-async function createCheckoutOrMarkFailed(payment: { id: string; provider: string; internalReference: string; amountMinor: number }, candidateEmail: string) {
+async function createCheckoutOrMarkFailed(
+  payment: { id: string; provider: string; internalReference: string; amountMinor: number },
+  candidateEmail: string,
+  callbackUrl: string
+) {
   try {
     return await createProviderCheckout({
       provider: payment.provider,
       internalReference: payment.internalReference,
       amountMinor: payment.amountMinor,
       candidateEmail,
+      callbackUrl,
     });
   } catch (e) {
     await prisma.payment.update({ where: { id: payment.id }, data: { status: PaymentStatus.FAILED } });
@@ -95,7 +100,11 @@ export async function initiateDocumentPurchaseAction(
       discountCodeId,
       amountMinor,
     });
-    const checkout = await createCheckoutOrMarkFailed(payment, candidate.email);
+    const checkout = await createCheckoutOrMarkFailed(
+      payment,
+      candidate.email,
+      `${process.env.NEXTAUTH_URL}/portal/checkout/${payment.internalReference}`
+    );
 
     revalidatePath("/portal/library");
     return { internalReference: payment.internalReference, checkoutUrl: checkout.checkoutUrl };

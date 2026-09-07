@@ -127,12 +127,19 @@ async function getNombaAccessToken(): Promise<string> {
   return accessToken;
 }
 
-/** Create a Nomba checkout session and return the hosted payment page URL. */
+/**
+ * Create a Nomba checkout session and return the hosted payment page URL.
+ * callbackUrl is where Nomba redirects the browser after the candidate
+ * finishes on their hosted page — the caller decides it, since only the
+ * caller knows which of this app's return routes (guest/candidate/exam)
+ * fits this specific checkout.
+ */
 export async function createProviderCheckout(input: {
   provider: string;
   internalReference: string;
   amountMinor: number;
   candidateEmail: string;
+  callbackUrl: string;
 }): Promise<ProviderCheckout> {
   const { accountId } = getNombaConfig();
   const accessToken = await getNombaAccessToken();
@@ -150,6 +157,7 @@ export async function createProviderCheckout(input: {
         currency: "NGN",
         orderReference: input.internalReference,
         customerEmail: input.candidateEmail,
+        callbackUrl: input.callbackUrl,
       },
     }),
   });
