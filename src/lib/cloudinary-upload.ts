@@ -17,12 +17,13 @@ export interface CloudinaryUploadResult {
  */
 export async function uploadToCloudinary(
   file: File,
-  purpose: "programme" | "finance" | "certificate" | "blog" | "candidate_photo" | "document_library"
+  purpose: "programme" | "finance" | "certificate" | "blog" | "candidate_photo" | "document_library",
+  kind?: "audio" | "video" | "image" | "document"
 ): Promise<CloudinaryUploadResult> {
   const signRes = await fetch("/api/uploads/cloudinary", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ purpose }),
+    body: JSON.stringify({ purpose, kind }),
   });
   if (!signRes.ok) {
     const error = await signRes.json().catch(() => ({}));
