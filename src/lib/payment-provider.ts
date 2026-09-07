@@ -151,6 +151,12 @@ export async function createProviderCheckout(input: {
   const { accountId } = getNombaConfig();
   const accessToken = await getNombaAccessToken();
 
+  // Logged deliberately (no secrets in it) — the only way to see what
+  // callbackUrl actually reached Nomba, since a malformed value here
+  // surfaces later as a broken redirect after payment, not as an error
+  // on this request itself.
+  console.log(`[nomba] checkout order reference=${input.internalReference} callbackUrl=${input.callbackUrl} apiUrl=${nombaApiUrl()}`);
+
   const response = await fetch(`${nombaApiUrl()}/v1/checkout/order`, {
     method: "POST",
     headers: {
