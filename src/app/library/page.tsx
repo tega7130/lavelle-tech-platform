@@ -3,12 +3,10 @@ import type { Metadata } from "next";
 import { SiteCompactHeader } from "@/components/site/site-header";
 import { SiteFooter } from "@/components/site/site-footer";
 import { LibraryCatalogue } from "@/components/site/library-catalogue";
-import { buttonClassName } from "@/components/ui/button";
-import { cn } from "@/lib/cn";
 import { getPublicDocumentTemplates, getPublicDocumentCategories, getActiveLibraryPromotion } from "@/lib/public-document-library-reads";
 
 const SITE_URL = "https://lavelle.africa";
-const PAGE_TITLE = "Document Library — Professional Legal Templates | Lavelle Institute";
+const PAGE_TITLE = "Library — Professional Legal Templates | Lavelle Institute";
 const PAGE_DESCRIPTION =
   "Browse professional contracts, MOUs, agreements and other legal templates drafted by Nigerian legal experts. Create a free Lavelle account to purchase and download.";
 
@@ -24,13 +22,6 @@ export const metadata: Metadata = {
     type: "website",
   },
 };
-
-const BENEFITS = [
-  { label: "PDF & Word Formats", detail: "Every template ships as an editable .docx or ready-to-use PDF." },
-  { label: "Lifetime Access", detail: "Buy once — unlimited downloads, forever, no expiry." },
-  { label: "Expert-Curated", detail: "Drafted by Nigerian legal experts for real practice." },
-  { label: "Affordable & Instant", detail: "Pay by card, transfer or USSD and download immediately." },
-] as const;
 
 const FAQS = [
   { q: "What file formats are available?", a: "PDF and Word (.docx)." },
@@ -79,7 +70,7 @@ export default async function PublicLibraryPage() {
       {/* HERO */}
       <div className="py-11">
         <div className="mx-auto max-w-[1200px] px-5 sm:px-6 md:px-8 lg:px-10">
-          <div className="text-[11px] tracking-[0.18em] uppercase font-semibold text-accent">Document Library</div>
+          <div className="text-[11px] tracking-[0.18em] uppercase font-semibold text-accent">Library</div>
           <h1 className="font-heading font-semibold text-[26px] sm:text-[30px] lg:text-[40px] leading-[1.12] mt-4 max-w-[26ch] tracking-[-0.022em]">
             Professional document templates for every occasion
           </h1>
@@ -87,28 +78,6 @@ export default async function PublicLibraryPage() {
             Browse our collection of professional contracts, MOUs, agreements and other legal templates, drafted by Nigerian legal experts. Create a free
             account to access, purchase and download templates.
           </p>
-          <div className="flex flex-wrap gap-3 mt-6">
-            <Link href="/register" className={cn(buttonClassName("primary"), "h-[46px] px-6 rounded-[9px] text-[13.5px]")}>
-              Create free account
-            </Link>
-            <Link href="/sign-in?next=/portal/library" className={cn(buttonClassName("secondary"), "h-[46px] px-6 rounded-[9px] text-[13.5px]")}>
-              Already have an account? Log in
-            </Link>
-          </div>
-
-          {/* BENEFITS */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-[14px] mt-11">
-            <div className="px-4 py-[18px] rounded-[11px] bg-neutral-100 border border-divider">
-              <div className="font-heading font-semibold text-[15px]">{templateCount} Professional Template{templateCount === 1 ? "" : "s"}</div>
-              <div className="text-[12px] text-neutral-600 mt-1.5 leading-[1.5]">Curated across contracts, MOUs, agreements and more.</div>
-            </div>
-            {BENEFITS.map((b) => (
-              <div key={b.label} className="px-4 py-[18px] rounded-[11px] bg-neutral-100 border border-divider">
-                <div className="font-heading font-semibold text-[15px]">{b.label}</div>
-                <div className="text-[12px] text-neutral-600 mt-1.5 leading-[1.5]">{b.detail}</div>
-              </div>
-            ))}
-          </div>
         </div>
       </div>
 
