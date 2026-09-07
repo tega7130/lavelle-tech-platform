@@ -10,7 +10,7 @@ import { tierLabel } from "@/lib/format";
 import type { VerifyResult } from "@/lib/certificate-verify";
 
 const BAND_LABEL: Record<string, string> = { DISTINCTION: "Distinction", MERIT: "Merit", PASS: "Pass", REFER: "Refer" };
-const SAMPLE_ID = "LAV-TILL 2026/001";
+const SAMPLE_ID = "LVL-CERT-2026-00005";
 
 function fmtDate(d: string) {
   return new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
@@ -74,7 +74,7 @@ export function VerifyPortal({ initialNumber }: { initialNumber: string }) {
           <Card elev="md" className="p-6 mt-6">
             <Label>Certificate ID</Label>
             <Input
-              placeholder="LAV-TILL YYYY/NNN"
+              placeholder="LVL-CERT-YYYY-NNNNN"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && run(query)}
