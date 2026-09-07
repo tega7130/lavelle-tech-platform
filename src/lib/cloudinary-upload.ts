@@ -28,7 +28,7 @@ export async function uploadToCloudinary(
     const error = await signRes.json().catch(() => ({}));
     throw new Error(error.error || "Could not get an upload authorization.");
   }
-  const { signature, timestamp, folder, apiKey, cloudName } = await signRes.json();
+  const { signature, timestamp, folder, apiKey, cloudName, resourceType } = await signRes.json();
 
   const formData = new FormData();
   formData.append("file", file);
@@ -37,7 +37,14 @@ export async function uploadToCloudinary(
   formData.append("signature", signature);
   formData.append("folder", folder);
 
-  const uploadRes = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/auto/upload`, {
+  // resourceType is "auto" (Cloudinary's own content-sniffing) unless
+  // /api/uploads/cloudinary pins a specific one for this purpose — a
+  // purpose whose signed-URL download side hardcodes a resource_type
+  // (document_library, blog, candidate_photo) needs the upload pinned
+  // to match, or "auto" guessing wrong here 404s the download later
+  // with nothing in this app's own logs to explain it — the same
+  // failure mode already fixed for certificate PDFs.
+  const uploadRes = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/${resourceType ?? "auto"}/upload`, {
     method: "POST",
     body: formData,
   });
