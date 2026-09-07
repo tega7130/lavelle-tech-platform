@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getCandidateDocumentDetail } from "@/lib/candidate-document-reads";
 import { formatNaira } from "@/lib/format";
-import { ACCEPTED_DOCUMENT_MIME_TYPES } from "@/lib/document-library";
+import { ACCEPTED_DOCUMENT_MIME_TYPES, effectivePriceMinor } from "@/lib/document-library";
 import { Card, CardKicker } from "@/components/ui/card";
 import { Tag } from "@/components/ui/tag";
 import { FavoriteButton } from "@/components/portal/favorite-button";
@@ -73,10 +73,10 @@ export default async function TemplateDetailPage({ params }: { params: Promise<{
 
         <Card elev="md" className="h-fit">
           <CardKicker>Price</CardKicker>
-          {document.compareAtPriceMinor != null && document.compareAtPriceMinor > document.priceMinor && (
-            <div className="text-[14px] text-neutral-500 line-through">{formatNaira(document.compareAtPriceMinor)}</div>
+          {document.discountedPriceMinor != null && document.discountedPriceMinor < document.priceMinor && (
+            <div className="text-[14px] text-neutral-500 line-through">{formatNaira(document.priceMinor)}</div>
           )}
-          <div className="font-heading text-[26px]">{formatNaira(document.priceMinor)}</div>
+          <div className="font-heading text-[26px]">{formatNaira(effectivePriceMinor(document))}</div>
           <div className="mb-3 text-[12px] text-neutral-500">One-time purchase — permanent access</div>
 
           {document.viewerOwns ? (
@@ -88,7 +88,7 @@ export default async function TemplateDetailPage({ params }: { params: Promise<{
               <ViewOnlineButton documentTemplateId={document.id} variant="secondary" className="w-full justify-center" />
             </div>
           ) : document.isActive ? (
-            <PurchaseButton documentTemplateId={document.id} title={document.title} priceMinor={document.priceMinor} fileFormatLabel={fileFormatLabel} />
+            <PurchaseButton documentTemplateId={document.id} title={document.title} priceMinor={effectivePriceMinor(document)} fileFormatLabel={fileFormatLabel} />
           ) : (
             <div className="text-[12.5px] text-neutral-500">This template can no longer be purchased.</div>
           )}

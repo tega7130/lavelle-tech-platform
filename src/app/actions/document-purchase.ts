@@ -6,6 +6,7 @@ import { PaymentStatus } from "@/generated/prisma/client";
 import { getCurrentCandidate } from "@/lib/candidate-session";
 import { createProviderCheckout } from "@/lib/payment-provider";
 import { getSignedAssetUrl } from "@/lib/storage";
+import { effectivePriceMinor } from "@/lib/document-library";
 import {
   validateAndComputeDiscount,
   resolveDocumentPurchaseForPayment,
@@ -31,7 +32,7 @@ export async function validateDiscountCodeAction(documentTemplateId: string, cod
     return { valid: false as const, reason: "This document template is no longer available." };
   }
 
-  const result = await validateAndComputeDiscount(document.priceMinor, code, documentTemplateId);
+  const result = await validateAndComputeDiscount(effectivePriceMinor(document), code, documentTemplateId);
   if (!result.valid) return { valid: false as const, reason: result.reason ?? "Invalid discount code." };
   return { valid: true as const, discountMinor: result.discountMinor!, finalAmountMinor: result.finalAmountMinor! };
 }
@@ -82,20 +83,22 @@ export async function initiateDocumentPurchaseAction(
     const document = await prisma.documentTemplate.findUnique({ where: { id: documentTemplateId } });
     if (!document || !document.isActive) throw new DocumentUnavailableError();
 
+    const priceMinor = effectivePriceMinor(document);
+
     let discountMinor = 0;
     let discountCodeId: string | null = null;
     if (discountCode?.trim()) {
-      const discount = await validateAndComputeDiscount(document.priceMinor, discountCode, documentTemplateId);
+      const discount = await validateAndComputeDiscount(priceMinor, discountCode, documentTemplateId);
       if (!discount.valid) {
         return { checkoutUrl: null, internalReference: null, error: discount.reason ?? "Invalid discount code." };
       }
       discountMinor = discount.discountMinor!;
       discountCodeId = discount.discountCodeId!;
     }
-    const amountMinor = document.priceMinor - discountMinor;
+    const amountMinor = priceMinor - discountMinor;
 
     const { payment } = await resolveDocumentPurchaseForPayment(candidate.id, documentTemplateId, {
-      originalPriceMinor: document.priceMinor,
+      originalPriceMinor: priceMinor,
       discountMinor,
       discountCodeId,
       amountMinor,

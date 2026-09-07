@@ -14,16 +14,17 @@ const documentMetadataSchema = z.object({
   // converts to kobo — priceMinor itself is never entered directly, same
   // discipline as Programme.feeNaira/feeMinor (src/lib/validation/programme.ts).
   priceNaira: z.coerce.number().nonnegative("Price cannot be negative").finite(),
-  // Optional "was" price for a sale display (compareAtPriceMinor) — a plain
-  // naira amount, same conversion discipline as priceNaira. Checked against
-  // priceNaira below since a "sale" that isn't actually cheaper is a
-  // mistake, not a valid state.
-  compareAtPriceNaira: z.coerce.number().positive("Must be greater than 0").finite().optional(),
+  // Optional flat sale price (discountedPriceMinor), never a percentage — a
+  // plain naira amount, same conversion discipline as priceNaira. When set
+  // it becomes both what's charged and the prominent displayed price, with
+  // priceNaira struck through beside it, so it's checked against priceNaira
+  // below: a "sale" that isn't actually cheaper is a mistake, not a valid state.
+  discountedPriceNaira: z.coerce.number().positive("Must be greater than 0").finite().optional(),
 });
 
-function checkCompareAtPrice(data: { priceNaira: number; compareAtPriceNaira?: number }, ctx: z.RefinementCtx) {
-  if (data.compareAtPriceNaira !== undefined && data.compareAtPriceNaira <= data.priceNaira) {
-    ctx.addIssue({ code: "custom", path: ["compareAtPriceNaira"], message: "Must be higher than the price for a sale to show." });
+function checkDiscountedPrice(data: { priceNaira: number; discountedPriceNaira?: number }, ctx: z.RefinementCtx) {
+  if (data.discountedPriceNaira !== undefined && data.discountedPriceNaira >= data.priceNaira) {
+    ctx.addIssue({ code: "custom", path: ["discountedPriceNaira"], message: "Must be lower than the selling price for a sale to show." });
   }
 }
 
@@ -34,10 +35,10 @@ export const createDocumentTemplateSchema = documentMetadataSchema
     fileName: z.string().min(1),
     fileBytes: z.number().int().positive(),
   })
-  .superRefine(checkCompareAtPrice);
+  .superRefine(checkDiscountedPrice);
 export type CreateDocumentTemplateInput = z.infer<typeof createDocumentTemplateSchema>;
 
-export const updateDocumentTemplateSchema = documentMetadataSchema.superRefine(checkCompareAtPrice);
+export const updateDocumentTemplateSchema = documentMetadataSchema.superRefine(checkDiscountedPrice);
 export type UpdateDocumentTemplateInput = z.infer<typeof updateDocumentTemplateSchema>;
 
 // value is a raw human number, interpreted per type: a percent (1-100) for

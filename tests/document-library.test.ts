@@ -11,7 +11,7 @@ import {
   setDiscountCodeActive,
 } from "@/lib/document-library-actions";
 import { createDocumentTemplateSchema, updateDocumentTemplateSchema, createDiscountCodeSchema } from "@/lib/validation/document-library";
-import { isAcceptedDocumentMimeType, MAX_DOCUMENT_BYTES } from "@/lib/document-library";
+import { isAcceptedDocumentMimeType, MAX_DOCUMENT_BYTES, effectivePriceMinor } from "@/lib/document-library";
 
 async function seedStaff() {
   return testPrisma.staff.create({
@@ -91,14 +91,14 @@ describe("createDocumentTemplate", () => {
     await testPrisma.staff.delete({ where: { id: staff.id } }).catch(() => {});
   });
 
-  it("stores an optional compareAtPriceMinor, and null when omitted", async () => {
+  it("stores an optional discountedPriceMinor, and null when omitted", async () => {
     const staff = await seedStaff();
     const category = await seedCategory();
-    const onSale = await createDocumentTemplate({ ...baseInput(category.id), compareAtPriceMinor: 2_000_000 }, staff.id);
-    expect(onSale.compareAtPriceMinor).toBe(2_000_000);
+    const onSale = await createDocumentTemplate({ ...baseInput(category.id), discountedPriceMinor: 1_000_000 }, staff.id);
+    expect(onSale.discountedPriceMinor).toBe(1_000_000);
 
     const notOnSale = await createDocumentTemplate(baseInput(category.id), staff.id);
-    expect(notOnSale.compareAtPriceMinor).toBeNull();
+    expect(notOnSale.discountedPriceMinor).toBeNull();
 
     await cleanup(staff.id, onSale.id, notOnSale.id);
     await testPrisma.documentCategory.delete({ where: { id: category.id } });
@@ -135,24 +135,24 @@ describe("updateDocumentTemplateMetadata", () => {
     await testPrisma.documentCategory.deleteMany({ where: { id: { in: [category.id, otherCategory.id] } } });
   });
 
-  it("sets and then clears compareAtPriceMinor", async () => {
+  it("sets and then clears discountedPriceMinor", async () => {
     const staff = await seedStaff();
     const category = await seedCategory();
     const document = await createDocumentTemplate(baseInput(category.id), staff.id);
 
     const onSale = await updateDocumentTemplateMetadata(
       document.id,
-      { title: document.title, categoryId: category.id, priceMinor: document.priceMinor, compareAtPriceMinor: 2_000_000 },
+      { title: document.title, categoryId: category.id, priceMinor: document.priceMinor, discountedPriceMinor: 1_000_000 },
       staff.id
     );
-    expect(onSale.compareAtPriceMinor).toBe(2_000_000);
+    expect(onSale.discountedPriceMinor).toBe(1_000_000);
 
     const cleared = await updateDocumentTemplateMetadata(
       document.id,
-      { title: document.title, categoryId: category.id, priceMinor: document.priceMinor, compareAtPriceMinor: null },
+      { title: document.title, categoryId: category.id, priceMinor: document.priceMinor, discountedPriceMinor: null },
       staff.id
     );
-    expect(cleared.compareAtPriceMinor).toBeNull();
+    expect(cleared.discountedPriceMinor).toBeNull();
 
     await cleanup(staff.id, document.id);
     await testPrisma.documentCategory.delete({ where: { id: category.id } });
@@ -491,18 +491,18 @@ describe("createDocumentTemplateSchema validation", () => {
     expect(() => createDocumentTemplateSchema.parse({ ...validBase, priceNaira: "free" })).toThrow();
   });
 
-  it("does not require compareAtPriceNaira", () => {
+  it("does not require discountedPriceNaira", () => {
     expect(() => createDocumentTemplateSchema.parse(validBase)).not.toThrow();
   });
 
-  it("accepts compareAtPriceNaira when higher than priceNaira", () => {
-    const result = createDocumentTemplateSchema.parse({ ...validBase, compareAtPriceNaira: "20000" });
-    expect(result.compareAtPriceNaira).toBe(20000);
+  it("accepts discountedPriceNaira when lower than priceNaira", () => {
+    const result = createDocumentTemplateSchema.parse({ ...validBase, discountedPriceNaira: "10000" });
+    expect(result.discountedPriceNaira).toBe(10000);
   });
 
-  it("rejects compareAtPriceNaira equal to or lower than priceNaira", () => {
-    expect(() => createDocumentTemplateSchema.parse({ ...validBase, compareAtPriceNaira: "15000" })).toThrow();
-    expect(() => createDocumentTemplateSchema.parse({ ...validBase, compareAtPriceNaira: "10000" })).toThrow();
+  it("rejects discountedPriceNaira equal to or higher than priceNaira", () => {
+    expect(() => createDocumentTemplateSchema.parse({ ...validBase, discountedPriceNaira: "15000" })).toThrow();
+    expect(() => createDocumentTemplateSchema.parse({ ...validBase, discountedPriceNaira: "20000" })).toThrow();
   });
 });
 
@@ -516,9 +516,9 @@ describe("updateDocumentTemplateSchema validation", () => {
     expect(result.title).toBe("Renamed");
   });
 
-  it("rejects compareAtPriceNaira equal to or lower than priceNaira", () => {
+  it("rejects discountedPriceNaira equal to or higher than priceNaira", () => {
     expect(() =>
-      updateDocumentTemplateSchema.parse({ title: "Renamed", categoryId: "some-category-id", priceNaira: "500", compareAtPriceNaira: "500" })
+      updateDocumentTemplateSchema.parse({ title: "Renamed", categoryId: "some-category-id", priceNaira: "500", discountedPriceNaira: "500" })
     ).toThrow();
   });
 });
@@ -533,5 +533,15 @@ describe("isAcceptedDocumentMimeType / MAX_DOCUMENT_BYTES", () => {
 
   it("defines a positive, sane upload ceiling", () => {
     expect(MAX_DOCUMENT_BYTES).toBeGreaterThan(0);
+  });
+});
+
+describe("effectivePriceMinor", () => {
+  it("is the discounted price when one is set — this is what gets charged", () => {
+    expect(effectivePriceMinor({ priceMinor: 2_000_000, discountedPriceMinor: 1_000_000 })).toBe(1_000_000);
+  });
+
+  it("falls back to the selling price when there is no discounted price", () => {
+    expect(effectivePriceMinor({ priceMinor: 1_500_000, discountedPriceMinor: null })).toBe(1_500_000);
   });
 });

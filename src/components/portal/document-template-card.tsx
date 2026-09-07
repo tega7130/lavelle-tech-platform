@@ -3,6 +3,7 @@ import { Card, CardTitle, CardBody } from "@/components/ui/card";
 import { Tag } from "@/components/ui/tag";
 import { buttonClassName } from "@/components/ui/button";
 import { formatNaira } from "@/lib/format";
+import { effectivePriceMinor } from "@/lib/document-library";
 import { FavoriteButton } from "@/components/portal/favorite-button";
 import { DownloadButton } from "@/components/portal/document-file-buttons";
 import type { CandidateDocumentSummary } from "@/lib/candidate-document-reads";
@@ -38,10 +39,10 @@ export function DocumentTemplateCard({ document }: { document: TemplateCardDocum
 
       <div className="flex items-center justify-between gap-2">
         <span className="flex items-baseline gap-1.5">
-          {document.compareAtPriceMinor != null && document.compareAtPriceMinor > document.priceMinor && (
-            <span className="text-[12px] text-neutral-500 line-through">{formatNaira(document.compareAtPriceMinor)}</span>
+          {document.discountedPriceMinor != null && document.discountedPriceMinor < document.priceMinor && (
+            <span className="text-[12px] text-neutral-500 line-through">{formatNaira(document.priceMinor)}</span>
           )}
-          <span className="font-heading text-[15px]">{formatNaira(document.priceMinor)}</span>
+          <span className="font-heading text-[15px]">{formatNaira(effectivePriceMinor(document))}</span>
         </span>
 
         {document.viewerOwns ? (

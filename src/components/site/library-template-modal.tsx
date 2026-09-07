@@ -42,10 +42,10 @@ export function LibraryTemplateModal({
           <div>
             <div className="text-[10px] tracking-[0.1em] uppercase text-neutral-500">Price</div>
             <div className="flex items-baseline gap-2 mt-1">
-              {document.compareAtPriceMinor != null && document.compareAtPriceMinor > document.priceMinor && (
-                <span className="text-[13px] text-neutral-500 line-through">{formatNaira(document.compareAtPriceMinor)}</span>
+              {document.discountedPriceMinor != null && document.discountedPriceMinor < document.priceMinor && (
+                <span className="text-[13px] text-neutral-500 line-through">{formatNaira(document.priceMinor)}</span>
               )}
-              <span className="font-heading font-semibold text-[19px]">{formatNaira(document.priceMinor)}</span>
+              <span className="font-heading font-semibold text-[19px]">{formatNaira(document.effectivePriceMinor)}</span>
             </div>
           </div>
           <div>

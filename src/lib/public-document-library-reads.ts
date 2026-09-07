@@ -1,7 +1,7 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@/generated/prisma/client";
-import { ACCEPTED_DOCUMENT_MIME_TYPES } from "@/lib/document-library";
+import { ACCEPTED_DOCUMENT_MIME_TYPES, effectivePriceMinor } from "@/lib/document-library";
 import { formatNaira } from "@/lib/format";
 
 // Public website (Phase 3) — unauthenticated visitors, no session at all.
@@ -16,7 +16,7 @@ const PUBLIC_DOCUMENT_SELECT = {
   category: { select: { id: true, name: true } },
   description: true,
   priceMinor: true,
-  compareAtPriceMinor: true,
+  discountedPriceMinor: true,
   fileType: true,
   createdAt: true,
 } satisfies Prisma.DocumentTemplateSelect;
@@ -30,7 +30,8 @@ function toPublicSummary(doc: PublicDocumentRow) {
     category: doc.category,
     description: doc.description,
     priceMinor: doc.priceMinor,
-    compareAtPriceMinor: doc.compareAtPriceMinor,
+    discountedPriceMinor: doc.discountedPriceMinor,
+    effectivePriceMinor: effectivePriceMinor(doc),
     fileFormat: ACCEPTED_DOCUMENT_MIME_TYPES[doc.fileType] ?? "Document",
     createdAt: doc.createdAt.toISOString(),
   };

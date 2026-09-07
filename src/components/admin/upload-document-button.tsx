@@ -39,7 +39,7 @@ export function UploadDocumentButton({
   const [categoryId, setCategoryId] = React.useState(initialCategories[0]?.id ?? "");
   const [description, setDescription] = React.useState("");
   const [priceNaira, setPriceNaira] = React.useState("");
-  const [compareAtPriceNaira, setCompareAtPriceNaira] = React.useState("");
+  const [discountedPriceNaira, setDiscountedPriceNaira] = React.useState("");
   const [file, setFile] = React.useState<UploadedDocumentFile | null>(null);
   const [fileUploading, setFileUploading] = React.useState(false);
   const [fileError, setFileError] = React.useState<string | null>(null);
@@ -52,7 +52,7 @@ export function UploadDocumentButton({
     setCategoryId(initialCategories[0]?.id ?? "");
     setDescription("");
     setPriceNaira("");
-    setCompareAtPriceNaira("");
+    setDiscountedPriceNaira("");
     setFile(null);
     setFileError(null);
     setError(null);
@@ -107,8 +107,8 @@ export function UploadDocumentButton({
       setError("Choose a category.");
       return;
     }
-    if (compareAtPriceNaira && Number(compareAtPriceNaira) <= Number(priceNaira)) {
-      setError("Compare-at price must be higher than the price for a sale to show.");
+    if (discountedPriceNaira && Number(discountedPriceNaira) >= Number(priceNaira)) {
+      setError("Discounted price must be lower than the selling price for a sale to show.");
       return;
     }
     setBusy(true);
@@ -118,7 +118,7 @@ export function UploadDocumentButton({
         categoryId,
         description: description || undefined,
         priceNaira,
-        compareAtPriceNaira: compareAtPriceNaira || undefined,
+        discountedPriceNaira: discountedPriceNaira || undefined,
         storageKey: file.storageKey,
         fileType: file.fileType,
         fileName: file.fileName,
@@ -212,23 +212,23 @@ export function UploadDocumentButton({
             </Field>
 
             <Field>
-              <Label>Price (₦)</Label>
+              <Label>Selling price (₦)</Label>
               <Input type="number" min={0} step="0.01" value={priceNaira} onChange={(e) => setPriceNaira(e.target.value)} placeholder="15000" />
               <div className="text-neutral-500 text-[11.5px] mt-1">Amount in Nigerian Naira (NGN).</div>
             </Field>
 
             <Field>
-              <Label>Compare-at price (optional)</Label>
+              <Label>Discounted price (optional)</Label>
               <Input
                 type="number"
                 min={0}
                 step="0.01"
-                value={compareAtPriceNaira}
-                onChange={(e) => setCompareAtPriceNaira(e.target.value)}
-                placeholder="20000"
+                value={discountedPriceNaira}
+                onChange={(e) => setDiscountedPriceNaira(e.target.value)}
+                placeholder="10000"
               />
               <div className="text-neutral-500 text-[11.5px] mt-1">
-                Shown struck through next to the price to signal a sale — higher than Price above, never charged.
+                A flat sale price — lower than Selling price above. When set, this is what&apos;s charged, and the selling price is shown struck through beside it.
               </div>
             </Field>
 

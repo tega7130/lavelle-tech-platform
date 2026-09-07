@@ -22,3 +22,14 @@ export const MAX_DOCUMENT_BYTES = 20 * 1024 * 1024; // 20MB
 export function isAcceptedDocumentMimeType(mimeType: string): boolean {
   return mimeType in ACCEPTED_DOCUMENT_MIME_TYPES;
 }
+
+/**
+ * The one place priceMinor (the admin's "selling price") and
+ * discountedPriceMinor (the optional flat sale override) are reconciled
+ * into a single number — what's actually charged at checkout, and the
+ * prominent price shown everywhere it's listed. priceMinor is struck
+ * through beside it whenever discountedPriceMinor is set and lower.
+ */
+export function effectivePriceMinor(document: { priceMinor: number; discountedPriceMinor: number | null }): number {
+  return document.discountedPriceMinor ?? document.priceMinor;
+}

@@ -43,10 +43,10 @@ function PublicTemplateCard({ document, onView }: { document: PublicDocumentSumm
       </p>
       <div className="flex items-center justify-between gap-3 mt-4 pt-4 border-t border-dashed border-neutral-300">
         <span className="flex items-baseline gap-1.5">
-          {document.compareAtPriceMinor != null && document.compareAtPriceMinor > document.priceMinor && (
-            <span className="text-[11.5px] text-neutral-500 line-through">{formatNaira(document.compareAtPriceMinor)}</span>
+          {document.discountedPriceMinor != null && document.discountedPriceMinor < document.priceMinor && (
+            <span className="text-[11.5px] text-neutral-500 line-through">{formatNaira(document.priceMinor)}</span>
           )}
-          <span className="text-[13px] text-neutral-600">{formatNaira(document.priceMinor)}</span>
+          <span className="text-[13px] text-neutral-600">{formatNaira(document.effectivePriceMinor)}</span>
         </span>
         <button type="button" onClick={onView} className={cn(buttonClassName("secondary"), "h-9 px-4 text-[12.5px]")}>
           View Details
@@ -85,9 +85,9 @@ export function LibraryCatalogue({ documents, categories }: { documents: PublicD
         case "alphabetical":
           return a.title.localeCompare(b.title);
         case "price_asc":
-          return a.priceMinor - b.priceMinor;
+          return a.effectivePriceMinor - b.effectivePriceMinor;
         case "price_desc":
-          return b.priceMinor - a.priceMinor;
+          return b.effectivePriceMinor - a.effectivePriceMinor;
         default:
           return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
       }

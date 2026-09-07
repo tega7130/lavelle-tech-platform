@@ -1,6 +1,7 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
 import { getCurrentCandidate } from "@/lib/candidate-session";
+import { effectivePriceMinor } from "@/lib/document-library";
 import type { Prisma } from "@/generated/prisma/client";
 
 // Candidate-facing server functions — called directly from Server
@@ -17,7 +18,7 @@ const CANDIDATE_DOCUMENT_SELECT = {
   category: { select: { id: true, name: true } },
   description: true,
   priceMinor: true,
-  compareAtPriceMinor: true,
+  discountedPriceMinor: true,
   currency: true,
   fileType: true,
   fileName: true,
@@ -30,12 +31,12 @@ export type CandidateDocumentSummary = Prisma.DocumentTemplateGetPayload<{ selec
 
 export type DocumentSort = "newest" | "price_asc" | "price_desc" | "popular";
 
+// price_asc/price_desc are NOT sorted at the DB level — the sale price
+// (discountedPriceMinor) can undercut priceMinor, so "low to high" has to
+// sort by effectivePriceMinor, computed after the fetch (see
+// listCandidateDocuments below).
 function resolveOrderBy(sort?: DocumentSort): Prisma.DocumentTemplateOrderByWithRelationInput {
   switch (sort) {
-    case "price_asc":
-      return { priceMinor: "asc" };
-    case "price_desc":
-      return { priceMinor: "desc" };
     // Sorts by purchaseCount without ever selecting or returning it —
     // candidates never see the number itself (rule 5/27 of the Phase 2 spec).
     case "popular":
@@ -89,7 +90,12 @@ export async function listCandidateDocuments(params: ListCandidateDocumentsParam
     orderBy: resolveOrderBy(params.sort),
   });
 
-  return annotateViewerState(candidate?.id ?? null, documents);
+  const annotated = await annotateViewerState(candidate?.id ?? null, documents);
+  if (params.sort === "price_asc" || params.sort === "price_desc") {
+    const sign = params.sort === "price_asc" ? 1 : -1;
+    return [...annotated].sort((a, b) => sign * (effectivePriceMinor(a) - effectivePriceMinor(b)));
+  }
+  return annotated;
 }
 
 /**

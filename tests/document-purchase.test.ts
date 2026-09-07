@@ -8,6 +8,7 @@ import {
   AlreadyOwnedError,
   PurchaseInProgressError,
 } from "@/lib/document-purchase";
+import { effectivePriceMinor } from "@/lib/document-library";
 
 async function seedStaff() {
   return testPrisma.staff.create({
@@ -28,7 +29,7 @@ async function seedCandidate() {
   });
 }
 
-async function seedDocument(staffId: string, priceMinor = 1_000_000) {
+async function seedDocument(staffId: string, priceMinor = 1_000_000, discountedPriceMinor: number | null = null) {
   const category = await testPrisma.documentCategory.create({
     data: { name: `Test Category ${crypto.randomUUID().slice(0, 8)}`, slug: `TEST_${crypto.randomUUID().slice(0, 8)}` },
   });
@@ -37,6 +38,7 @@ async function seedDocument(staffId: string, priceMinor = 1_000_000) {
       title: "Test Template",
       categoryId: category.id,
       priceMinor,
+      discountedPriceMinor,
       storageKey: `lavelle/document_library/${crypto.randomUUID()}`,
       fileType: "application/pdf",
       fileName: "test.pdf",
@@ -151,6 +153,53 @@ describe("validateAndComputeDiscount", () => {
     const result = await validateAndComputeDiscount(1_000_000, code.code, document.id);
     expect(result.valid).toBe(false);
     expect(result.reason).toMatch(/doesn't apply/);
+    await testPrisma.discountCode.delete({ where: { id: code.id } });
+  });
+});
+
+/**
+ * Mirrors app/actions/document-purchase.ts's initiateDocumentPurchaseAction
+ * exactly (priceMinor -> effectivePriceMinor(document), then optionally a
+ * discount code on top of that): a document on sale must be charged its
+ * discountedPriceMinor, never the pre-sale priceMinor, with or without a
+ * discount code also applied.
+ */
+describe("checkout charges effectivePriceMinor, not raw priceMinor", () => {
+  it("charges the full discounted price when no discount code is used", async () => {
+    const staff = await seedStaff();
+    const candidate = await seedCandidate();
+    const document = await seedDocument(staff.id, 2_000_000, 1_000_000);
+
+    const priceMinor = effectivePriceMinor(document);
+    expect(priceMinor).toBe(1_000_000);
+
+    const { payment, purchase } = await resolveDocumentPurchaseForPayment(candidate.id, document.id, noDiscount(priceMinor));
+    expect(payment.amountMinor).toBe(1_000_000);
+    expect(purchase.originalPriceMinor).toBe(1_000_000);
+
+    await cleanup({ staffId: staff.id, candidateId: candidate.id, documentId: document.id });
+  });
+
+  it("applies a discount code against the already-discounted price, not the pre-sale price", async () => {
+    const staff = await seedStaff();
+    const candidate = await seedCandidate();
+    const document = await seedDocument(staff.id, 2_000_000, 1_000_000);
+    const code = await testPrisma.discountCode.create({ data: { code: `SALE${crypto.randomUUID().slice(0, 6)}`, type: "PERCENT", value: 10 } });
+
+    const priceMinor = effectivePriceMinor(document);
+    const discount = await validateAndComputeDiscount(priceMinor, code.code, document.id);
+    expect(discount).toMatchObject({ valid: true, discountMinor: 100_000, finalAmountMinor: 900_000 });
+
+    const { payment, purchase } = await resolveDocumentPurchaseForPayment(candidate.id, document.id, {
+      originalPriceMinor: priceMinor,
+      discountMinor: discount.discountMinor!,
+      discountCodeId: discount.discountCodeId!,
+      amountMinor: priceMinor - discount.discountMinor!,
+    });
+    expect(payment.amountMinor).toBe(900_000);
+    expect(purchase.originalPriceMinor).toBe(1_000_000);
+
+    await cleanup({ staffId: staff.id, candidateId: candidate.id, documentId: document.id });
     await testPrisma.discountCode.delete({ where: { id: code.id } });
   });
 });

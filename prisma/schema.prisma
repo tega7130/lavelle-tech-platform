@@ -2416,17 +2416,23 @@ model DocumentTemplate {
   description String?
 
   // Kobo — same convention as Programme.feeMinor/Payment.amountMinor.
-  // Never a float. This is the only price ever charged — a sale shown via
-  // compareAtPriceMinor never changes what a purchase actually costs.
+  // Never a float. The stable "selling price" an admin sets — struck
+  // through wherever discountedPriceMinor is set and lower, but it is
+  // discountedPriceMinor (see below), not this field, that is actually
+  // charged whenever one is active.
   priceMinor Int
   currency   String @default("NGN")
 
-  // Optional "was" price, shown struck through next to priceMinor when set
-  // and higher than it — a plain display cue for a sale, unrelated to the
+  // Optional flat naira sale price (never a percentage) — when set and
+  // lower than priceMinor, this becomes BOTH the prominent displayed price
+  // (with priceMinor struck through beside it) AND the amount actually
+  // charged at checkout in place of priceMinor. Unrelated to the
   // DiscountCode system (no code to enter, nothing scoped, nothing
-  // redeemed). DocumentPurchase.originalPriceMinor still snapshots the
-  // live priceMinor at purchase time, never this field.
-  compareAtPriceMinor Int?
+  // redeemed) — see effectivePriceMinor() for the one place this and
+  // priceMinor are reconciled into what a purchase actually costs.
+  // DocumentPurchase.originalPriceMinor snapshots that effective price at
+  // purchase time, never raw priceMinor.
+  discountedPriceMinor Int?
 
   storageKey String @unique // Cloudinary public_id
   fileType   String // MIME type, as reported by Cloudinary at upload time
@@ -2600,9 +2606,11 @@ model DocumentPurchase {
   payment   Payment @relation(fields: [paymentId], references: [id])
 
   // Snapshotted at initiation/retry, never re-derived from the live
-  // DocumentTemplate.priceMinor once paid — same discipline as
-  // Payment.amountMinor's own comment ("a snapshot of the fee... never
-  // read the live fee when displaying a historic payment").
+  // DocumentTemplate once paid — same discipline as Payment.amountMinor's
+  // own comment ("a snapshot of the fee... never read the live fee when
+  // displaying a historic payment"). This is the effective price at that
+  // moment (effectivePriceMinor: discountedPriceMinor ?? priceMinor), not
+  // necessarily raw priceMinor.
   originalPriceMinor Int
   discountMinor      Int    @default(0)
   amountMinor        Int // originalPriceMinor - discountMinor; what was actually charged

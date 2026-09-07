@@ -17,7 +17,7 @@ async function seedCategory(name = `Test Category ${crypto.randomUUID().slice(0,
 async function seedDocument(
   staffId: string,
   categoryId: string,
-  overrides: Partial<{ title: string; priceMinor: number; compareAtPriceMinor: number | null; isActive: boolean; deletedAt: Date | null; description: string | null }> = {}
+  overrides: Partial<{ title: string; priceMinor: number; discountedPriceMinor: number | null; isActive: boolean; deletedAt: Date | null; description: string | null }> = {}
 ) {
   return testPrisma.documentTemplate.create({
     data: {
@@ -25,7 +25,7 @@ async function seedDocument(
       categoryId,
       description: overrides.description ?? "A description mentioning employment.",
       priceMinor: overrides.priceMinor ?? 1_500_000,
-      compareAtPriceMinor: overrides.compareAtPriceMinor ?? null,
+      discountedPriceMinor: overrides.discountedPriceMinor ?? null,
       storageKey: `lavelle/document_library/${crypto.randomUUID()}`,
       fileType: "application/pdf",
       fileName: "employment-contract.pdf",
@@ -80,15 +80,20 @@ describe("getPublicDocumentTemplates", () => {
     await testPrisma.staff.delete({ where: { id: staff.id } }).catch(() => {});
   });
 
-  it("includes compareAtPriceMinor when set, and null when not", async () => {
+  it("includes discountedPriceMinor when set, and null when not, computing effectivePriceMinor either way", async () => {
     const staff = await seedStaff();
     const category = await seedCategory();
-    const onSale = await seedDocument(staff.id, category.id, { title: "On Sale", priceMinor: 1_000_000, compareAtPriceMinor: 2_000_000 });
-    const notOnSale = await seedDocument(staff.id, category.id, { title: "Not On Sale" });
+    const onSale = await seedDocument(staff.id, category.id, { title: "On Sale", priceMinor: 2_000_000, discountedPriceMinor: 1_000_000 });
+    const notOnSale = await seedDocument(staff.id, category.id, { title: "Not On Sale", priceMinor: 1_500_000 });
 
     const results = await getPublicDocumentTemplates();
-    expect(results.find((d) => d.id === onSale.id)?.compareAtPriceMinor).toBe(2_000_000);
-    expect(results.find((d) => d.id === notOnSale.id)?.compareAtPriceMinor).toBeNull();
+    const onSaleFound = results.find((d) => d.id === onSale.id);
+    expect(onSaleFound?.discountedPriceMinor).toBe(1_000_000);
+    expect(onSaleFound?.effectivePriceMinor).toBe(1_000_000);
+
+    const notOnSaleFound = results.find((d) => d.id === notOnSale.id);
+    expect(notOnSaleFound?.discountedPriceMinor).toBeNull();
+    expect(notOnSaleFound?.effectivePriceMinor).toBe(1_500_000);
 
     await cleanupDocuments(onSale.id, notOnSale.id);
     await testPrisma.documentCategory.delete({ where: { id: category.id } });
