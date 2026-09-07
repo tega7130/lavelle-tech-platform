@@ -140,11 +140,6 @@ function ResultCard({ result }: { result: VerifyResult }) {
         </div>
         <div className="border-t border-dashed border-neutral-300 my-4" />
         <RecordRows rows={rows} />
-        {result.predecessorNumber && (
-          <div className="mt-4 px-4 py-3 rounded-md bg-accent-2-100 border border-accent-2-300 text-[12.5px] text-accent-2-800">
-            Re-issued credential. This certificate replaces {result.predecessorNumber}, which is retired and no longer valid.
-          </div>
-        )}
         <div className="text-neutral-500 text-[11.5px] mt-4">This record is issued directly by Lavelle Institute and reflects the register as of today.</div>
       </Card>
     );
