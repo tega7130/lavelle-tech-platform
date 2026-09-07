@@ -117,13 +117,12 @@ export async function getPaymentStatus(internalReference: string) {
       failureReason: true,
       enrolmentId: true,
       enrolment: { select: { programme: { select: { code: true, title: true } } } },
-      // Document Library (Phase 2) — Nomba's return redirect is a single
-      // dashboard-configured URL, not something this app sets per
-      // checkout session (see createProviderCheckout — it never sends a
-      // callback/return URL), so a document purchase lands back on this
-      // SAME page as a programme/exam payment. Rather than a second,
-      // possibly-never-visited return route, CheckoutStatus branches on
-      // `purpose` and reads this instead of `enrolment` for that case.
+      // Document Library (Phase 2) — a document purchase's callbackUrl
+      // (see initiateDocumentPurchaseAction) still points at this SAME
+      // /portal/checkout/[reference] page as a programme payment, rather
+      // than a second, possibly-never-visited return route. CheckoutStatus
+      // branches on `purpose` and reads this instead of `enrolment` for
+      // that case.
       documentPurchase: { select: { documentTemplateId: true, documentTemplate: { select: { id: true, title: true } } } },
     },
   });

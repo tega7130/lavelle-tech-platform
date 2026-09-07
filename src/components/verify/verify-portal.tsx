@@ -10,7 +10,7 @@ import { tierLabel } from "@/lib/format";
 import type { VerifyResult } from "@/lib/certificate-verify";
 
 const BAND_LABEL: Record<string, string> = { DISTINCTION: "Distinction", MERIT: "Merit", PASS: "Pass", REFER: "Refer" };
-const SAMPLE_ID = "LVL-CERT-2025-00790";
+const SAMPLE_ID = "LVL-CERT-2026-00005";
 
 function fmtDate(d: string) {
   return new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
@@ -79,10 +79,7 @@ export function VerifyPortal({ initialNumber }: { initialNumber: string }) {
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && run(query)}
             />
-            <div className="flex justify-between items-center mt-3">
-              <button className="text-neutral-500 text-[12px] cursor-pointer underline" onClick={() => setQuery(SAMPLE_ID)}>
-                Try {SAMPLE_ID}
-              </button>
+            <div className="flex justify-end mt-3">
               <Button onClick={() => run(query)} disabled={busy || !query.trim()}>
                 {busy ? "Checking…" : "Verify certificate"}
               </Button>
@@ -140,11 +137,6 @@ function ResultCard({ result }: { result: VerifyResult }) {
         </div>
         <div className="border-t border-dashed border-neutral-300 my-4" />
         <RecordRows rows={rows} />
-        {result.predecessorNumber && (
-          <div className="mt-4 px-4 py-3 rounded-md bg-accent-2-100 border border-accent-2-300 text-[12.5px] text-accent-2-800">
-            Re-issued credential. This certificate replaces {result.predecessorNumber}, which is retired and no longer valid.
-          </div>
-        )}
         <div className="text-neutral-500 text-[11.5px] mt-4">This record is issued directly by Lavelle Institute and reflects the register as of today.</div>
       </Card>
     );

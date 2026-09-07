@@ -19,6 +19,13 @@ function secret() {
   return s;
 }
 
+/** Base URL for every Nomba API call — https://api.nomba.com (production) or https://sandbox.nomba.com (sandbox), set per environment rather than hard-coded, so switching envs is a config change, not a deploy. */
+function nombaApiUrl(): string {
+  const url = process.env.NOMBA_API_URL;
+  if (!url) throw new Error("NOMBA_API_URL is not set");
+  return url.replace(/\/+$/, "");
+}
+
 /** HMAC-SHA256 over the raw webhook body — used only by the local /pay/stub dev simulator, not real Nomba deliveries (see verifyNombaWebhookSignature for those). */
 export function signWebhookPayload(rawBody: string): string {
   return crypto.createHmac("sha256", secret()).update(rawBody).digest("hex");
@@ -99,7 +106,7 @@ export interface ProviderCheckout {
 async function getNombaAccessToken(): Promise<string> {
   const { accountId, clientId, clientSecret } = getNombaConfig();
 
-  const response = await fetch("https://api.nomba.com/v1/auth/token/issue", {
+  const response = await fetch(`${nombaApiUrl()}/v1/auth/token/issue`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -127,17 +134,41 @@ async function getNombaAccessToken(): Promise<string> {
   return accessToken;
 }
 
-/** Create a Nomba checkout session and return the hosted payment page URL. */
+/**
+ * Create a Nomba checkout session and return the hosted payment page URL.
+ * callbackUrl is where Nomba redirects the browser after the candidate
+ * finishes on their hosted page — the caller decides it, since only the
+ * caller knows which of this app's return routes (guest/candidate/exam)
+ * fits this specific checkout.
+ */
 export async function createProviderCheckout(input: {
   provider: string;
   internalReference: string;
   amountMinor: number;
   candidateEmail: string;
+  callbackUrl: string;
 }): Promise<ProviderCheckout> {
+  // A relative callbackUrl (e.g. NEXTAUTH_URL misconfigured as an empty
+  // string for this environment) doesn't fail this request — Nomba
+  // happily stores it and only breaks later, when the candidate finishes
+  // paying and gets redirected to something like
+  // "/portal/checkout/LVL-PAY-..." with no host, which the browser then
+  // tries to resolve as a hostname. Catching it here fails loudly and
+  // immediately instead, before any money moves.
+  if (!/^https?:\/\//i.test(input.callbackUrl)) {
+    throw new Error(`callbackUrl must be an absolute URL, got "${input.callbackUrl}" — check NEXTAUTH_URL is set for this environment.`);
+  }
+
   const { accountId } = getNombaConfig();
   const accessToken = await getNombaAccessToken();
 
-  const response = await fetch("https://api.nomba.com/v1/checkout/order", {
+  // Logged deliberately (no secrets in it) — the only way to see what
+  // callbackUrl actually reached Nomba, since a malformed value here
+  // surfaces later as a broken redirect after payment, not as an error
+  // on this request itself.
+  console.log(`[nomba] checkout order reference=${input.internalReference} callbackUrl=${input.callbackUrl} apiUrl=${nombaApiUrl()}`);
+
+  const response = await fetch(`${nombaApiUrl()}/v1/checkout/order`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -150,6 +181,7 @@ export async function createProviderCheckout(input: {
         currency: "NGN",
         orderReference: input.internalReference,
         customerEmail: input.candidateEmail,
+        callbackUrl: input.callbackUrl,
       },
     }),
   });
@@ -174,7 +206,7 @@ export async function verifyPaymentWithProvider(internalReference: string) {
   const { accountId } = getNombaConfig();
   const accessToken = await getNombaAccessToken();
 
-  const response = await fetch("https://api.nomba.com/v1/transactions/accounts/single?orderReference=" + encodeURIComponent(internalReference), {
+  const response = await fetch(`${nombaApiUrl()}/v1/transactions/accounts/single?orderReference=${encodeURIComponent(internalReference)}`, {
     method: "GET",
     headers: {
       Authorization: `Bearer ${accessToken}`,

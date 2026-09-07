@@ -19,6 +19,29 @@ const PERMISSION_BY_PURPOSE = {
 } as const;
 
 /**
+ * Resource type Cloudinary is told to upload each purpose's file as.
+ * Left undefined (→ "auto", Cloudinary's own content-sniffing) for
+ * purposes that genuinely mix file kinds — "programme" covers lecture
+ * video/image/narration uploads, each read back later with the specific
+ * resourceType actually stored on that MediaAsset row, not a fixed
+ * guess. "document_library" only ever accepts PDF/DOCX (see
+ * upload-document-button.tsx's accept attribute) and is always read
+ * back with a hardcoded resource_type: "raw" (getSignedAssetUrl calls
+ * in document-purchase.ts/document-library.ts) — pinning it here, not
+ * leaving it to auto-detection, is what the certificate PDF fix in
+ * 9fc406e already established for exactly this failure mode: "auto"
+ * guessing wrong at upload time means the signed download URL later
+ * requests a resource_type the asset was never actually stored under,
+ * a 404 from Cloudinary with nothing in this app's own logs to explain
+ * it.
+ */
+const RESOURCE_TYPE_BY_PURPOSE: Record<string, "image" | "video" | "raw"> = {
+  document_library: "raw",
+  blog: "image",
+  candidate_photo: "image",
+};
+
+/**
  * Returns a signed-upload payload for a direct browser → Cloudinary
  * upload — never proxies the file bytes through this app's own
  * serverless function. Vercel's request-body ceiling makes proxying
@@ -56,6 +79,9 @@ export async function POST(req: NextRequest) {
   const timestamp = Math.round(Date.now() / 1000);
   const folder = `lavelle/${purpose}`;
   const signature = cloudinary.utils.api_sign_request({ folder, timestamp }, apiSecret);
+  // Not part of the signed params — resource_type is a URL path segment
+  // on Cloudinary's own upload endpoint, not a signed body field.
+  const resourceType = RESOURCE_TYPE_BY_PURPOSE[purpose] ?? "auto";
 
-  return NextResponse.json({ signature, timestamp, folder, apiKey, cloudName });
+  return NextResponse.json({ signature, timestamp, folder, apiKey, cloudName, resourceType });
 }

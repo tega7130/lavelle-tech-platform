@@ -169,6 +169,7 @@ export async function registerForExam(examId: string, windowId: string, candidat
       internalReference: payment.internalReference,
       amountMinor: payment.amountMinor,
       candidateEmail,
+      callbackUrl: `${process.env.NEXTAUTH_URL}/portal/exams/checkout/${payment.internalReference}`,
     });
   } catch (e) {
     // Otherwise this Payment row is stuck at PENDING forever, silently
