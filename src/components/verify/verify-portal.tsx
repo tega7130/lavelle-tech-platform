@@ -79,10 +79,7 @@ export function VerifyPortal({ initialNumber }: { initialNumber: string }) {
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && run(query)}
             />
-            <div className="flex justify-between items-center mt-3">
-              <button className="text-neutral-500 text-[12px] cursor-pointer underline" onClick={() => setQuery(SAMPLE_ID)}>
-                Try {SAMPLE_ID}
-              </button>
+            <div className="flex justify-end mt-3">
               <Button onClick={() => run(query)} disabled={busy || !query.trim()}>
                 {busy ? "Checking…" : "Verify certificate"}
               </Button>
