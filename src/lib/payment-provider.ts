@@ -19,6 +19,13 @@ function secret() {
   return s;
 }
 
+/** Base URL for every Nomba API call — https://api.nomba.com (production) or https://sandbox.nomba.com (sandbox), set per environment rather than hard-coded, so switching envs is a config change, not a deploy. */
+function nombaApiUrl(): string {
+  const url = process.env.NOMBA_API_URL;
+  if (!url) throw new Error("NOMBA_API_URL is not set");
+  return url.replace(/\/+$/, "");
+}
+
 /** HMAC-SHA256 over the raw webhook body — used only by the local /pay/stub dev simulator, not real Nomba deliveries (see verifyNombaWebhookSignature for those). */
 export function signWebhookPayload(rawBody: string): string {
   return crypto.createHmac("sha256", secret()).update(rawBody).digest("hex");
@@ -99,7 +106,7 @@ export interface ProviderCheckout {
 async function getNombaAccessToken(): Promise<string> {
   const { accountId, clientId, clientSecret } = getNombaConfig();
 
-  const response = await fetch("https://api.nomba.com/v1/auth/token/issue", {
+  const response = await fetch(`${nombaApiUrl()}/v1/auth/token/issue`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -144,7 +151,7 @@ export async function createProviderCheckout(input: {
   const { accountId } = getNombaConfig();
   const accessToken = await getNombaAccessToken();
 
-  const response = await fetch("https://api.nomba.com/v1/checkout/order", {
+  const response = await fetch(`${nombaApiUrl()}/v1/checkout/order`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -182,7 +189,7 @@ export async function verifyPaymentWithProvider(internalReference: string) {
   const { accountId } = getNombaConfig();
   const accessToken = await getNombaAccessToken();
 
-  const response = await fetch("https://api.nomba.com/v1/transactions/accounts/single?orderReference=" + encodeURIComponent(internalReference), {
+  const response = await fetch(`${nombaApiUrl()}/v1/transactions/accounts/single?orderReference=${encodeURIComponent(internalReference)}`, {
     method: "GET",
     headers: {
       Authorization: `Bearer ${accessToken}`,
