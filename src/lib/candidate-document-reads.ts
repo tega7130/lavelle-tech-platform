@@ -17,6 +17,7 @@ const CANDIDATE_DOCUMENT_SELECT = {
   category: { select: { id: true, name: true } },
   description: true,
   priceMinor: true,
+  compareAtPriceMinor: true,
   currency: true,
   fileType: true,
   fileName: true,

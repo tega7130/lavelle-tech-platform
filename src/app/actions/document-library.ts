@@ -36,6 +36,7 @@ export async function createDocumentTemplateAction(input: unknown) {
       categoryId: parsed.data.categoryId,
       description: parsed.data.description,
       priceMinor: Math.round(parsed.data.priceNaira * 100),
+      compareAtPriceMinor: parsed.data.compareAtPriceNaira != null ? Math.round(parsed.data.compareAtPriceNaira * 100) : null,
       storageKey: parsed.data.storageKey,
       fileType: parsed.data.fileType,
       fileName: parsed.data.fileName,
@@ -59,6 +60,7 @@ export async function updateDocumentTemplateAction(id: string, input: unknown) {
       categoryId: parsed.data.categoryId,
       description: parsed.data.description,
       priceMinor: Math.round(parsed.data.priceNaira * 100),
+      compareAtPriceMinor: parsed.data.compareAtPriceNaira != null ? Math.round(parsed.data.compareAtPriceNaira * 100) : null,
     },
     staff.id
   );

@@ -73,6 +73,9 @@ export default async function TemplateDetailPage({ params }: { params: Promise<{
 
         <Card elev="md" className="h-fit">
           <CardKicker>Price</CardKicker>
+          {document.compareAtPriceMinor != null && document.compareAtPriceMinor > document.priceMinor && (
+            <div className="text-[14px] text-neutral-500 line-through">{formatNaira(document.compareAtPriceMinor)}</div>
+          )}
           <div className="font-heading text-[26px]">{formatNaira(document.priceMinor)}</div>
           <div className="mb-3 text-[12px] text-neutral-500">One-time purchase — permanent access</div>
 

@@ -16,6 +16,7 @@ const PUBLIC_DOCUMENT_SELECT = {
   category: { select: { id: true, name: true } },
   description: true,
   priceMinor: true,
+  compareAtPriceMinor: true,
   fileType: true,
   createdAt: true,
 } satisfies Prisma.DocumentTemplateSelect;
@@ -29,6 +30,7 @@ function toPublicSummary(doc: PublicDocumentRow) {
     category: doc.category,
     description: doc.description,
     priceMinor: doc.priceMinor,
+    compareAtPriceMinor: doc.compareAtPriceMinor,
     fileFormat: ACCEPTED_DOCUMENT_MIME_TYPES[doc.fileType] ?? "Document",
     createdAt: doc.createdAt.toISOString(),
   };

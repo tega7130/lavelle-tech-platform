@@ -90,6 +90,19 @@ describe("createDocumentTemplate", () => {
     await expect(createDocumentTemplate(baseInput(crypto.randomUUID()), staff.id)).rejects.toThrow();
     await testPrisma.staff.delete({ where: { id: staff.id } }).catch(() => {});
   });
+
+  it("stores an optional compareAtPriceMinor, and null when omitted", async () => {
+    const staff = await seedStaff();
+    const category = await seedCategory();
+    const onSale = await createDocumentTemplate({ ...baseInput(category.id), compareAtPriceMinor: 2_000_000 }, staff.id);
+    expect(onSale.compareAtPriceMinor).toBe(2_000_000);
+
+    const notOnSale = await createDocumentTemplate(baseInput(category.id), staff.id);
+    expect(notOnSale.compareAtPriceMinor).toBeNull();
+
+    await cleanup(staff.id, onSale.id, notOnSale.id);
+    await testPrisma.documentCategory.delete({ where: { id: category.id } });
+  });
 });
 
 describe("updateDocumentTemplateMetadata", () => {
@@ -120,6 +133,29 @@ describe("updateDocumentTemplateMetadata", () => {
 
     await cleanup(staff.id, document.id);
     await testPrisma.documentCategory.deleteMany({ where: { id: { in: [category.id, otherCategory.id] } } });
+  });
+
+  it("sets and then clears compareAtPriceMinor", async () => {
+    const staff = await seedStaff();
+    const category = await seedCategory();
+    const document = await createDocumentTemplate(baseInput(category.id), staff.id);
+
+    const onSale = await updateDocumentTemplateMetadata(
+      document.id,
+      { title: document.title, categoryId: category.id, priceMinor: document.priceMinor, compareAtPriceMinor: 2_000_000 },
+      staff.id
+    );
+    expect(onSale.compareAtPriceMinor).toBe(2_000_000);
+
+    const cleared = await updateDocumentTemplateMetadata(
+      document.id,
+      { title: document.title, categoryId: category.id, priceMinor: document.priceMinor, compareAtPriceMinor: null },
+      staff.id
+    );
+    expect(cleared.compareAtPriceMinor).toBeNull();
+
+    await cleanup(staff.id, document.id);
+    await testPrisma.documentCategory.delete({ where: { id: category.id } });
   });
 });
 
@@ -454,6 +490,20 @@ describe("createDocumentTemplateSchema validation", () => {
   it("rejects a non-numeric price", () => {
     expect(() => createDocumentTemplateSchema.parse({ ...validBase, priceNaira: "free" })).toThrow();
   });
+
+  it("does not require compareAtPriceNaira", () => {
+    expect(() => createDocumentTemplateSchema.parse(validBase)).not.toThrow();
+  });
+
+  it("accepts compareAtPriceNaira when higher than priceNaira", () => {
+    const result = createDocumentTemplateSchema.parse({ ...validBase, compareAtPriceNaira: "20000" });
+    expect(result.compareAtPriceNaira).toBe(20000);
+  });
+
+  it("rejects compareAtPriceNaira equal to or lower than priceNaira", () => {
+    expect(() => createDocumentTemplateSchema.parse({ ...validBase, compareAtPriceNaira: "15000" })).toThrow();
+    expect(() => createDocumentTemplateSchema.parse({ ...validBase, compareAtPriceNaira: "10000" })).toThrow();
+  });
 });
 
 describe("updateDocumentTemplateSchema validation", () => {
@@ -464,6 +514,12 @@ describe("updateDocumentTemplateSchema validation", () => {
       priceNaira: "500",
     });
     expect(result.title).toBe("Renamed");
+  });
+
+  it("rejects compareAtPriceNaira equal to or lower than priceNaira", () => {
+    expect(() =>
+      updateDocumentTemplateSchema.parse({ title: "Renamed", categoryId: "some-category-id", priceNaira: "500", compareAtPriceNaira: "500" })
+    ).toThrow();
   });
 });
 

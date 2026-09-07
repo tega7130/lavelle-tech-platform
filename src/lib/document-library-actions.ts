@@ -20,6 +20,9 @@ export interface DocumentTemplateMetadataInput {
   categoryId: string;
   description?: string;
   priceMinor: number;
+  // "Was" price for a sale display — never charged, only shown struck
+  // through. undefined leaves it unset; explicit null clears an existing one.
+  compareAtPriceMinor?: number | null;
 }
 
 /** Case-insensitive dedupe on name — returns the existing row on match rather than creating a near-duplicate. Mirrors app/actions/programme.ts's createCategory exactly. */
@@ -51,6 +54,7 @@ export async function createDocumentTemplate(
       categoryId: input.categoryId,
       description: input.description || null,
       priceMinor: input.priceMinor,
+      compareAtPriceMinor: input.compareAtPriceMinor ?? null,
       storageKey: input.storageKey,
       fileType: input.fileType,
       fileName: input.fileName,
@@ -82,6 +86,7 @@ export async function updateDocumentTemplateMetadata(
       categoryId: input.categoryId,
       description: input.description || null,
       priceMinor: input.priceMinor,
+      compareAtPriceMinor: input.compareAtPriceMinor ?? null,
     },
     include: { category: true },
   });

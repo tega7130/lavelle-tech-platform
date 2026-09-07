@@ -2416,9 +2416,17 @@ model DocumentTemplate {
   description String?
 
   // Kobo — same convention as Programme.feeMinor/Payment.amountMinor.
-  // Never a float.
+  // Never a float. This is the only price ever charged — a sale shown via
+  // compareAtPriceMinor never changes what a purchase actually costs.
   priceMinor Int
   currency   String @default("NGN")
+
+  // Optional "was" price, shown struck through next to priceMinor when set
+  // and higher than it — a plain display cue for a sale, unrelated to the
+  // DiscountCode system (no code to enter, nothing scoped, nothing
+  // redeemed). DocumentPurchase.originalPriceMinor still snapshots the
+  // live priceMinor at purchase time, never this field.
+  compareAtPriceMinor Int?
 
   storageKey String @unique // Cloudinary public_id
   fileType   String // MIME type, as reported by Cloudinary at upload time

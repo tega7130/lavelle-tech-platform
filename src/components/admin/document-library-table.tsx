@@ -48,6 +48,7 @@ function EditDocumentDialog({
   const [categoryId, setCategoryId] = React.useState(document.categoryId);
   const [description, setDescription] = React.useState(document.description ?? "");
   const [priceNaira, setPriceNaira] = React.useState(String(document.priceMinor / 100));
+  const [compareAtPriceNaira, setCompareAtPriceNaira] = React.useState(document.compareAtPriceMinor != null ? String(document.compareAtPriceMinor / 100) : "");
   const [relatedIds, setRelatedIds] = React.useState(document.relatedTo.map((r) => r.relatedDocumentTemplateId));
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -79,9 +80,19 @@ function EditDocumentDialog({
       setError("Choose a category.");
       return;
     }
+    if (compareAtPriceNaira && Number(compareAtPriceNaira) <= Number(priceNaira)) {
+      setError("Compare-at price must be higher than the price for a sale to show.");
+      return;
+    }
     setBusy(true);
     try {
-      await updateDocumentTemplateAction(document.id, { title, categoryId, description: description || undefined, priceNaira });
+      await updateDocumentTemplateAction(document.id, {
+        title,
+        categoryId,
+        description: description || undefined,
+        priceNaira,
+        compareAtPriceNaira: compareAtPriceNaira || undefined,
+      });
       await setComplementaryTemplatesAction(document.id, relatedIds);
       router.refresh();
       onClose();
@@ -135,6 +146,14 @@ function EditDocumentDialog({
           <Label>Price (₦)</Label>
           <Input type="number" min={0} step="0.01" value={priceNaira} onChange={(e) => setPriceNaira(e.target.value)} />
           <div className="text-neutral-500 text-[11.5px] mt-1">Amount in Nigerian Naira (NGN).</div>
+        </Field>
+
+        <Field>
+          <Label>Compare-at price (optional)</Label>
+          <Input type="number" min={0} step="0.01" value={compareAtPriceNaira} onChange={(e) => setCompareAtPriceNaira(e.target.value)} placeholder="20000" />
+          <div className="text-neutral-500 text-[11.5px] mt-1">
+            Shown struck through next to the price to signal a sale — higher than Price above, never charged. Clear to remove the sale display.
+          </div>
         </Field>
 
         <Field>
@@ -297,7 +316,12 @@ export function DocumentLibraryTable({ documents, categories }: { documents: Doc
                   <div className="text-[11.5px] text-neutral-500 truncate max-w-[280px]">{d.fileName}</div>
                 </Td>
                 <Td className="text-[13px]">{d.category.name}</Td>
-                <Td className="text-[13px] tabular-nums">{formatNaira(d.priceMinor)}</Td>
+                <Td className="text-[13px] tabular-nums">
+                  {d.compareAtPriceMinor != null && d.compareAtPriceMinor > d.priceMinor && (
+                    <span className="text-neutral-500 line-through mr-1.5">{formatNaira(d.compareAtPriceMinor)}</span>
+                  )}
+                  {formatNaira(d.priceMinor)}
+                </Td>
                 <Td className="text-[13px] tabular-nums">{d.purchaseCount}</Td>
                 <Td className="text-[13px] tabular-nums">{formatNaira(d.revenueMinor)}</Td>
                 <Td className="text-[13px]">{formatDate(d.createdAt)}</Td>

@@ -14,17 +14,30 @@ const documentMetadataSchema = z.object({
   // converts to kobo — priceMinor itself is never entered directly, same
   // discipline as Programme.feeNaira/feeMinor (src/lib/validation/programme.ts).
   priceNaira: z.coerce.number().nonnegative("Price cannot be negative").finite(),
+  // Optional "was" price for a sale display (compareAtPriceMinor) — a plain
+  // naira amount, same conversion discipline as priceNaira. Checked against
+  // priceNaira below since a "sale" that isn't actually cheaper is a
+  // mistake, not a valid state.
+  compareAtPriceNaira: z.coerce.number().positive("Must be greater than 0").finite().optional(),
 });
 
-export const createDocumentTemplateSchema = documentMetadataSchema.extend({
-  storageKey: z.string().min(1),
-  fileType: z.string().min(1),
-  fileName: z.string().min(1),
-  fileBytes: z.number().int().positive(),
-});
+function checkCompareAtPrice(data: { priceNaira: number; compareAtPriceNaira?: number }, ctx: z.RefinementCtx) {
+  if (data.compareAtPriceNaira !== undefined && data.compareAtPriceNaira <= data.priceNaira) {
+    ctx.addIssue({ code: "custom", path: ["compareAtPriceNaira"], message: "Must be higher than the price for a sale to show." });
+  }
+}
+
+export const createDocumentTemplateSchema = documentMetadataSchema
+  .extend({
+    storageKey: z.string().min(1),
+    fileType: z.string().min(1),
+    fileName: z.string().min(1),
+    fileBytes: z.number().int().positive(),
+  })
+  .superRefine(checkCompareAtPrice);
 export type CreateDocumentTemplateInput = z.infer<typeof createDocumentTemplateSchema>;
 
-export const updateDocumentTemplateSchema = documentMetadataSchema;
+export const updateDocumentTemplateSchema = documentMetadataSchema.superRefine(checkCompareAtPrice);
 export type UpdateDocumentTemplateInput = z.infer<typeof updateDocumentTemplateSchema>;
 
 // value is a raw human number, interpreted per type: a percent (1-100) for

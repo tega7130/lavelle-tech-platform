@@ -42,7 +42,12 @@ function PublicTemplateCard({ document, onView }: { document: PublicDocumentSumm
         {document.description || "A professionally drafted template, ready to customise for your matter."}
       </p>
       <div className="flex items-center justify-between gap-3 mt-4 pt-4 border-t border-dashed border-neutral-300">
-        <span className="text-[13px] text-neutral-600">{formatNaira(document.priceMinor)}</span>
+        <span className="flex items-baseline gap-1.5">
+          {document.compareAtPriceMinor != null && document.compareAtPriceMinor > document.priceMinor && (
+            <span className="text-[11.5px] text-neutral-500 line-through">{formatNaira(document.compareAtPriceMinor)}</span>
+          )}
+          <span className="text-[13px] text-neutral-600">{formatNaira(document.priceMinor)}</span>
+        </span>
         <button type="button" onClick={onView} className={cn(buttonClassName("secondary"), "h-9 px-4 text-[12.5px]")}>
           View Details
         </button>

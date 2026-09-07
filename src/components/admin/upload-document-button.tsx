@@ -39,6 +39,7 @@ export function UploadDocumentButton({
   const [categoryId, setCategoryId] = React.useState(initialCategories[0]?.id ?? "");
   const [description, setDescription] = React.useState("");
   const [priceNaira, setPriceNaira] = React.useState("");
+  const [compareAtPriceNaira, setCompareAtPriceNaira] = React.useState("");
   const [file, setFile] = React.useState<UploadedDocumentFile | null>(null);
   const [fileUploading, setFileUploading] = React.useState(false);
   const [fileError, setFileError] = React.useState<string | null>(null);
@@ -51,6 +52,7 @@ export function UploadDocumentButton({
     setCategoryId(initialCategories[0]?.id ?? "");
     setDescription("");
     setPriceNaira("");
+    setCompareAtPriceNaira("");
     setFile(null);
     setFileError(null);
     setError(null);
@@ -105,6 +107,10 @@ export function UploadDocumentButton({
       setError("Choose a category.");
       return;
     }
+    if (compareAtPriceNaira && Number(compareAtPriceNaira) <= Number(priceNaira)) {
+      setError("Compare-at price must be higher than the price for a sale to show.");
+      return;
+    }
     setBusy(true);
     try {
       await createDocumentTemplateAction({
@@ -112,6 +118,7 @@ export function UploadDocumentButton({
         categoryId,
         description: description || undefined,
         priceNaira,
+        compareAtPriceNaira: compareAtPriceNaira || undefined,
         storageKey: file.storageKey,
         fileType: file.fileType,
         fileName: file.fileName,
@@ -208,6 +215,21 @@ export function UploadDocumentButton({
               <Label>Price (₦)</Label>
               <Input type="number" min={0} step="0.01" value={priceNaira} onChange={(e) => setPriceNaira(e.target.value)} placeholder="15000" />
               <div className="text-neutral-500 text-[11.5px] mt-1">Amount in Nigerian Naira (NGN).</div>
+            </Field>
+
+            <Field>
+              <Label>Compare-at price (optional)</Label>
+              <Input
+                type="number"
+                min={0}
+                step="0.01"
+                value={compareAtPriceNaira}
+                onChange={(e) => setCompareAtPriceNaira(e.target.value)}
+                placeholder="20000"
+              />
+              <div className="text-neutral-500 text-[11.5px] mt-1">
+                Shown struck through next to the price to signal a sale — higher than Price above, never charged.
+              </div>
             </Field>
 
             {error && <div className="text-[12.5px] text-[#912019]">{error}</div>}

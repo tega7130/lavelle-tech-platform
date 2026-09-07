@@ -37,7 +37,12 @@ export function DocumentTemplateCard({ document }: { document: TemplateCardDocum
       <div className="my-1 border-t border-dashed border-neutral-300" />
 
       <div className="flex items-center justify-between gap-2">
-        <span className="font-heading text-[15px]">{formatNaira(document.priceMinor)}</span>
+        <span className="flex items-baseline gap-1.5">
+          {document.compareAtPriceMinor != null && document.compareAtPriceMinor > document.priceMinor && (
+            <span className="text-[12px] text-neutral-500 line-through">{formatNaira(document.compareAtPriceMinor)}</span>
+          )}
+          <span className="font-heading text-[15px]">{formatNaira(document.priceMinor)}</span>
+        </span>
 
         {document.viewerOwns ? (
           <div className="flex items-center gap-2">
