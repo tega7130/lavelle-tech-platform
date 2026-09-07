@@ -148,6 +148,17 @@ export async function createProviderCheckout(input: {
   candidateEmail: string;
   callbackUrl: string;
 }): Promise<ProviderCheckout> {
+  // A relative callbackUrl (e.g. NEXTAUTH_URL misconfigured as an empty
+  // string for this environment) doesn't fail this request — Nomba
+  // happily stores it and only breaks later, when the candidate finishes
+  // paying and gets redirected to something like
+  // "/portal/checkout/LVL-PAY-..." with no host, which the browser then
+  // tries to resolve as a hostname. Catching it here fails loudly and
+  // immediately instead, before any money moves.
+  if (!/^https?:\/\//i.test(input.callbackUrl)) {
+    throw new Error(`callbackUrl must be an absolute URL, got "${input.callbackUrl}" — check NEXTAUTH_URL is set for this environment.`);
+  }
+
   const { accountId } = getNombaConfig();
   const accessToken = await getNombaAccessToken();
 
