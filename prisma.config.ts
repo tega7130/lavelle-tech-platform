@@ -3,15 +3,6 @@
 import "dotenv/config";
 import { defineConfig } from "prisma/config";
 
-console.error(
-  "[prisma.config.ts] DATABASE_URL set:",
-  !!process.env["DATABASE_URL"],
-  "len:",
-  (process.env["DATABASE_URL"] || "").length,
-  "MIGRATE_DATABASE_URL set:",
-  !!process.env["MIGRATE_DATABASE_URL"]
-);
-
 export default defineConfig({
   schema: "prisma/schema.prisma",
   migrations: {
