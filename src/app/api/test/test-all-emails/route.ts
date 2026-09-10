@@ -185,10 +185,14 @@ const templateTestData: Record<TemplateName, Record<string, any>> = {
     supportEmail: EMAIL_CONFIG.supportEmail,
     currentYear: 2026,
   },
-  "programme-coming-soon-live": {
+  "programme-golive-notification": {
+    firstName: "John",
     programmeName: "Energy Transactions",
+    tier: "Specialist",
+    programmePitch: "Master the regulatory framework and commercial structures of upstream energy deals.",
+    weeklyCommitment: "5-7 hours",
+    programmeFee: "₦450,000",
     programmeUrl: "http://localhost:3000/programmes/ELR-201",
-    unsubscribeUrl: "http://localhost:3000/api/programme-notifications/unsubscribe/xyz",
     currentYear: 2026,
   },
 };

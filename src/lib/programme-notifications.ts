@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@/generated/prisma/client";
 import { sendTransactionalEmailByTemplate } from "@/lib/send-transactional-email";
+import { formatNaira, tierLabel } from "@/lib/format";
 
 // No "server-only" import here, deliberately — same discipline as
 // website-admin-actions.ts, so this stays importable from plain Vitest
@@ -65,26 +66,38 @@ export async function unsubscribeFromProgrammeNotification(subscriptionId: strin
 export async function sendProgrammeGoLiveNotification(listingId: string) {
   const listing = await prisma.programmeListing.findUnique({
     where: { id: listingId },
-    include: { programme: { select: { code: true, title: true } } },
+    include: {
+      programme: { select: { code: true, title: true, tier: true, summary: true, weeklyHoursLabel: true, feeMinor: true } },
+    },
   });
   if (!listing) throw new ListingNotFoundForSubscriptionError();
 
   const subscribers = await prisma.programmeNotificationSubscription.findMany({
     where: { listingId, unsubscribedAt: null, notifiedAt: null },
+    include: { candidate: { select: { firstName: true } } },
   });
   if (subscribers.length === 0) return { sent: 0, failed: 0 };
 
   const programmeUrl = `${process.env.NEXTAUTH_URL}/programmes/${listing.programme.code}`;
   const currentYear = new Date().getFullYear();
+  // Same "computed not copied" rule as the public listing read (rule 2,
+  // website-reads.ts's effectiveContent) — the pitch reflects whatever
+  // is live at send time, not whatever it was when someone subscribed.
+  const programmePitch = listing.useDefaults ? listing.programme.summary : listing.summary!;
+  const tier = tierLabel(listing.programme.tier);
+  const programmeFee = formatNaira(listing.programme.feeMinor);
 
   let sent = 0;
   let failed = 0;
   for (const subscriber of subscribers) {
-    const unsubscribeUrl = `${process.env.NEXTAUTH_URL}/api/programme-notifications/unsubscribe/${subscriber.id}`;
-    const result = await sendTransactionalEmailByTemplate("programme-coming-soon-live", subscriber.email, {
+    const result = await sendTransactionalEmailByTemplate("programme-golive-notification", subscriber.email, {
+      firstName: subscriber.candidate?.firstName ?? "there",
       programmeName: listing.programme.title,
+      tier,
+      programmePitch,
+      weeklyCommitment: listing.programme.weeklyHoursLabel,
+      programmeFee,
       programmeUrl,
-      unsubscribeUrl,
       currentYear,
     });
     if (result.success) {
