@@ -100,6 +100,7 @@ model Candidate {
   videoUploads               VideoUpload[]
   documentFavorites          DocumentFavorite[]
   documentPurchases          DocumentPurchase[]
+  programmeNotificationSubscriptions ProgrammeNotificationSubscription[]
 
   @@index([accountStatus])
 }
@@ -2282,10 +2283,36 @@ model ProgrammeListing {
   publishedByStaff   Staff?    @relation("ListingPublishedBy", fields: [publishedByStaffId], references: [id])
   unpublishedAt      DateTime?
 
+  isComingSoon       Boolean   @default(false)
+  comingSoonMessage  String?
+
+  notificationSubscriptions ProgrammeNotificationSubscription[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([isPublished, orderIndex])
+}
+
+model ProgrammeNotificationSubscription {
+  id String @id @default(uuid())
+
+  listingId String
+  listing   ProgrammeListing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  candidateId String?    @db.Uuid
+  candidate   Candidate? @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  email String
+
+  notifiedAt     DateTime?
+  unsubscribedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([listingId, email])
+  @@index([listingId, notifiedAt])
 }
 
 // Slice 11 Part D: three states, not two — a DECLINED review and one

@@ -185,6 +185,12 @@ const templateTestData: Record<TemplateName, Record<string, any>> = {
     supportEmail: EMAIL_CONFIG.supportEmail,
     currentYear: 2026,
   },
+  "programme-coming-soon-live": {
+    programmeName: "Energy Transactions",
+    programmeUrl: "http://localhost:3000/programmes/ELR-201",
+    unsubscribeUrl: "http://localhost:3000/api/programme-notifications/unsubscribe/xyz",
+    currentYear: 2026,
+  },
 };
 
 export async function POST(request: Request) {

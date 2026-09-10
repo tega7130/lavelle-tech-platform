@@ -13,7 +13,14 @@ export interface ListCatalogueParams {
   feeMax?: number;
 }
 
-/** Only ACTIVE programmes, each annotated with the viewer's own enrolment state so a card can read "Enrolled" rather than "Enrol now". */
+/**
+ * Only ACTIVE programmes, each annotated with the viewer's own enrolment
+ * state so a card can read "Enrolled" rather than "Enrol now". Also
+ * carries the marketing listing's Coming Soon flag (if a listing exists
+ * at all — a programme can be ACTIVE with no ProgrammeListing row yet,
+ * in which case it's never Coming Soon) so the card can hide its fee and
+ * disable enrolment without a second, separate query per card.
+ */
 export async function listCatalogue(params: ListCatalogueParams = {}) {
   const candidate = await getCurrentCandidate();
 
@@ -27,7 +34,10 @@ export async function listCatalogue(params: ListCatalogueParams = {}) {
       ...(params.categoryId ? { categoryId: params.categoryId } : {}),
       ...(params.feeMax != null ? { feeMinor: { lte: params.feeMax } } : {}),
     },
-    include: { category: true },
+    include: {
+      category: true,
+      listing: { select: { id: true, isComingSoon: true, comingSoonMessage: true } },
+    },
     orderBy: { title: "asc" },
   });
 
@@ -44,7 +54,13 @@ export async function listCatalogue(params: ListCatalogueParams = {}) {
     enrolledProgrammeIds = new Set(rows.map((r) => r.programmeId));
   }
 
-  return programmes.map((p) => ({ ...p, viewerEnrolled: enrolledProgrammeIds.has(p.id) }));
+  return programmes.map((p) => ({
+    ...p,
+    viewerEnrolled: enrolledProgrammeIds.has(p.id),
+    listingId: p.listing?.id ?? null,
+    isComingSoon: p.listing?.isComingSoon ?? false,
+    comingSoonMessage: p.listing?.isComingSoon ? p.listing.comingSoonMessage : null,
+  }));
 }
 
 /**
@@ -75,6 +91,7 @@ export async function getProgrammeDetail(code: string) {
       },
       assessmentWeightings: true,
       coverVideoAsset: { select: { storageKey: true } },
+      listing: { select: { id: true, isComingSoon: true, comingSoonMessage: true } },
     },
   });
   if (!programme || programme.status !== ProgrammeStatus.ACTIVE) return null;
@@ -92,7 +109,13 @@ export async function getProgrammeDetail(code: string) {
     viewerEnrolled = !!enrolment;
   }
 
-  return { ...programme, viewerEnrolled };
+  return {
+    ...programme,
+    viewerEnrolled,
+    listingId: programme.listing?.id ?? null,
+    isComingSoon: programme.listing?.isComingSoon ?? false,
+    comingSoonMessage: programme.listing?.isComingSoon ? programme.listing.comingSoonMessage : null,
+  };
 }
 
 /**

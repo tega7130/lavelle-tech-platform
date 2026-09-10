@@ -16,6 +16,7 @@ import { generateExamWindowOpenedStaffEmail, type ExamWindowOpenedStaffVariables
 import { generateExamSubmissionReceivedAdminEmail, type ExamSubmissionReceivedAdminVariables } from './exam-submission-received-admin';
 import { generateReEngagementReminder3dayEmail, type ReEngagementReminder3dayVariables } from './re-engagement-reminder-3day';
 import { generateReEngagementReminder7dayEmail, type ReEngagementReminder7dayVariables } from './re-engagement-reminder-7day';
+import { generateProgrammeComingSoonLiveEmail, type ProgrammeComingSoonLiveVariables } from './programme-coming-soon-live';
 
 export interface EmailTemplate {
   subject: string;
@@ -41,7 +42,8 @@ export type EmailTemplateVariables =
   | { template: 'exam-window-opened-staff'; variables: ExamWindowOpenedStaffVariables }
   | { template: 'exam-submission-received-admin'; variables: ExamSubmissionReceivedAdminVariables }
   | { template: 're-engagement-reminder-3day'; variables: ReEngagementReminder3dayVariables }
-  | { template: 're-engagement-reminder-7day'; variables: ReEngagementReminder7dayVariables };
+  | { template: 're-engagement-reminder-7day'; variables: ReEngagementReminder7dayVariables }
+  | { template: 'programme-coming-soon-live'; variables: ProgrammeComingSoonLiveVariables };
 
 export const emailTemplates = {
   'account-welcome': generateAccountWelcomeEmail,
@@ -62,6 +64,7 @@ export const emailTemplates = {
   'exam-submission-received-admin': generateExamSubmissionReceivedAdminEmail,
   're-engagement-reminder-3day': generateReEngagementReminder3dayEmail,
   're-engagement-reminder-7day': generateReEngagementReminder7dayEmail,
+  'programme-coming-soon-live': generateProgrammeComingSoonLiveEmail,
 };
 
 export type TemplateName = keyof typeof emailTemplates;
