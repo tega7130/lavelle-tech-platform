@@ -199,7 +199,7 @@ export function ExamSitting({ data }: { data: SittingData }) {
 
   if (data.exam.enforceFullScreen && !fullscreenOk) {
     return (
-      <div className="min-h-screen bg-surface flex items-center justify-center p-6">
+      <div className="min-h-dvh bg-surface flex items-center justify-center p-6">
         <div className="max-w-[420px] text-center">
           <div className="font-heading font-semibold text-[17px]">This examination requires full screen</div>
           <p className="text-neutral-600 text-[13px] mt-2">Leaving full screen during the sitting is logged. Enter full screen to begin.</p>
@@ -215,7 +215,7 @@ export function ExamSitting({ data }: { data: SittingData }) {
   const wordCount = current.writtenAnswer ? current.writtenAnswer.trim().split(/\s+/).filter(Boolean).length : 0;
 
   return (
-    <div className="min-h-screen bg-surface flex flex-col">
+    <div className="min-h-dvh bg-surface flex flex-col">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4 px-3 sm:px-6 py-3 sm:py-3.5 border-b border-divider bg-bg">
         <div className="min-w-0">
           <div className="font-heading font-semibold text-[13.5px] truncate">{data.programme.title} — Examination</div>

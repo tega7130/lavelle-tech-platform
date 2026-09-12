@@ -335,7 +335,7 @@ export function LecturePlayer({ enrolmentId, data }: { enrolmentId: string; data
   }
 
   return (
-    <div className="min-h-screen bg-bg grid grid-cols-1 md:grid-cols-[300px_1fr]">
+    <div className="min-h-dvh bg-bg grid grid-cols-1 md:grid-cols-[300px_1fr]">
       {/* Dark lecture rail — permanent column on desktop, drawer on mobile */}
       <aside className="hidden md:flex text-white flex-col" style={{ background: "#0b1322" }}>
         {renderRailContent()}

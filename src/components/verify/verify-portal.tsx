@@ -48,7 +48,7 @@ export function VerifyPortal({ initialNumber }: { initialNumber: string }) {
   }, []);
 
   return (
-    <div className="min-h-screen flex flex-col bg-bg">
+    <div className="min-h-dvh flex flex-col bg-bg">
       <header className="flex items-center justify-between gap-4 px-8 py-4 border-b border-divider">
         <div className="flex items-center gap-2.5">
           <LogoMark size={32} />

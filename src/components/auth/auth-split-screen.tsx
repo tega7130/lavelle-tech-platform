@@ -32,7 +32,7 @@ export function AuthSplitScreen({
   footer,
 }: AuthSplitScreenProps) {
   return (
-    <div className="flex min-h-screen bg-surface text-text font-body max-[900px]:flex-col">
+    <div className="flex min-h-dvh bg-surface text-text font-body max-[900px]:flex-col">
       <div
         className={`relative flex w-[42%] min-w-[360px] flex-none flex-col overflow-hidden p-12 text-white max-[900px]:order-2 max-[900px]:w-auto max-[900px]:min-w-0 max-[900px]:min-h-0 max-[900px]:px-6 max-[900px]:py-7 ${panelClassName}`}
       >
