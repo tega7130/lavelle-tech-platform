@@ -9,6 +9,12 @@ const s3 = new S3Client({
     accessKeyId: process.env.DO_SPACES_KEY!,
     secretAccessKey: process.env.DO_SPACES_SECRET!,
   },
+  // The SDK's default ("WHEN_SUPPORTED") signs an x-amz-sdk-checksum-algorithm
+  // param into every presigned PUT URL. Spaces doesn't support that extension,
+  // so the browser's direct upload fails outright (CORS-looking "Failed to
+  // fetch", since Spaces' rejection response carries no CORS headers). This
+  // restores pre-2024 behaviour: only checksum when an operation requires it.
+  requestChecksumCalculation: "WHEN_REQUIRED",
 });
 
 function bucket(): string {
