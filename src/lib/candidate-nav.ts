@@ -21,6 +21,10 @@ export const CANDIDATE_NAV_ITEMS: CandidateNavItemMeta[] = [
   { key: "dashboard", label: "Dashboard", href: "/portal/dashboard" },
   { key: "programme", label: "Programme", href: "/portal/programme", gated: true },
   { key: "catalogue", label: "Catalogue", href: "/portal/catalogue" },
+  // Not gated, same reasoning as Blog/Exams/Credentials just below — a
+  // document template purchase is its own, independent transaction, not
+  // something that depends on programme enrolment.
+  { key: "library", label: "Document Library", href: "/portal/library" },
   { key: "deadlines", label: "Deadlines", href: "/portal/deadlines", gated: true },
   { key: "assessment", label: "Assessment", href: "/portal/assessment", gated: true },
   { key: "notes", label: "Notes", href: "/portal/notes", gated: true },

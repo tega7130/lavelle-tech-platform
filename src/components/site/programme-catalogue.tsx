@@ -11,7 +11,8 @@ type Listing = {
   tier: "FOUNDATION" | "SPECIALIST" | "ADVANCED_PRACTITIONER";
   tierLabel: string;
   weeks: string;
-  fee: string;
+  fee: string | null;
+  isComingSoon?: boolean;
 };
 
 const TIER_FILTERS = [
@@ -81,13 +82,17 @@ export function ProgrammeCatalogue({ listings }: { listings: Listing[] }) {
                 <span className={cn("px-[11px] py-1 rounded-full text-[10px] font-semibold tracking-[0.05em] uppercase", p.tier === "FOUNDATION" ? "bg-neutral-100 text-neutral-700" : p.tier === "ADVANCED_PRACTITIONER" ? "bg-accent-2-100 text-accent-2-800" : "bg-accent-100 text-accent-700")}>
                   {p.tierLabel}
                 </span>
-                <span className="text-neutral-400 text-[17px] font-semibold transition group-hover:translate-x-1 group-hover:text-accent">&rarr;</span>
+                {p.isComingSoon ? (
+                  <span className="px-[11px] py-1 rounded-full text-[10px] font-semibold tracking-[0.05em] uppercase bg-accent-2-100 text-accent-2-800">Coming soon</span>
+                ) : (
+                  <span className="text-neutral-400 text-[17px] font-semibold transition group-hover:translate-x-1 group-hover:text-accent">&rarr;</span>
+                )}
               </div>
               <h3 className="font-heading font-semibold text-[19px] leading-[1.28] mt-5">{p.title}</h3>
               <p className="text-[13px] leading-[1.62] text-neutral-600 mt-[9px] min-h-[63px]">{p.blurb}</p>
               <div className="flex gap-5 mt-5 pt-4 border-t border-dashed border-neutral-300 text-[11.5px] text-neutral-600">
                 <span>{p.weeks}</span>
-                <span className="ml-auto font-semibold text-accent">View programme</span>
+                <span className="ml-auto font-semibold text-accent">{p.isComingSoon ? "View details" : "View programme"}</span>
               </div>
             </Link>
           ))}

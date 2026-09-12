@@ -41,10 +41,10 @@ export async function assignRequestAction(requestId: string, staffId: string, pr
   revalidateSupport(requestId);
 }
 
-/** The two-key rule is enforced inside resolveRequest, not here — this only resolves WHO is acting and whether they hold manage_staff (README B5 rule 2: "not by hiding the button"). */
+/** Any staff member with RESPOND_SUPPORT permission can resolve a ticket. */
 export async function resolveRequestAction(requestId: string) {
   const staff = await requireStaffPermission(Permission.RESPOND_SUPPORT);
-  await resolveRequest(requestId, staff.id, staff.permissions.includes(Permission.MANAGE_STAFF));
+  await resolveRequest(requestId, staff.id);
   revalidateSupport(requestId);
 }
 

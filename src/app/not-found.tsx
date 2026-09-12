@@ -5,7 +5,7 @@ import { LogoMark } from "@/components/ui/logo-mark";
 /** Copy verbatim from Lavelle States.dc.html's "Not found" full-page state. */
 export default function NotFound() {
   return (
-    <div className="min-h-screen bg-bg flex items-center justify-center p-[var(--space-6)]">
+    <div className="min-h-dvh bg-bg flex items-center justify-center p-[var(--space-6)]">
       <div className="text-center max-w-[420px]">
         <div className="flex items-center justify-center gap-2.5">
           <LogoMark size={30} />

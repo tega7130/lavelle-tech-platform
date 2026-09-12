@@ -32,6 +32,10 @@ export interface ConfirmPaymentResult {
   candidateNumberAssigned: boolean;
   cohortAssigned: boolean;
   cohortUnavailable: boolean;
+  paymentPurpose: "PROGRAMME_FEE" | "EXAMINATION_FEE";
+  candidate: { firstName: string; lastName: string; email: string };
+  programme?: { id: string; title: string; tier: string };
+  confirmedAmount: number;
 }
 
 /**
@@ -58,6 +62,7 @@ export async function confirmPayment(paymentId: string, opts: ConfirmPaymentOpti
     if (!locked) throw new Error(`Payment ${paymentId} not found`);
 
     if (locked.status === PaymentStatus.SUCCESS) {
+      const candidate = await tx.candidate.findUniqueOrThrow({ where: { id: locked.candidateId! } });
       return {
         alreadyConfirmed: true,
         paymentId,
@@ -65,6 +70,9 @@ export async function confirmPayment(paymentId: string, opts: ConfirmPaymentOpti
         candidateNumberAssigned: false,
         cohortAssigned: false,
         cohortUnavailable: false,
+        paymentPurpose: "PROGRAMME_FEE",
+        candidate: { firstName: candidate.firstName, lastName: candidate.lastName, email: candidate.email },
+        confirmedAmount: locked.amountMinor,
       };
     }
 
@@ -285,6 +293,37 @@ export async function confirmPayment(paymentId: string, opts: ConfirmPaymentOpti
       ipAddress: opts.ipAddress ?? null,
     });
 
-    return { alreadyConfirmed: false, paymentId, enrolmentId, candidateNumberAssigned, cohortAssigned, cohortUnavailable };
+    // Fetch payment details for email sending
+    const payment = await tx.payment.findUniqueOrThrow({ where: { id: paymentId } });
+    const candidate = await tx.candidate.findUniqueOrThrow({ where: { id: candidateId } });
+
+    let programme: { id: string; title: string; tier: string } | undefined;
+
+    if (enrolmentId) {
+      const enrolment = await tx.enrolment.findUniqueOrThrow({ where: { id: enrolmentId } });
+      programme = await tx.programme.findUniqueOrThrow({ where: { id: enrolment.programmeId } });
+    } else if (payment.purpose === "EXAMINATION_FEE") {
+      // For exam payments, find the related exam through ExamRegistration
+      const registration = await tx.examRegistration.findFirst({
+        where: { paymentId },
+        include: { exam: true },
+      });
+      if (registration?.exam) {
+        programme = await tx.programme.findUniqueOrThrow({ where: { id: registration.exam.programmeId } });
+      }
+    }
+
+    return {
+      alreadyConfirmed: false,
+      paymentId,
+      enrolmentId,
+      candidateNumberAssigned,
+      cohortAssigned,
+      cohortUnavailable,
+      paymentPurpose: payment.purpose as "PROGRAMME_FEE" | "EXAMINATION_FEE",
+      candidate: { firstName: candidate.firstName, lastName: candidate.lastName, email: candidate.email },
+      programme,
+      confirmedAmount: confirmedAmountMinor,
+    };
   });
 }

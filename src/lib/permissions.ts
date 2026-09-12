@@ -39,6 +39,7 @@ export const PERMISSIONS: PermissionMeta[] = [
   { key: "REVOKE_CERTIFICATES" as Permission, category: "Credentials", description: "Revoke an issued certificate with a mandatory reason" },
   { key: "MANAGE_ANNOUNCEMENTS" as Permission, category: "Communications", description: "Compose, schedule and send announcements to candidates" },
   { key: "MANAGE_BLOG" as Permission, category: "Marketing", description: "Write, edit and publish blog posts" },
+  { key: "MANAGE_DOCUMENT_LIBRARY" as Permission, category: "Marketing", description: "Upload, edit and remove document templates in the Document Library" },
   { key: "RESPOND_SUPPORT" as Permission, category: "Support", description: "View and respond to candidate support requests" },
   { key: "MANAGE_STAFF" as Permission, category: "Platform", description: "Create staff accounts and assign or revoke permissions" },
   { key: "VIEW_AUDIT_LOG" as Permission, category: "Platform", description: "Read the admin audit log" },
@@ -90,12 +91,13 @@ const MANAGE_FINANCE = "MANAGE_FINANCE" as Permission;
 const ISSUE_CERTIFICATES = "ISSUE_CERTIFICATES" as Permission;
 const MANAGE_ANNOUNCEMENTS = "MANAGE_ANNOUNCEMENTS" as Permission;
 const MANAGE_BLOG = "MANAGE_BLOG" as Permission;
+const MANAGE_DOCUMENT_LIBRARY = "MANAGE_DOCUMENT_LIBRARY" as Permission;
 const RESPOND_SUPPORT = "RESPOND_SUPPORT" as Permission;
 const VIEW_AUDIT_LOG = "VIEW_AUDIT_LOG" as Permission;
 
 // Applying a preset replaces the current permission set — README.
 export const ROLE_PRESETS: Record<StaffRole, Permission[]> = {
-  SUPER_ADMIN: PERMISSIONS.map((p) => p.key), // all 18
+  SUPER_ADMIN: PERMISSIONS.map((p) => p.key), // all 19
   REGISTRAR: [
     VIEW_CANDIDATES, EDIT_CANDIDATE_DETAILS, SUSPEND_CANDIDATES,
     MANAGE_INTAKES_COHORTS, ISSUE_CERTIFICATES, MANAGE_ANNOUNCEMENTS, RESPOND_SUPPORT, VIEW_AUDIT_LOG,
@@ -110,7 +112,7 @@ export const ROLE_PRESETS: Record<StaffRole, Permission[]> = {
   FINANCE: [VIEW_CANDIDATES, VIEW_FINANCE, CONFIRM_PAYMENTS, MANAGE_FINANCE, VIEW_AUDIT_LOG],
   SUPPORT: [VIEW_CANDIDATES, RESPOND_SUPPORT],
   READ_ONLY: [VIEW_CANDIDATES, VIEW_FINANCE, VIEW_AUDIT_LOG],
-  CONTENT_MANAGER: [MANAGE_BLOG],
+  CONTENT_MANAGER: [MANAGE_BLOG, MANAGE_DOCUMENT_LIBRARY],
 } as Record<StaffRole, Permission[]>;
 
 /**

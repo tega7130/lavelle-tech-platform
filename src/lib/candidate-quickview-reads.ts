@@ -130,7 +130,7 @@ export async function getCandidateQuickView(candidateId: string) {
           programmeTitle: primary.programme.title,
           programmeId: primary.programmeId,
           intakeId: primary.intakeId,
-          intakeLabel: intakeLabel(primary.intake.month, primary.intake.year),
+          intakeLabel: primary.intake ? intakeLabel(primary.intake.month, primary.intake.year) : null,
         }
       : null,
     stats: {

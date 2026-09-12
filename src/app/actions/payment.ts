@@ -8,7 +8,7 @@ import { getCurrentCandidate } from "@/lib/candidate-session";
 import { getClientIp } from "@/lib/request-info";
 import { recordAuditEvent } from "@/lib/audit";
 import { createProviderCheckout, generateInternalReference } from "@/lib/payment-provider";
-import { LiveEnrolmentExistsError, PaymentNotPendingError, ProgrammeNotOpenError, assertProgrammeOpenForEnrolment } from "@/lib/payment-errors";
+import { LiveEnrolmentExistsError, PaymentNotPendingError, ProgrammeNotOpenError, ProgrammeComingSoonError, assertProgrammeOpenForEnrolment } from "@/lib/payment-errors";
 import { applyOfflineRecording } from "@/lib/offline-recording";
 import { offlinePaymentInputSchema, recordOfflinePaymentSchema, fieldErrors } from "@/lib/validation/payment";
 import { guestCheckoutSchema } from "@/lib/validation/candidate";
@@ -18,6 +18,11 @@ import { hashPassword } from "@/lib/password";
 import { consumeVerifiedOtp } from "@/lib/email-otp";
 import crypto from "node:crypto";
 import type { FormActionState } from "@/lib/action-state";
+
+function getPaymentProvider(): string {
+  const provider = process.env.PAYMENT_PROVIDER || "nomba";
+  return provider.toLowerCase();
+}
 
 /** Thin Server Action wrapper so the checkout return page's client-side poll can call the server function (rule 6 — this, not the redirect URL, is the authority). */
 export async function pollPaymentStatus(internalReference: string) {
@@ -40,20 +45,13 @@ function formToObject(formData: FormData): Record<string, string> {
   return obj;
 }
 
-async function pickOpenIntake() {
-  const intake = await prisma.intake.findFirst({ where: { status: "OPEN" }, orderBy: { startsAt: "asc" } });
-  if (!intake) throw new Error("No open intake is currently accepting enrolments.");
-  return intake;
-}
-
 async function createPendingPaymentAndEnrolment(candidateId: string, programmeId: string, feeMinor: number) {
-  const intake = await pickOpenIntake();
   for (let attempt = 0; attempt < 3; attempt++) {
     const internalReference = generateInternalReference();
     try {
       return await prisma.$transaction(async (tx) => {
         const enrolment = await tx.enrolment.create({
-          data: { candidateId, programmeId, intakeId: intake.id, status: EnrolmentStatus.PENDING_PAYMENT },
+          data: { candidateId, programmeId, status: EnrolmentStatus.PENDING_PAYMENT },
         });
         const payment = await tx.payment.create({
           data: {
@@ -61,7 +59,7 @@ async function createPendingPaymentAndEnrolment(candidateId: string, programmeId
             purpose: PaymentPurpose.PROGRAMME_FEE,
             enrolmentId: enrolment.id,
             amountMinor: feeMinor,
-            provider: "paystack",
+            provider: getPaymentProvider(),
             internalReference,
             status: PaymentStatus.PENDING,
           },
@@ -112,7 +110,7 @@ async function createRetryPayment(enrolmentId: string, candidateId: string, feeM
           purpose: PaymentPurpose.PROGRAMME_FEE,
           enrolmentId,
           amountMinor: feeMinor,
-          provider: "paystack",
+          provider: getPaymentProvider(),
           internalReference,
           status: PaymentStatus.PENDING,
         },
@@ -128,24 +126,76 @@ async function createRetryPayment(enrolmentId: string, candidateId: string, feeM
   throw new Error("Could not generate a unique payment reference. Try again.");
 }
 
-/** Creates the PENDING payment and PENDING_PAYMENT enrolment together; rejects if a live enrolment already exists. */
-export async function initiatePayment(programmeId: string) {
+/**
+ * If the provider call throws, the just-created Payment row would otherwise
+ * be stuck at PENDING forever — resolveEnrolmentForPayment's retry path
+ * only accepts a FAILED latest payment, so a stuck PENDING row silently
+ * blocks every future attempt until an admin fixes it by hand. Marking it
+ * FAILED here lets the candidate's next attempt retry on its own.
+ */
+async function createCheckoutOrMarkFailed(
+  payment: { id: string; provider: string; internalReference: string; amountMinor: number },
+  candidateEmail: string,
+  callbackUrl: string
+) {
+  try {
+    return await createProviderCheckout({
+      provider: payment.provider,
+      internalReference: payment.internalReference,
+      amountMinor: payment.amountMinor,
+      candidateEmail,
+      callbackUrl,
+    });
+  } catch (e) {
+    await prisma.payment.update({ where: { id: payment.id }, data: { status: PaymentStatus.FAILED } });
+    throw e;
+  }
+}
+
+/**
+ * Creates the PENDING payment and PENDING_PAYMENT enrolment together; rejects if a live enrolment already exists.
+ *
+ * Everything past the sign-in check is wrapped in a try/catch — a thrown
+ * error crossing a Server Action boundary gets its message stripped by
+ * Next.js in production (replaced with an opaque digest, surfaced to the
+ * candidate as a bare "React error #441"), same discipline player.ts's
+ * completeProgrammeAction already uses. Unlike that case, every failure
+ * here (known or not — including the payment provider itself being down
+ * or misconfigured) is caught into one generic message: a checkout button
+ * has no legitimate "let it stay a mysterious error" case, and the real
+ * cause is still logged server-side for debugging.
+ */
+export async function initiatePayment(programmeId: string): Promise<{ checkoutUrl: string | null; internalReference: string | null; error?: string }> {
   const candidate = await getCurrentCandidate();
   if (!candidate) throw new Error("Sign in required.");
 
-  const programme = await prisma.programme.findUniqueOrThrow({ where: { id: programmeId } });
-  assertProgrammeOpenForEnrolment(programme);
-
-  const { payment } = await resolveEnrolmentForPayment(candidate.id, programmeId, programme.feeMinor);
-  const checkout = createProviderCheckout({
-    provider: payment.provider,
-    internalReference: payment.internalReference,
-    amountMinor: payment.amountMinor,
-    candidateEmail: candidate.email,
+  const programme = await prisma.programme.findUniqueOrThrow({
+    where: { id: programmeId },
+    include: { listing: { select: { isComingSoon: true } } },
   });
 
-  revalidatePath("/portal/catalogue");
-  return { internalReference: payment.internalReference, checkoutUrl: checkout.checkoutUrl };
+  try {
+    assertProgrammeOpenForEnrolment(programme);
+    const { payment } = await resolveEnrolmentForPayment(candidate.id, programmeId, programme.feeMinor);
+    const checkout = await createCheckoutOrMarkFailed(
+      payment,
+      candidate.email,
+      `${process.env.NEXTAUTH_URL}/portal/checkout/${payment.internalReference}`
+    );
+
+    revalidatePath("/portal/catalogue");
+    return { internalReference: payment.internalReference, checkoutUrl: checkout.checkoutUrl };
+  } catch (e) {
+    if (e instanceof ProgrammeNotOpenError || e instanceof ProgrammeComingSoonError || e instanceof LiveEnrolmentExistsError) {
+      return { checkoutUrl: null, internalReference: null, error: e.message };
+    }
+    console.error(`initiatePayment failed for candidate ${candidate.id}, programme ${programmeId}:`, e);
+    return {
+      checkoutUrl: null,
+      internalReference: null,
+      error: "We couldn't start checkout right now. Please try again in a moment, or contact support if this continues.",
+    };
+  }
 }
 
 /**
@@ -173,14 +223,16 @@ export async function initiateGuestCheckout(_prev: FormActionState, formData: Fo
     return { errors: { email: "An account with this email already exists" }, values: raw };
   }
 
-  const programme = await prisma.programme.findUniqueOrThrow({ where: { id: data.programmeId } });
+  const programme = await prisma.programme.findUniqueOrThrow({
+    where: { id: data.programmeId },
+    include: { listing: { select: { isComingSoon: true } } },
+  });
   try {
     assertProgrammeOpenForEnrolment(programme);
   } catch (e) {
-    if (e instanceof ProgrammeNotOpenError) return { message: e.message, values: raw };
+    if (e instanceof ProgrammeNotOpenError || e instanceof ProgrammeComingSoonError) return { message: e.message, values: raw };
     throw e;
   }
-  const intake = await pickOpenIntake();
 
   const passwordHash = await hashPassword(data.password);
   const checkoutToken = crypto.randomBytes(24).toString("hex");
@@ -193,7 +245,7 @@ export async function initiateGuestCheckout(_prev: FormActionState, formData: Fo
           data: {
             purpose: PaymentPurpose.PROGRAMME_FEE,
             amountMinor: programme.feeMinor,
-            provider: "paystack",
+            provider: getPaymentProvider(),
             internalReference,
             status: PaymentStatus.PENDING,
           },
@@ -201,7 +253,6 @@ export async function initiateGuestCheckout(_prev: FormActionState, formData: Fo
         await tx.guestCheckout.create({
           data: {
             programmeId: programme.id,
-            intakeId: intake.id,
             firstName: data.firstName,
             lastName: data.lastName,
             email: data.email,
@@ -216,12 +267,11 @@ export async function initiateGuestCheckout(_prev: FormActionState, formData: Fo
         return payment;
       });
 
-      const checkout = createProviderCheckout({
-        provider: payment.provider,
-        internalReference: payment.internalReference,
-        amountMinor: payment.amountMinor,
-        candidateEmail: data.email,
-      });
+      const checkout = await createCheckoutOrMarkFailed(
+        payment,
+        data.email,
+        `${process.env.NEXTAUTH_URL}/checkout/return/${payment.internalReference}?token=${checkoutToken}`
+      );
       return { ok: true, data: { checkoutUrl: checkout.checkoutUrl } };
     } catch (e) {
       if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002" && p2002Target(e).includes("internalReference") && attempt < 2) {

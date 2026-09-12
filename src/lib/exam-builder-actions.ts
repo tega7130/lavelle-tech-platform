@@ -1,5 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import { recordAuditEvent } from "@/lib/audit";
+import { sendTransactionalEmailByTemplate } from "@/lib/send-transactional-email";
+import { getFirstName } from "@/lib/email-utils";
+import { EMAIL_CONFIG } from "@/lib/email-config";
 import { slugify } from "@/lib/slug";
 import { computeShortfalls, type DrawableQuestion } from "@/lib/exam-draw";
 import type { ExamQuestionType, ExamQuestionStatus, AttemptPolicy } from "@/generated/prisma/client";
@@ -58,7 +61,11 @@ export async function createExam(programmeId: string, staffId: string, ipAddress
 export interface CreateStandaloneExamInput {
   title: string;
   code: string;
-  tier: "FOUNDATION" | "SPECIALIST"; // ADVANCED_PRACTITIONER deliberately excluded — its prerequisite (exam-eligibility.ts) requires a completed Specialist enrolment in the same category, a ladder concept a standalone exam never participates in.
+  // ADVANCED_PRACTITIONER is allowed here — checkExamEligibility (exam-eligibility.ts)
+  // gates it on a completed Specialist enrolment anywhere in the exam's category, not
+  // on the exam's own (shell) programme, so a standalone exam participates in that
+  // ladder exactly like a linked one.
+  tier: "FOUNDATION" | "SPECIALIST" | "ADVANCED_PRACTITIONER";
   categoryId?: string | null;
   newCategoryName?: string | null;
 }
@@ -83,9 +90,6 @@ export async function createStandaloneExam(input: CreateStandaloneExamInput, sta
   if (!title) throw new Error("Examination title is required.");
   const code = input.code.trim().toUpperCase();
   if (!code) throw new Error("Examination code is required.");
-  if (input.tier !== "FOUNDATION" && input.tier !== "SPECIALIST") {
-    throw new Error("A standalone examination must be Foundation or Specialist level.");
-  }
 
   const exam = await prisma.$transaction(async (tx) => {
     let categoryId = input.categoryId ?? null;
@@ -371,6 +375,63 @@ export async function createExamWindow(examId: string, input: ExamWindowInput, s
     description: `Sitting added: opens ${input.opensAt.toISOString().slice(0, 10)}`,
     ipAddress,
   });
+
+  // Awaited, not a detached IIFE — on the serverless runtime the response
+  // can go out (and the instance be frozen/recycled) before an un-awaited
+  // promise ever reaches sendEmail, so these emails would silently never
+  // send. Per-candidate sends run in parallel (not a sequential loop) so
+  // awaiting here doesn't turn a large enrolment list into a slow chain
+  // that risks the action itself timing out; one candidate's failure still
+  // can't stop the others (own try/catch each) or fail the window creation.
+  try {
+    const exam = await prisma.exam.findUniqueOrThrow({
+      where: { id: examId },
+      include: { programme: true },
+    });
+
+    // Find all candidates eligible for this exam (enrolled in the programme)
+    const enrolments = await prisma.enrolment.findMany({
+      where: {
+        programmeId: exam.programmeId,
+        status: { in: ["ACTIVE", "COMPLETED"] },
+      },
+      include: { candidate: true },
+      distinct: ["candidateId"],
+    });
+
+    const currentYear = new Date().getFullYear();
+
+    await Promise.all(
+      enrolments.map(async (enrolment) => {
+        try {
+          await sendTransactionalEmailByTemplate("exam-scheduled", enrolment.candidate.email, {
+            firstName: getFirstName(enrolment.candidate.firstName),
+            programmeName: exam.programme.title,
+            tier: exam.programme.tier,
+            examDate: input.opensAt.toLocaleDateString(),
+            examTime: input.opensAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+            examDuration: `${exam.durationMinutes} minutes`,
+            windowOpenDate: input.opensAt.toLocaleDateString(),
+            windowCloseDate: input.closesAt.toLocaleDateString(),
+            registrationDeadline: input.registrationDeadline.toLocaleDateString(),
+            registrationUrl: `${process.env.NEXTAUTH_URL}/portal/exams`,
+            examRulesUrl: `${process.env.NEXTAUTH_URL}/exams/rules`,
+            supportEmail: EMAIL_CONFIG.supportEmail,
+            currentYear,
+          });
+        } catch (candidateEmailError) {
+          console.error(
+            `Failed to send exam-scheduled email to ${enrolment.candidate.email}:`,
+            candidateEmailError
+          );
+          // Continue with next candidate if one fails
+        }
+      })
+    );
+  } catch (emailError) {
+    console.error("Failed to send exam-scheduled emails:", emailError);
+    // Do not fail the window creation on email errors
+  }
 
   return window;
 }

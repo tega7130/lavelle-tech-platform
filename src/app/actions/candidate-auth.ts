@@ -42,6 +42,9 @@ import {
 import { recordAuditEvent } from "@/lib/audit";
 import { p2002Target } from "@/lib/prisma-errors";
 import type { FormActionState } from "@/lib/action-state";
+import { sendTransactionalEmailByTemplate } from "@/lib/send-transactional-email";
+import { getFirstName } from "@/lib/email-utils";
+import { EMAIL_CONFIG } from "@/lib/email-config";
 
 function formToObject(formData: FormData): Record<string, string> {
   const obj: Record<string, string> = {};
@@ -71,7 +74,7 @@ export async function requestRegistrationOtp(
 
   const parsed = requestOtpSchema.safeParse(raw);
   if (!parsed.success) return { errors: fieldErrors(parsed.error), values: raw };
-  const email = parsed.data.email;
+  const email = parsed.data.email.toLowerCase();
 
   const existing = await prisma.candidate.findUnique({ where: { email }, select: { id: true } });
   if (existing) return { errors: { email: "An account with this email already exists" }, values: raw };
@@ -79,9 +82,24 @@ export async function requestRegistrationOtp(
   const code = await createOtpChallenge(email);
   logOtpEmail(email, code);
 
-  // No email provider is wired up in this slice (same honest dev stand-in
-  // as the rest of the auth flow) — the code rides along in the response
-  // so registration is testable end to end without a mail server.
+  // Awaited, not a detached IIFE — on the serverless runtime the response
+  // can go out (and the instance be frozen/recycled) before an un-awaited
+  // promise ever reaches sendEmail, so the OTP would silently never send.
+  // This is the code a new candidate needs to complete registration, so
+  // it matters more than most: no email means no way in at all outside dev.
+  try {
+    await sendTransactionalEmailByTemplate("email-verification-otp", email, {
+      firstName: "there",
+      otpCode: code,
+      otpExpiryMinutes: 48,
+      currentYear: new Date().getFullYear(),
+    });
+  } catch (emailError) {
+    console.error("Failed to send email-verification-otp:", emailError);
+    // Do not fail the OTP request on email errors
+  }
+
+  // In development, include the code in response for testing without email
   const devCode = process.env.NODE_ENV !== "production" ? code : undefined;
   return { ok: true, data: { otpSent: true, ...(devCode ? { devCode } : {}) } };
 }
@@ -168,7 +186,7 @@ export async function registerCandidate(
             applicantNumber,
             firstName: data.firstName,
             lastName: data.lastName,
-            email: data.email,
+            email: data.email.toLowerCase(),
             emailVerifiedAt: new Date(),
             phoneCountryCode: data.phoneCountryCode || "+234",
             phone: data.phone || null,
@@ -196,6 +214,17 @@ export async function registerCandidate(
       });
 
       await setSessionCookie(result.sessionToken, true);
+
+      await sendTransactionalEmailByTemplate(
+        'account-welcome',
+        result.candidate.email,
+        {
+          firstName: getFirstName(result.candidate.firstName),
+          exploreProgrammesUrl: `${process.env.NEXTAUTH_URL}/programmes`,
+          currentYear: new Date().getFullYear(),
+        }
+      );
+
       redirect("/portal/dashboard");
     } catch (e) {
       if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
@@ -237,7 +266,7 @@ export async function signInCandidate(
   if (!parsed.success) return { errors: fieldErrors(parsed.error), values: raw };
   const data = parsed.data;
 
-  const candidate = await prisma.candidate.findUnique({ where: { email: data.email } });
+  const candidate = await prisma.candidate.findUnique({ where: { email: data.email.toLowerCase() } });
   const invalid: FormActionState = { values: raw, message: "Incorrect email or password." };
   if (!candidate) return invalid;
   if (!(await verifyPassword(data.password, candidate.passwordHash))) return invalid;
@@ -288,6 +317,24 @@ export async function resendVerification(): Promise<FormActionState> {
   await invalidateOutstandingTokens(candidate.id);
   const token = await createVerificationTokenRecord(prisma, candidate.id);
   logVerificationEmail(candidate.email, token);
+
+  // Awaited, not a detached IIFE — see requestRegistrationOtp above for why.
+  // This is the recovery path when the first verification email didn't
+  // arrive, so it especially can't be the one that silently drops too.
+  try {
+    const verifyUrl = `${process.env.NEXTAUTH_URL}/api/auth/verify-email?token=${token}`;
+    await sendTransactionalEmailByTemplate("email-verification-otp", candidate.email, {
+      firstName: getFirstName(candidate.firstName),
+      verificationUrl: verifyUrl,
+      expiryHours: Math.floor(48),
+      supportEmail: EMAIL_CONFIG.supportEmail,
+      currentYear: new Date().getFullYear(),
+    });
+  } catch (emailError) {
+    console.error("Failed to send email-verification-otp:", emailError);
+    // Do not fail the resend on email errors
+  }
+
   return { ok: true };
 }
 
@@ -319,12 +366,31 @@ export async function requestPasswordResetOtp(
 
   const parsed = requestPasswordResetOtpSchema.safeParse(raw);
   if (!parsed.success) return { errors: fieldErrors(parsed.error), values: raw };
-  const email = parsed.data.email;
+  const email = parsed.data.email.toLowerCase();
 
   const candidate = await prisma.candidate.findUnique({ where: { email } });
   if (candidate && candidate.accountStatus === "ACTIVE") {
     const code = await createPasswordResetOtpChallenge(candidate.id);
     logPasswordResetOtpEmail(email, code);
+
+    // Awaited, not a detached IIFE — same failure mode as
+    // requestRegistrationOtp above (killed before it ever reaches
+    // sendEmail on the serverless runtime). Response shape/timing is
+    // unchanged either way — a failed send still can't disclose whether
+    // the account exists (see the doc comment on this function).
+    try {
+      const resetUrl = `${process.env.NEXTAUTH_URL}/reset-password?email=${encodeURIComponent(email)}`;
+      await sendTransactionalEmailByTemplate("password-reset-request", email, {
+        firstName: getFirstName(candidate.firstName),
+        resetPasswordUrl: resetUrl,
+        supportEmail: EMAIL_CONFIG.supportEmail,
+        currentYear: new Date().getFullYear(),
+      });
+    } catch (emailError) {
+      console.error("Failed to send password-reset-request:", emailError);
+      // Do not fail the reset request on email errors
+    }
+
     const devCode = process.env.NODE_ENV !== "production" ? code : undefined;
     return { ok: true, data: { otpSent: true, ...(devCode ? { devCode } : {}) } };
   }
@@ -350,6 +416,7 @@ export async function verifyPasswordResetOtp(
   const parsed = verifyPasswordResetOtpSchema.safeParse(raw);
   if (!parsed.success) return { errors: fieldErrors(parsed.error), values: raw };
   const { email, code } = parsed.data;
+  const normalizedEmail = email.toLowerCase();
 
   const messages: Record<string, string> = {
     invalid: "That code is incorrect.",
@@ -361,7 +428,7 @@ export async function verifyPasswordResetOtp(
   // Same address unknown either way — resolving to a candidate row here,
   // not before the rate limit above, keeps that check indistinguishable
   // from an "invalid code" reply.
-  const candidate = await prisma.candidate.findUnique({ where: { email } });
+  const candidate = await prisma.candidate.findUnique({ where: { email: normalizedEmail } });
   if (!candidate) return { errors: { code: messages.not_found }, values: raw };
 
   const result = await verifyPasswordResetOtpChallenge(candidate.id, code);
@@ -395,7 +462,7 @@ export async function resetPasswordWithOtp(
   if (!parsed.success) return { errors: fieldErrors(parsed.error), values: raw };
   const data = parsed.data;
 
-  const candidate = await prisma.candidate.findUnique({ where: { email: data.email } });
+  const candidate = await prisma.candidate.findUnique({ where: { email: data.email.toLowerCase() } });
   if (!candidate) return { message: "Please verify your email address first.", values: raw };
 
   const otpVerified = await consumeVerifiedPasswordResetOtp(candidate.id);

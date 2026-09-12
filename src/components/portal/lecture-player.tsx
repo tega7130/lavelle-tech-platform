@@ -14,6 +14,7 @@ import { QuizPlayer } from "@/components/portal/quiz-player";
 import { LectureNotesPanel } from "@/components/portal/lecture-notes-panel";
 import { ChevronLeftIcon, LockIcon, MenuIcon } from "@/components/icons";
 import { computePercent } from "@/lib/progress";
+import { renderMarkupToReact } from "@/lib/rich-text";
 import { youtubeEmbedUrl } from "@/lib/format";
 import { loadYouTubeIframeApi, type YouTubePlayer } from "@/lib/youtube-player";
 import type { LectureStep } from "@/lib/lecture-steps";
@@ -40,6 +41,15 @@ const STEP_LABEL: Record<LectureStep, string> = {
   quiz: "Quiz",
 };
 
+// Shown next to the disabled Next-module/Complete-Programme button while a
+// scenario/drafting/quiz step still blocks it — never "content", which is
+// deliberately exempt from gating (see readyToFinish below).
+const BLOCKING_STEP_MESSAGE: Record<Exclude<LectureStep, "content">, (isLastLectureInProgramme: boolean) => string> = {
+  scenario: (isLast) => `Complete the scenario step to ${isLast ? "complete the programme" : "move to the next module"}.`,
+  drafting: (isLast) => `Submit the drafting exercise to ${isLast ? "complete the programme" : "move to the next module"}.`,
+  quiz: (isLast) => `Pass this module's quiz to ${isLast ? "complete the programme" : "move to the next module"}.`,
+};
+
 const POSITION_SAVE_INTERVAL_MS = 10_000;
 
 function draftLocalStorageKey(enrolmentId: string, lectureId: string) {
@@ -51,7 +61,12 @@ export function LecturePlayer({ enrolmentId, data }: { enrolmentId: string; data
   const { lecture, module: mod, steps, quiz, quizAttempt, resumePosition, nextLectureId, isLastLectureInProgramme, modules } = data;
 
   const firstIncomplete = steps.findIndex((s) => !data.stepsCompleted.includes(s));
-  const [stepIndex, setStepIndex] = React.useState(firstIncomplete === -1 ? steps.length - 1 : firstIncomplete);
+  // A fully-completed lecture (firstIncomplete === -1) reopens at the start
+  // (index 0, "content") rather than the last step — revisiting a finished
+  // lecture should replay from the top, not jump straight to the quiz.
+  // stepIndex is purely initial UI position; it never touches `completed`
+  // or any persisted progress, so this can't un-complete anything.
+  const [stepIndex, setStepIndex] = React.useState(firstIncomplete === -1 ? 0 : firstIncomplete);
   const [completed, setCompleted] = React.useState<Set<string>>(new Set(data.stepsCompleted));
   const activeStep = steps[stepIndex]!;
   // Mobile-only drawer for the module/lecture rail — desktop keeps it as a
@@ -194,17 +209,38 @@ export function LecturePlayer({ enrolmentId, data }: { enrolmentId: string; data
   // when the attempt passes, so a failed/un-taken quiz blocks "Next module"
   // and "Complete Programme" until the candidate passes it.
   const [quizPassed, setQuizPassed] = React.useState(quizAttempt?.passed === true);
-  // Gated on every authored step of THIS lecture being done, not merely
-  // stepIndex reaching the last page — reaching the quiz page doesn't mean
-  // the quiz was submitted (QuizPlayer marks "quiz" complete on a PASS only).
-  const lectureFullyComplete = steps.every((s) => completed.has(s));
   // A quiz that was already passed in an earlier session (data.stepsCompleted)
   // stays "complete" while the candidate retakes it — quizResultVisible tracks
   // whether the CURRENT attempt has a result on screen, so the finishing CTA
   // doesn't appear mid-retake, before "Submit quiz" is clicked (rule from
   // candidate report: button must not show while the quiz form is still up).
   const [quizResultVisible, setQuizResultVisible] = React.useState(completed.has("quiz"));
-  const readyToFinish = lectureFullyComplete && (!steps.includes("quiz") || (quizResultVisible && quizPassed));
+  // The finishing CTA (Next module / Complete Programme) checks every
+  // authored step except "content", which is deliberately exempt: a
+  // candidate who read the content and clicked straight through to the
+  // quiz has still done the work, so nothing further should hold the CTA
+  // back on that step alone. Scenario/drafting/quiz still gate it — mid-
+  // lecture, isCurrentStepBlocking already stops "Next" from advancing past
+  // an unfinished scenario/drafting step, but that check never runs when
+  // one of them happens to BE the lecture's last step (no "Next" button to
+  // block), so it has to be re-checked here too.
+  const missingBlockingStep = steps.find((s) =>
+    s === "content" ? false : s === "quiz" ? !(quizResultVisible && quizPassed) : !completed.has(s)
+  );
+  const readyToFinish = !missingBlockingStep;
+  // "content" is exempt from the check above but was never actually
+  // recorded on the server either — the old "Next module"/"Complete
+  // Lecture" link was a plain navigation, so nothing ever told the server
+  // this step was done. Persist it (and anything else somehow still
+  // missing) as soon as the CTA unlocks, so this lecture's own progress
+  // record — and the sidebar checkmark / progress bar / percent-complete
+  // that all read off it — update immediately instead of staying stuck at
+  // "not started" after the candidate has already moved on.
+  React.useEffect(() => {
+    if (!readyToFinish) return;
+    steps.filter((s) => !completed.has(s)).forEach((s) => void markStepComplete(s));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [readyToFinish]);
   // Every module that carries a quiz must have that quiz passed before the
   // programme can be marked complete — checking only the current lecture
   // isn't enough, since a candidate could reach the final lecture while an
@@ -233,6 +269,10 @@ export function LecturePlayer({ enrolmentId, data }: { enrolmentId: string; data
     setCompleteError(null);
     try {
       const result = await completeProgrammeAction(enrolmentId);
+      if (result.error) {
+        setCompleteError(result.error);
+        return;
+      }
       fireConfetti();
       setCompletionModal(result);
       router.refresh();
@@ -295,7 +335,7 @@ export function LecturePlayer({ enrolmentId, data }: { enrolmentId: string; data
   }
 
   return (
-    <div className="min-h-screen bg-bg grid grid-cols-1 md:grid-cols-[300px_1fr]">
+    <div className="min-h-dvh bg-bg grid grid-cols-1 md:grid-cols-[300px_1fr]">
       {/* Dark lecture rail — permanent column on desktop, drawer on mobile */}
       <aside className="hidden md:flex text-white flex-col" style={{ background: "#0b1322" }}>
         {renderRailContent()}
@@ -407,6 +447,9 @@ export function LecturePlayer({ enrolmentId, data }: { enrolmentId: string; data
                       ref={videoRef}
                       src={lecture.videoUrl ?? undefined}
                       controls
+                      controlsList="nodownload noremoteplayback"
+                      disablePictureInPicture
+                      onContextMenu={(e) => e.preventDefault()}
                       className="w-full aspect-video"
                       onCanPlay={() => setMediaBuffering(false)}
                       onWaiting={() => setMediaBuffering(true)}
@@ -505,8 +548,14 @@ export function LecturePlayer({ enrolmentId, data }: { enrolmentId: string; data
 
         {activeStep === "scenario" && (
           <div>
-            <p className="text-[14px] leading-relaxed">{lecture.scenarioPrompt}</p>
-            {lecture.scenarioGuidance && <p className="text-[13px] text-neutral-600">{lecture.scenarioGuidance}</p>}
+            <div className="text-[14px] leading-relaxed [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5">
+              {renderMarkupToReact(lecture.scenarioPrompt ?? "")}
+            </div>
+            {lecture.scenarioGuidance && (
+              <div className="mt-2 text-[13px] text-neutral-600 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5">
+                {renderMarkupToReact(lecture.scenarioGuidance)}
+              </div>
+            )}
             {!completed.has("scenario") && (
               <Button className="mt-4" onClick={() => markStepComplete("scenario")}>
                 Continue
@@ -552,22 +601,43 @@ export function LecturePlayer({ enrolmentId, data }: { enrolmentId: string; data
               <Button onClick={goNextStep} disabled={isCurrentStepBlocking}>
                 Next
               </Button>
+            ) : missingBlockingStep ? (
+              // Scenario, drafting, or the quiz still isn't done — always
+              // show the CTA the candidate is working toward, disabled,
+              // naming what's blocking it — never render nothing here.
+              <div className="flex flex-col items-end gap-1.5">
+                <Button disabled>{isLastLectureInProgramme ? "Complete Programme" : "Next module →"}</Button>
+                <span className="text-[12px] text-neutral-500 text-right max-w-[280px]">
+                  {/* missingBlockingStep's find predicate never returns true for "content" — see its definition above */}
+                  {BLOCKING_STEP_MESSAGE[missingBlockingStep as Exclude<LectureStep, "content">](isLastLectureInProgramme)}
+                </span>
+              </div>
             ) : isLastLectureInProgramme ? (
-              readyToFinish && allModuleQuizzesPassed ? (
+              allModuleQuizzesPassed ? (
                 <Button onClick={handleCompleteProgramme} disabled={completingProgramme}>
                   {completingProgramme ? "Completing…" : "Complete Programme"}
                 </Button>
-              ) : null
-            ) : readyToFinish && nextLectureId ? (
+              ) : (
+                // This lecture's own quiz is passed, but an earlier module's
+                // never was — allModuleQuizzesPassed reads that from `modules`
+                // (server-derived), not this lecture's own local quiz state.
+                <div className="flex flex-col items-end gap-1.5">
+                  <Button disabled>Complete Programme</Button>
+                  <span className="text-[12px] text-neutral-500 text-right max-w-[280px]">
+                    Pass every module&rsquo;s quiz to complete the programme.
+                  </span>
+                </div>
+              )
+            ) : nextLectureId ? (
               // The quiz result (if any) stays on screen until the candidate
               // clicks through — this doesn't auto-advance, it just points
               // at wherever nextLectureId actually is, in or out of module.
               <Link href={`/learn/${enrolmentId}/${nextLectureId}`} className="inline-flex">
                 <Button>{nextLectureCrossesModule ? "Next module →" : "Complete Lecture →"}</Button>
               </Link>
-            ) : readyToFinish ? (
+            ) : (
               <LockIcon width={14} height={14} className="text-neutral-400" />
-            ) : null}
+            )}
           </div>
           {completeError && <div className="text-[12px] text-[#b91c1c]">{completeError}</div>}
         </div>
@@ -688,7 +758,9 @@ function DraftingStep({
 
   return (
     <div>
-      <p className="text-[14px] leading-relaxed">{prompt}</p>
+      <div className="text-[14px] leading-relaxed [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5">
+        {renderMarkupToReact(prompt)}
+      </div>
       {backOnline && (
         <div className="p-3 rounded-md bg-[#e7f6ed] border border-[#bfe3cd] text-[#15803d] text-[12.5px] mb-3">
           <div className="font-semibold">You are back online</div>

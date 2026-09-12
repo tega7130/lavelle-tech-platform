@@ -70,6 +70,21 @@ export const BlogIcon = (p: IconProps) => (
   </Svg>
 );
 
+export const HeartIcon = ({ filled, ...p }: IconProps & { filled?: boolean }) => (
+  <Svg {...p} fill={filled ? "currentColor" : "none"}>
+    <path d="M9 15.3S2.7 11.4 2.7 6.9a3.3 3.3 0 0 1 6-1.9A3.3 3.3 0 0 1 15.3 6.9c0 4.5-6.3 8.4-6.3 8.4Z" />
+  </Svg>
+);
+
+export const LibraryIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M5.5 2.5h6l3 3v10h-9z" />
+    <path d="M11.5 2.5v3h3" />
+    <line x1="7.5" y1="9.5" x2="11.5" y2="9.5" />
+    <line x1="7.5" y1="12" x2="11.5" y2="12" />
+  </Svg>
+);
+
 export const AssessmentIcon = (p: IconProps) => (
   <Svg {...p}>
     <path d="M3 15V8" />
@@ -184,6 +199,7 @@ export const ADMIN_NAV_PATHS: Record<string, string> = {
     "M9 1.8l1.9 3.9 4.3.6-3.1 3 .7 4.3L9 11.6l-3.8 2 .7-4.3-3.1-3 4.3-.6z",
   funnel: "M2.5 2.8h13l-4.8 6v5.4l-3.4-2v-3.4z",
   analytics: "M2.8 15.2V6.8M8.6 15.2V2.8M14.4 15.2V9.8",
+  documentlibrary: "M5 2.5h6l3 3v9.5H5zM11 2.5v3h3M7 9.5h4M7 12h4",
 };
 
 export function AdminNavIcon({ name, ...p }: { name: string } & IconProps) {

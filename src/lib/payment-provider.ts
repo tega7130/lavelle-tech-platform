@@ -1,21 +1,17 @@
 import "server-only";
 import crypto from "node:crypto";
 
-/**
- * Local dev payment-provider stub. No real Paystack/Flutterwave account is
- * configured for this environment, so "checkout" is a page in this app
- * (/pay/stub) that lets a developer simulate a successful or declined
- * payment — but the CONTRACT is the real one: initiating a payment returns
- * a checkout URL to redirect to, and confirmation arrives exclusively via
- * a signed webhook delivered to /api/webhooks/[provider] (rule 5/6). The
- * stub's "Simulate success" button builds and signs a webhook payload the
- * exact same way a real provider would, then calls the exact same
- * verify-then-process path the real route handler uses — nothing about
- * the confirmation flow is shortcut. Swap createProviderCheckout and
- * verifyPaymentWithProvider for real provider SDK calls to go live;
- * nothing downstream (the webhook handler, the enrolment transaction)
- * needs to change.
- */
+function getNombaConfig() {
+  const accountId = process.env.NOMBA_ACCOUNT_ID;
+  const clientId = process.env.NOMBA_CLIENT_ID;
+  const clientSecret = process.env.NOMBA_PRIVATE_KEY; // NOMBA_PRIVATE_KEY is the OAuth client_secret
+
+  if (!accountId || !clientId || !clientSecret) {
+    throw new Error("Nomba credentials not configured: NOMBA_ACCOUNT_ID, NOMBA_CLIENT_ID, NOMBA_PRIVATE_KEY required");
+  }
+
+  return { accountId, clientId, clientSecret };
+}
 
 function secret() {
   const s = process.env.PAYMENT_WEBHOOK_SECRET;
@@ -23,7 +19,14 @@ function secret() {
   return s;
 }
 
-/** HMAC-SHA256 over the raw webhook body — the same scheme the webhook route verifies before parsing (rule 5). */
+/** Base URL for every Nomba API call — https://api.nomba.com (production) or https://sandbox.nomba.com (sandbox), set per environment rather than hard-coded, so switching envs is a config change, not a deploy. */
+function nombaApiUrl(): string {
+  const url = process.env.NOMBA_API_URL;
+  if (!url) throw new Error("NOMBA_API_URL is not set");
+  return url.replace(/\/+$/, "");
+}
+
+/** HMAC-SHA256 over the raw webhook body — used only by the local /pay/stub dev simulator, not real Nomba deliveries (see verifyNombaWebhookSignature for those). */
 export function signWebhookPayload(rawBody: string): string {
   return crypto.createHmac("sha256", secret()).update(rawBody).digest("hex");
 }
@@ -37,47 +40,192 @@ export function verifyWebhookSignature(rawBody: string, signature: string | null
   return crypto.timingSafeEqual(bufA, bufB);
 }
 
+function nombaWebhookSecret() {
+  const s = process.env.NOMBA_WEBHOOK_SECRET;
+  if (!s) throw new Error("NOMBA_WEBHOOK_SECRET is not set — set the same signature key configured under Developer > Webhook Setup on the Nomba dashboard.");
+  return s;
+}
+
+export interface NombaWebhookPayload {
+  event_type: string;
+  requestId: string;
+  data: {
+    merchant?: { userId?: string; walletId?: string };
+    transaction?: {
+      transactionId?: string;
+      type?: string;
+      time?: string;
+      responseCode?: string;
+      responseCodeMessage?: string;
+      transactionAmount?: number;
+      merchantTxRef?: string;
+    };
+    order?: { orderReference?: string; orderId?: string; amount?: number; customerEmail?: string; currency?: string };
+  };
+}
+
+/**
+ * Nomba's exact HMAC-SHA256 scheme (docs: "Webhook signature verification")
+ * — a colon-joined string of specific payload fields plus the delivery
+ * timestamp, HMAC'd with the signature key set on the Nomba dashboard and
+ * base64-encoded. This is NOT a hash of the raw body, unlike most
+ * webhook schemes (including our own /pay/stub simulator above) — Nomba's
+ * own reference implementations extract these fields from the parsed
+ * payload before hashing.
+ */
+export function verifyNombaWebhookSignature(payload: NombaWebhookPayload, timestamp: string, signature: string | null): boolean {
+  if (!signature) return false;
+  const merchant = payload.data.merchant ?? {};
+  const transaction = payload.data.transaction ?? {};
+  const responseCode = !transaction.responseCode || transaction.responseCode === "null" ? "" : transaction.responseCode;
+
+  const hashingPayload = [
+    payload.event_type ?? "",
+    payload.requestId ?? "",
+    merchant.userId ?? "",
+    merchant.walletId ?? "",
+    transaction.transactionId ?? "",
+    transaction.type ?? "",
+    transaction.time ?? "",
+    responseCode,
+    timestamp,
+  ].join(":");
+
+  const expected = crypto.createHmac("sha256", nombaWebhookSecret()).update(hashingPayload).digest("base64");
+  const bufA = Buffer.from(expected.toLowerCase());
+  const bufB = Buffer.from(signature.toLowerCase());
+  if (bufA.length !== bufB.length) return false;
+  return crypto.timingSafeEqual(bufA, bufB);
+}
+
 export interface ProviderCheckout {
   checkoutUrl: string;
 }
 
+/** Get an access token from Nomba using client credentials. */
+async function getNombaAccessToken(): Promise<string> {
+  const { accountId, clientId, clientSecret } = getNombaConfig();
+
+  const response = await fetch(`${nombaApiUrl()}/v1/auth/token/issue`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      accountId,
+    },
+    body: JSON.stringify({
+      grant_type: "client_credentials",
+      client_id: clientId,
+      client_secret: clientSecret,
+    }),
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`Nomba authentication failed: ${response.status} ${error}`);
+  }
+
+  const data = (await response.json()) as { code?: string; data?: { access_token?: string } };
+  const accessToken = data.data?.access_token;
+
+  if (!accessToken) {
+    throw new Error("Nomba did not return an access token");
+  }
+
+  return accessToken;
+}
+
 /**
- * In production this calls the provider's checkout-session API and
- * returns their hosted payment page URL. The local stub has no hosted
- * page to redirect to, so it points at our own /pay/stub instead, passing
- * along exactly what a real checkout session would need to know.
+ * Create a Nomba checkout session and return the hosted payment page URL.
+ * callbackUrl is where Nomba redirects the browser after the candidate
+ * finishes on their hosted page — the caller decides it, since only the
+ * caller knows which of this app's return routes (guest/candidate/exam)
+ * fits this specific checkout.
  */
-export function createProviderCheckout(input: {
+export async function createProviderCheckout(input: {
   provider: string;
   internalReference: string;
   amountMinor: number;
   candidateEmail: string;
-}): ProviderCheckout {
-  const params = new URLSearchParams({
-    provider: input.provider,
-    ref: input.internalReference,
-    amount: String(input.amountMinor),
-    email: input.candidateEmail,
+  callbackUrl: string;
+}): Promise<ProviderCheckout> {
+  // A relative callbackUrl (e.g. NEXTAUTH_URL misconfigured as an empty
+  // string for this environment) doesn't fail this request — Nomba
+  // happily stores it and only breaks later, when the candidate finishes
+  // paying and gets redirected to something like
+  // "/portal/checkout/LVL-PAY-..." with no host, which the browser then
+  // tries to resolve as a hostname. Catching it here fails loudly and
+  // immediately instead, before any money moves.
+  if (!/^https?:\/\//i.test(input.callbackUrl)) {
+    throw new Error(`callbackUrl must be an absolute URL, got "${input.callbackUrl}" — check NEXTAUTH_URL is set for this environment.`);
+  }
+
+  const { accountId } = getNombaConfig();
+  const accessToken = await getNombaAccessToken();
+
+  // Logged deliberately (no secrets in it) — the only way to see what
+  // callbackUrl actually reached Nomba, since a malformed value here
+  // surfaces later as a broken redirect after payment, not as an error
+  // on this request itself.
+  console.log(`[nomba] checkout order reference=${input.internalReference} callbackUrl=${input.callbackUrl} apiUrl=${nombaApiUrl()}`);
+
+  const response = await fetch(`${nombaApiUrl()}/v1/checkout/order`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${accessToken}`,
+      accountId,
+    },
+    body: JSON.stringify({
+      order: {
+        amount: (input.amountMinor / 100).toFixed(2),
+        currency: "NGN",
+        orderReference: input.internalReference,
+        customerEmail: input.candidateEmail,
+        callbackUrl: input.callbackUrl,
+      },
+    }),
   });
-  return { checkoutUrl: `/pay/stub?${params.toString()}` };
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`Nomba checkout failed: ${response.status} ${error}`);
+  }
+
+  const data = (await response.json()) as { code?: string; data?: { checkoutLink?: string } };
+  const checkoutUrl = data.data?.checkoutLink;
+
+  if (!checkoutUrl) {
+    throw new Error("Nomba API did not return a checkout link");
+  }
+
+  return { checkoutUrl };
 }
 
-/**
- * Server-to-server verify, for the return-from-provider page and for
- * reconciliation — the return page's actual authority, never the redirect
- * query string (rule 6). In production this is an HTTPS call to the
- * provider's transaction-verify endpoint. The local stub has no separate
- * provider-side ledger to call out to (there is no external provider), so
- * it reads back the Payment row our own signature-verified webhook
- * already wrote — legitimate as a stand-in only because that webhook
- * delivery is itself signed and verified before anything is written, not
- * because this function trusts the caller.
- */
+/** Verify payment status with Nomba's API. */
 export async function verifyPaymentWithProvider(internalReference: string) {
-  const { prisma } = await import("@/lib/prisma");
-  const payment = await prisma.payment.findUnique({ where: { internalReference } });
-  if (!payment) return { found: false as const };
-  return { found: true as const, status: payment.status, confirmedAt: payment.confirmedAt };
+  const { accountId } = getNombaConfig();
+  const accessToken = await getNombaAccessToken();
+
+  const response = await fetch(`${nombaApiUrl()}/v1/transactions/accounts/single?orderReference=${encodeURIComponent(internalReference)}`, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      accountId,
+    },
+  });
+
+  if (!response.ok) {
+    // If Nomba can't find it, fall back to local DB (might be a webhook that hasn't arrived yet)
+    const { prisma } = await import("@/lib/prisma");
+    const payment = await prisma.payment.findUnique({ where: { internalReference } });
+    if (!payment) return { found: false as const };
+    return { found: true as const, status: payment.status, confirmedAt: payment.confirmedAt };
+  }
+
+  const data = (await response.json()) as { code?: string; data?: { status?: string } };
+  const status = data.data?.status || "pending";
+
+  return { found: true as const, status, confirmedAt: undefined };
 }
 
 /** Internal reference shown to the candidate and quoted in support — LVL-PAY-2026-11842. Uniqueness is enforced by the DB constraint; callers retry on conflict. */

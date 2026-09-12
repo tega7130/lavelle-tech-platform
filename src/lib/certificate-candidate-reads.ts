@@ -30,7 +30,7 @@ export async function getCandidateCredentials(candidateId: string) {
     if (certifiedProgrammeIds.has(enrolment.programmeId)) continue; // already has (or is superseded by) a certificate for this programme
     const [completedCount, totalCount] = await Promise.all([
       prisma.lectureProgress.count({ where: { enrolmentId: enrolment.id, state: "COMPLETED" } }),
-      prisma.lecture.count({ where: { module: { programmeId: enrolment.programmeId }, status: "PUBLISHED" } }),
+      prisma.lecture.count({ where: { module: { programmeId: enrolment.programmeId, status: "PUBLISHED" }, status: "PUBLISHED" } }),
     ]);
     inProgress.push({
       enrolmentId: enrolment.id,

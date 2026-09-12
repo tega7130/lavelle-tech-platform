@@ -1501,7 +1501,7 @@ function StandaloneExamForm({ onClose, onCreated }: { onClose: () => void; onCre
   const [topics, setTopics] = React.useState<{ id: string; name: string }[] | null>(null);
   const [title, setTitle] = React.useState("");
   const [code, setCode] = React.useState("");
-  const [tier, setTier] = React.useState<"FOUNDATION" | "SPECIALIST">("SPECIALIST");
+  const [tier, setTier] = React.useState<"FOUNDATION" | "SPECIALIST" | "ADVANCED_PRACTITIONER">("SPECIALIST");
   const [topicId, setTopicId] = React.useState<string>("__new__");
   const [newTopicName, setNewTopicName] = React.useState("");
   const [busy, setBusy] = React.useState(false);
@@ -1542,15 +1542,23 @@ function StandaloneExamForm({ onClose, onCreated }: { onClose: () => void; onCre
         <Label>Examination title</Label>
         <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Advanced Marketing Examination" />
       </div>
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <Label>Examination code</Label>
-          <Input value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="MKT-401" />
-        </div>
-        <div>
-          <Label>Level</Label>
-          <Segmented name="new-exam-tier" value={tier} onChange={(v) => setTier(v as typeof tier)} options={[{ value: "FOUNDATION", label: "Foundation" }, { value: "SPECIALIST", label: "Specialist" }]} />
-        </div>
+      <div>
+        <Label>Examination code</Label>
+        <Input value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="MKT-401" />
+      </div>
+      <div>
+        <Label>Level</Label>
+        <Segmented
+          name="new-exam-tier"
+          className="w-full [&>label]:flex-1 [&>label]:justify-center"
+          value={tier}
+          onChange={(v) => setTier(v as typeof tier)}
+          options={[
+            { value: "FOUNDATION", label: "Foundation" },
+            { value: "SPECIALIST", label: "Specialist" },
+            { value: "ADVANCED_PRACTITIONER", label: "Advanced Practitioner" },
+          ]}
+        />
       </div>
       <div>
         <Label>Topic / specialization</Label>

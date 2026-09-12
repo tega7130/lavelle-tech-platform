@@ -1,15 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { readBlob } from "@/lib/storage";
 import { verifyCertificatePdfLink } from "@/lib/certificate-pdf";
+import { getObjectBytes } from "@/lib/storage";
 
-/**
- * Signed, expiring (rule 8) — and 403s when revoked, checked fresh here
- * on every request, never trusted from whatever was true when the link
- * was minted. "A revoked certificate that still downloads is worse than
- * none at all." Superseded is deliberately NOT blocked — it was never
- * invalid, only replaced, so its own record stays a real document.
- */
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const exp = request.nextUrl.searchParams.get("exp");
@@ -24,7 +17,14 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   if (!certificate.pdfAssetId) return NextResponse.json({ error: "no_pdf" }, { status: 404 });
 
   const asset = await prisma.mediaAsset.findUniqueOrThrow({ where: { id: certificate.pdfAssetId } });
-  const bytes = await readBlob(asset.storageKey);
+
+  let bytes: Buffer;
+  try {
+    bytes = await getObjectBytes(asset.storageKey);
+  } catch (error) {
+    console.error(`Storage fetch failed for certificate ${certificate.id}:`, error);
+    return NextResponse.json({ error: "pdf_unavailable" }, { status: 502 });
+  }
 
   return new NextResponse(new Uint8Array(bytes), {
     headers: {

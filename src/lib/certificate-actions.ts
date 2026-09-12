@@ -1,8 +1,10 @@
 import { prisma } from "@/lib/prisma";
 import { recordAuditEvent } from "@/lib/audit";
-import { writeBlob } from "@/lib/storage";
 import { renderCertificatePdf } from "@/lib/certificate-pdf";
-import { tierLabel } from "@/lib/format";
+import { putObject } from "@/lib/storage";
+import { sendTransactionalEmailByTemplate } from "@/lib/send-transactional-email";
+import { getFirstName } from "@/lib/email-utils";
+import { EMAIL_CONFIG } from "@/lib/email-config";
 import type { CertificateStatus, GradeBand, Prisma } from "@/generated/prisma/client";
 
 // No "server-only" / staff-auth / candidate-session import here,
@@ -12,6 +14,13 @@ import type { CertificateStatus, GradeBand, Prisma } from "@/generated/prisma/cl
 // discipline as every other core-lib file in this project.
 
 const BAND_LABEL: Record<GradeBand, string> = { DISTINCTION: "Distinction", MERIT: "Merit", PASS: "Pass", REFER: "Refer" };
+
+/** storageKey includes a fresh uuid — a certificate can be reissued, each reissue uploading a new PDF, and MediaAsset.storageKey is unique. */
+async function uploadCertificatePdf(pdfBytes: Buffer, certificateNumber: string): Promise<string> {
+  const storageKey = `lavelle/certificates/${certificateNumber}-${crypto.randomUUID()}.pdf`;
+  await putObject(storageKey, pdfBytes, "application/pdf");
+  return storageKey;
+}
 
 /**
  * The printed certificate's own band — deliberately NOT the same scale
@@ -81,8 +90,21 @@ async function findActiveTemplate(tier: string, db: Prisma.TransactionClient | t
  * (a required column) — issuedByStaffId on the Certificate itself stays
  * null, which is what marks this as an automatic issue.
  */
+interface CertificateEmailData {
+  email: string;
+  firstName: string;
+  certificateId: string;
+  certificateNumber: string;
+  issuedAt: Date;
+  band: GradeBand;
+  programmeTitle: string;
+  tier: string;
+}
+
 export async function issueCertificate(sittingId: string, mintedByStaffId: string) {
-  return prisma.$transaction(async (tx) => {
+  let emailData: CertificateEmailData | null = null;
+
+  const certificate = await prisma.$transaction(async (tx) => {
     const rows = await tx.$queryRaw<{ id: string }[]>`SELECT id FROM "Sitting" WHERE id = ${sittingId} FOR UPDATE`;
     if (rows.length === 0) throw new Error("Sitting not found.");
 
@@ -112,18 +134,9 @@ export async function issueCertificate(sittingId: string, mintedByStaffId: strin
     const issuedAt = new Date();
     const certBand = certificateBandFor(sitting.totalPercent);
 
-    const pdfBytes = await renderCertificatePdf({
-      certificateNumber,
-      holderName,
-      programmeTitle: programme.title,
-      tierLabel: tierLabel(programme.tier),
-      bandLabel: BAND_LABEL[certBand],
-      pathway,
-      issuedAt,
-      signatoryBlock: template.signatoryBlock,
-    });
-    const storageKey = `certificates/${certificateNumber}.pdf`;
-    await writeBlob(storageKey, pdfBytes);
+    const pdfBytes = await renderCertificatePdf({ certificateNumber, holderName, programmeTitle: programme.title });
+
+    const storageKey = await uploadCertificatePdf(pdfBytes, certificateNumber);
     const pdfAsset = await tx.mediaAsset.create({
       data: {
         kind: "document",
@@ -135,7 +148,7 @@ export async function issueCertificate(sittingId: string, mintedByStaffId: strin
       },
     });
 
-    const certificate = await tx.certificate.create({
+    const cert = await tx.certificate.create({
       data: {
         certificateNumber,
         candidateId: candidate.id,
@@ -169,14 +182,55 @@ export async function issueCertificate(sittingId: string, mintedByStaffId: strin
     await recordAuditEvent(tx, {
       actorStaffId: null,
       subjectType: "certificate",
-      subjectId: certificate.id,
+      subjectId: cert.id,
       action: "certificate.issued",
       description: `Certificate ${certificateNumber} issued to ${holderName} for ${programme.title}`,
       ipAddress: null,
     });
 
-    return certificate;
+    // Capture email data for async sending
+    emailData = {
+      email: candidate.email,
+      firstName: candidate.firstName,
+      certificateId: cert.id,
+      certificateNumber,
+      issuedAt,
+      band: certBand,
+      programmeTitle: programme.title,
+      tier: programme.tier,
+    };
+
+    return cert;
   });
+
+  // Send certificate-issued email — awaited, not a detached IIFE (see
+  // exam-builder-actions.ts's createExamWindow for why). Still never
+  // fails the issuance itself on an email error.
+  if (emailData) {
+    const data: CertificateEmailData = emailData;
+    try {
+      const certificateDownloadUrl = `${process.env.NEXTAUTH_URL}/portal/credentials/${data.certificateId}/download`;
+      const certificateVerificationUrl = `${process.env.NEXTAUTH_URL}/verify?number=${encodeURIComponent(data.certificateNumber)}`;
+
+      await sendTransactionalEmailByTemplate("certificate-issued", data.email, {
+        firstName: getFirstName(data.firstName),
+        programmeName: data.programmeTitle,
+        tier: data.tier,
+        grade: BAND_LABEL[data.band],
+        certificateId: data.certificateNumber,
+        issueDate: data.issuedAt.toLocaleDateString(),
+        certificateDownloadUrl,
+        certificateVerificationUrl,
+        supportEmail: EMAIL_CONFIG.supportEmail,
+        currentYear: new Date().getFullYear(),
+      });
+    } catch (emailError) {
+      console.error("Failed to send certificate-issued email:", emailError);
+      // Do not fail the certificate issuance on email errors
+    }
+  }
+
+  return certificate;
 }
 
 export class NotEligibleForCourseCertificateError extends Error {
@@ -213,7 +267,7 @@ export async function issueCertificateForCourseCompletion(enrolmentId: string) {
     if (existing) return existing; // idempotent — re-clicking Complete Programme must not mint two
 
     const [totalPublished, completedCount] = await Promise.all([
-      tx.lecture.count({ where: { module: { programmeId: enrolment.programmeId }, status: "PUBLISHED" } }),
+      tx.lecture.count({ where: { module: { programmeId: enrolment.programmeId, status: "PUBLISHED" }, status: "PUBLISHED" } }),
       tx.lectureProgress.count({ where: { enrolmentId, state: "COMPLETED" } }),
     ]);
     if (totalPublished === 0 || completedCount < totalPublished) {
@@ -249,18 +303,8 @@ export async function issueCertificateForCourseCompletion(enrolmentId: string) {
     const holderName = `${candidate.firstName} ${candidate.lastName}`;
     const issuedAt = new Date();
 
-    const pdfBytes = await renderCertificatePdf({
-      certificateNumber,
-      holderName,
-      programmeTitle: programme.title,
-      tierLabel: tierLabel(programme.tier),
-      bandLabel: BAND_LABEL[band],
-      pathway: "PATHWAY",
-      issuedAt,
-      signatoryBlock: template.signatoryBlock,
-    });
-    const storageKey = `certificates/${certificateNumber}.pdf`;
-    await writeBlob(storageKey, pdfBytes);
+    const pdfBytes = await renderCertificatePdf({ certificateNumber, holderName, programmeTitle: programme.title });
+    const storageKey = await uploadCertificatePdf(pdfBytes, certificateNumber);
     const pdfAsset = await tx.mediaAsset.create({
       data: {
         kind: "document",
@@ -268,8 +312,6 @@ export async function issueCertificateForCourseCompletion(enrolmentId: string) {
         mimeType: "application/pdf",
         bytes: pdfBytes.length,
         originalFilename: `${certificateNumber}.pdf`,
-        // No staff acted here — attributed to the candidate whose
-        // completion triggered it, same as their own profile photo.
         uploadedByCandidateId: candidate.id,
       },
     });
@@ -384,18 +426,8 @@ export async function issueCertificateManually(input: ManualIssueInput, staffId:
     const holderName = `${candidate.firstName} ${candidate.lastName}`;
     const issuedAt = new Date();
 
-    const pdfBytes = await renderCertificatePdf({
-      certificateNumber,
-      holderName,
-      programmeTitle: programme.title,
-      tierLabel: tierLabel(programme.tier),
-      bandLabel: BAND_LABEL[input.band],
-      pathway,
-      issuedAt,
-      signatoryBlock: template.signatoryBlock,
-    });
-    const storageKey = `certificates/${certificateNumber}.pdf`;
-    await writeBlob(storageKey, pdfBytes);
+    const pdfBytes = await renderCertificatePdf({ certificateNumber, holderName, programmeTitle: programme.title });
+    const storageKey = await uploadCertificatePdf(pdfBytes, certificateNumber);
     const pdfAsset = await tx.mediaAsset.create({
       data: {
         kind: "document",
@@ -463,14 +495,14 @@ export async function revokeCertificate(id: string, reason: string, staffId: str
   const trimmedReason = reason.trim();
   if (!trimmedReason) throw new Error("A reason is required to revoke a certificate.");
 
-  return prisma.$transaction(async (tx) => {
+  const updated = await prisma.$transaction(async (tx) => {
     const certificate = await tx.certificate.findUnique({ where: { id } });
     if (!certificate) throw new CertificateNotFoundError();
     if (certificate.status === "REVOKED") throw new AlreadyRevokedError();
     if (certificate.status === "SUPERSEDED") throw new AlreadySupersededError();
 
     const now = new Date();
-    const updated = await tx.certificate.update({
+    const result = await tx.certificate.update({
       where: { id },
       data: { status: "REVOKED", revokedAt: now, revokedReason: trimmedReason, revokedByStaffId: staffId },
     });
@@ -494,8 +526,38 @@ export async function revokeCertificate(id: string, reason: string, staffId: str
       ipAddress,
     });
 
-    return updated;
+    return { certificate, result };
   });
+
+  // Send certificate-revoked email — awaited, not a detached IIFE (see
+  // exam-builder-actions.ts's createExamWindow for why). Still never
+  // fails the revocation itself on an email error.
+  try {
+    const candidate = await prisma.candidate.findUniqueOrThrow({
+      where: { id: updated.certificate.candidateId },
+    });
+
+    const appealDeadlineDate = new Date();
+    appealDeadlineDate.setDate(appealDeadlineDate.getDate() + EMAIL_CONFIG.appealDeadlineDays);
+
+    await sendTransactionalEmailByTemplate("certificate-revoked", candidate.email, {
+      firstName: getFirstName(candidate.firstName),
+      programmeName: updated.certificate.programmeTitle,
+      tier: updated.certificate.tier,
+      certificateId: updated.certificate.certificateNumber,
+      revocationReason: trimmedReason,
+      appealDeadlineDate: appealDeadlineDate.toLocaleDateString(),
+      appealInstructionsUrl: `${process.env.NEXTAUTH_URL}/appeals/new`,
+      supportEmail: EMAIL_CONFIG.supportEmail,
+      securityContactEmail: EMAIL_CONFIG.securityContactEmail,
+      currentYear: new Date().getFullYear(),
+    });
+  } catch (emailError) {
+    console.error("Failed to send certificate-revoked email:", emailError);
+    // Do not fail the revocation on email errors
+  }
+
+  return updated.result;
 }
 
 /**
@@ -527,14 +589,8 @@ export async function reissueCertificate(id: string, reason: string, staffId: st
       certificateNumber,
       holderName: original.holderName,
       programmeTitle: original.programmeTitle,
-      tierLabel: tierLabel(original.tier),
-      bandLabel: BAND_LABEL[original.band],
-      pathway: original.pathway,
-      issuedAt,
-      signatoryBlock: template.signatoryBlock,
     });
-    const storageKey = `certificates/${certificateNumber}.pdf`;
-    await writeBlob(storageKey, pdfBytes);
+    const storageKey = await uploadCertificatePdf(pdfBytes, certificateNumber);
     const pdfAsset = await tx.mediaAsset.create({
       data: {
         kind: "document",

@@ -135,3 +135,7 @@ export async function listCandidateMarks(candidateId: string) {
     })),
   };
 }
+
+export async function countPendingMarks() {
+  return prisma.mark.count({ where: { state: MarkState.AWAITING } });
+}

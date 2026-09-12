@@ -16,7 +16,7 @@ export interface TransferIntakeModalProps {
   enrolmentId: string;
   candidateName: string;
   candidateNumber: string | null;
-  currentIntakeLabel: string;
+  currentIntakeLabel: string | null;
   onClose: () => void;
   onTransferred: (newLabel: string) => void;
 }

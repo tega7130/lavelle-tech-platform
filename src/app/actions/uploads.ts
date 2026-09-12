@@ -6,18 +6,16 @@ import { Permission } from "@/generated/prisma/client";
 import { requireStaffPermission } from "@/lib/staff-auth";
 import { getCurrentCandidate } from "@/lib/candidate-session";
 import { recordAuditEvent } from "@/lib/audit";
-import { blobExists, blobSize, readBlob } from "@/lib/storage";
-import { probeDurationSeconds } from "@/lib/media-probe";
+import { isAcceptedDocumentMimeType, ACCEPTED_DOCUMENT_MIME_TYPES, MAX_DOCUMENT_BYTES } from "@/lib/document-library";
 
 const finaliseUploadSchema = z.object({
   storageKey: z.string().min(1),
   kind: z.enum(["audio", "image", "video", "document"]),
   mimeType: z.string().min(1),
   originalFilename: z.string().min(1),
-  // Mirrors /api/uploads/sign's purpose — programme media (default), a
-  // finance receipt, certificate template artwork, or a blog post hero
-  // image, each gated by a different permission.
-  purpose: z.enum(["programme", "finance", "certificate", "blog"]).default("programme"),
+  bytes: z.number().int().positive(),
+  durationSeconds: z.number().nonnegative().nullable(),
+  purpose: z.enum(["programme", "finance", "certificate", "blog", "document_library"]).default("programme"),
 });
 
 const PERMISSION_BY_PURPOSE = {
@@ -25,26 +23,22 @@ const PERMISSION_BY_PURPOSE = {
   finance: Permission.CONFIRM_PAYMENTS,
   certificate: Permission.ISSUE_CERTIFICATES,
   blog: Permission.MANAGE_BLOG,
+  document_library: Permission.MANAGE_DOCUMENT_LIBRARY,
 } as const;
 
-/**
- * Probes duration server-side and creates the MediaAsset — never trusts
- * a client-supplied duration (there is no such field to trust; nothing
- * in this app's UI ever asks the admin to type one).
- */
 export async function finaliseUpload(input: unknown) {
   const data = finaliseUploadSchema.parse(input);
   const staff = await requireStaffPermission(PERMISSION_BY_PURPOSE[data.purpose]);
 
-  if (!(await blobExists(data.storageKey))) {
-    throw new Error("Upload not found — the presigned URL may have expired before the file finished uploading.");
-  }
-  const bytes = await blobSize(data.storageKey);
-
-  let durationSeconds: number | null = null;
-  if (data.kind === "audio" || data.kind === "video") {
-    const buf = await readBlob(data.storageKey);
-    durationSeconds = await probeDurationSeconds(buf, data.mimeType);
+  // Server-side file-type and size validation — never trust the client's
+  // <input accept> or the file extension alone.
+  if (data.purpose === "document_library") {
+    if (!isAcceptedDocumentMimeType(data.mimeType)) {
+      throw new Error(`Unsupported file type. Accepted types: ${Object.values(ACCEPTED_DOCUMENT_MIME_TYPES).join(", ")}.`);
+    }
+    if (data.bytes > MAX_DOCUMENT_BYTES) {
+      throw new Error(`File is too large. Maximum size is ${Math.round(MAX_DOCUMENT_BYTES / (1024 * 1024))}MB.`);
+    }
   }
 
   const asset = await prisma.mediaAsset.create({
@@ -52,8 +46,8 @@ export async function finaliseUpload(input: unknown) {
       kind: data.kind,
       storageKey: data.storageKey,
       mimeType: data.mimeType,
-      bytes,
-      durationSeconds,
+      bytes: data.bytes,
+      durationSeconds: data.durationSeconds,
       originalFilename: data.originalFilename,
       uploadedByStaffId: staff.id,
     },
@@ -74,34 +68,21 @@ const finaliseCandidatePhotoSchema = z.object({
   storageKey: z.string().min(1),
   mimeType: z.string().min(1),
   originalFilename: z.string().min(1),
+  bytes: z.number().int().positive(),
 });
 
-/**
- * The candidate-facing counterpart to finaliseUpload — same verify-blob-
- * then-create-MediaAsset shape, but candidate-gated instead of staff-
- * permission-gated, and it also writes the resulting storage key onto
- * CandidateProfile.photoUrl in the same call (the one write path for a
- * candidate's own photo, mirroring updateProfile's single-write-path
- * rule). photoUrl holds a storage key, never a signed URL — a signed GET
- * URL expires in minutes and must be regenerated fresh at render time.
- */
 export async function finaliseCandidatePhotoUpload(input: unknown) {
   const data = finaliseCandidatePhotoSchema.parse(input);
   const candidate = await getCurrentCandidate();
   if (!candidate) throw new Error("You must be signed in.");
   if (!data.mimeType.startsWith("image/")) throw new Error("Profile photos must be an image file.");
 
-  if (!(await blobExists(data.storageKey))) {
-    throw new Error("Upload not found — the presigned URL may have expired before the file finished uploading.");
-  }
-  const bytes = await blobSize(data.storageKey);
-
   const asset = await prisma.mediaAsset.create({
     data: {
       kind: "image",
       storageKey: data.storageKey,
       mimeType: data.mimeType,
-      bytes,
+      bytes: data.bytes,
       originalFilename: data.originalFilename,
       uploadedByCandidateId: candidate.id,
     },

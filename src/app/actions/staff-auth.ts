@@ -33,6 +33,26 @@ export async function staffSignIn(_prev: FormActionState, formData: FormData): P
   redirect(next && next.startsWith("/admin/") ? next : "/admin/overview");
 }
 
+/** Silent by design (same rule as requestStaffPasswordReset) — the caller never learns whether the address matched a real account. */
+export async function requestStaffLoginOtp(email: string): Promise<void> {
+  const ip = await getClientIp();
+  await core.requestStaffLoginOtpCore(email.trim().toLowerCase(), ip);
+}
+
+export async function verifyStaffLoginOtp(_prev: FormActionState, formData: FormData): Promise<FormActionState> {
+  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  const code = String(formData.get("code") ?? "").trim();
+  const next = String(formData.get("next") ?? "");
+
+  const ip = await getClientIp();
+  const userAgent = await getUserAgent();
+  const result = await core.verifyStaffLoginOtpCore(email, code, ip, userAgent);
+  if (!result.ok) return { message: result.message };
+
+  await setStaffSessionCookie(result.sessionToken);
+  redirect(next && next.startsWith("/admin/") ? next : "/admin/overview");
+}
+
 export async function staffSignOut() {
   await destroyStaffSession();
   redirect("/staff/sign-in?signedOut=1");
@@ -48,16 +68,50 @@ export async function setStaffPassword(_prev: FormActionState, formData: FormDat
   const result = await core.setStaffPasswordCore(parsed.data.token, parsed.data.password, ip, userAgent);
   if (!result.ok) return { message: "This link has expired or was already used." };
 
-  await setStaffSessionCookie(result.sessionToken);
+  // sessionToken is null for a password reset (see setStaffPasswordCore) —
+  // that path deliberately does not sign the admin in; they return to
+  // /staff/sign-in and authenticate normally with the new password.
+  if (result.sessionToken) await setStaffSessionCookie(result.sessionToken);
   // Not a redirect() — the set-password page shows an activation
   // confirmation (role, who invited them) before the staff member moves
   // on themselves; the session cookie is already live.
   return { ok: true, data: { name: result.name, role: result.role } };
 }
 
-export async function resendStaffInvitation(staffId: string) {
+/** Verify OTP for password reset. Silent response (returns error only if > 5 bad attempts). */
+export async function verifyStaffPasswordResetOtp(email: string, code: string): Promise<{ ok: boolean }> {
+  const result = await core.verifyStaffPasswordResetOtpCore(email.trim().toLowerCase(), code.trim());
+  // Return silent response for UX consistency: only the too_many_attempts failure is user-facing
+  return { ok: result === "ok" };
+}
+
+/** Set password after OTP verification in password reset flow. */
+export async function setStaffPasswordAfterOtpReset(
+  _prev: FormActionState,
+  formData: FormData
+): Promise<FormActionState> {
+  const raw = formToObject(formData);
+  const email = (raw.email || "").trim().toLowerCase();
+  const code = (raw.code || "").trim();
+  const password = raw.password || "";
+
+  if (!email || !code || !password) {
+    return { values: raw, message: "Email, code, and password are required" };
+  }
+
+  const ip = await getClientIp();
+  const userAgent = await getUserAgent();
+  const result = await core.setStaffPasswordAfterOtpResetCore(email, code, password, ip, userAgent);
+
+  if (!result.ok) return { values: raw, message: "Password reset failed. Code may have expired or already been used." };
+
+  // Don't auto-login for password reset — user goes to /staff/sign-in
+  return { ok: true, data: { message: "Password updated successfully. Please sign in with your new password." } };
+}
+
+export async function resendStaffInvitation(staffId: string): Promise<{ emailSent: boolean }> {
   const actor = await requireStaffPermission(Permission.MANAGE_STAFF);
-  await core.resendStaffInvitationCore(staffId, actor.id);
+  return core.resendStaffInvitationCore(staffId, actor.id);
 }
 
 export async function requestStaffPasswordReset(email: string): Promise<void> {

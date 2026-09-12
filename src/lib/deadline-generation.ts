@@ -41,6 +41,8 @@ export async function generateDeadlinesForEnrolment(enrolmentId: string, db: Db 
     include: { intake: true },
   });
 
+  if (!enrolment.intake) return 0; // no deadlines without an intake start date
+
   const modules = await db.module.findMany({
     where: { programmeId: enrolment.programmeId },
     orderBy: { weekNumber: "asc" },

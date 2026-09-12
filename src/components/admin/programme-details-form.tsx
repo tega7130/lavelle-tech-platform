@@ -6,22 +6,16 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createCategory } from "@/app/actions/programme";
 import { finaliseUpload } from "@/app/actions/uploads";
+import { uploadToStorage, probeMediaDuration } from "@/lib/storage-upload";
 import { emptyActionState, type FormActionState } from "@/lib/action-state";
 import { Button, buttonClassName } from "@/components/ui/button";
 import { Label, Input, Textarea, FieldError } from "@/components/ui/field";
 import { Dialog } from "@/components/ui/dialog";
 
-async function uploadVideo(file: File) {
-  const signRes = await fetch("/api/uploads/sign", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ kind: "video", mimeType: file.type, bytes: file.size }),
-  });
-  if (!signRes.ok) throw new Error("Could not get an upload URL.");
-  const { storageKey, uploadUrl } = await signRes.json();
-  const putRes = await fetch(uploadUrl, { method: "PUT", body: file });
-  if (!putRes.ok) throw new Error("Upload failed.");
-  return finaliseUpload({ storageKey, kind: "video", mimeType: file.type, originalFilename: file.name });
+async function uploadCoverVideo(file: File) {
+  const durationSeconds = await probeMediaDuration(file);
+  const { storageKey, bytes } = await uploadToStorage(file, "programme", "video");
+  return finaliseUpload({ storageKey, kind: "video", mimeType: file.type, originalFilename: file.name, bytes, durationSeconds });
 }
 
 export interface CategoryOption {
@@ -102,7 +96,7 @@ export function ProgrammeDetailsForm({
     setVideoError(null);
     setVideoUploading(true);
     try {
-      const asset = await uploadVideo(file);
+      const asset = await uploadCoverVideo(file);
       setCoverVideoAsset({ id: asset.id, originalFilename: asset.originalFilename });
     } catch (err) {
       setVideoError(err instanceof Error ? err.message : "Upload failed.");

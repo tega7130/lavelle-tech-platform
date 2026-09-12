@@ -5,6 +5,7 @@ import { SiteFooter } from "@/components/site/site-footer";
 import { buttonClassName } from "@/components/ui/button";
 import { cn } from "@/lib/cn";
 import { getListingDetail, getPublishedListings } from "@/lib/website-reads";
+import { NotifyMeForm } from "@/components/site/notify-me-form";
 
 function ProgrammeVideo({ video, title }: { video: { embedUrl: string | null; directVideoUrl: string | null }; title: string }) {
   return (
@@ -19,7 +20,13 @@ function ProgrammeVideo({ video, title }: { video: { embedUrl: string | null; di
         />
       ) : (
         // eslint-disable-next-line jsx-a11y/media-has-caption
-        <video src={video.directVideoUrl!} controls className="h-full w-full" />
+        <video
+          src={video.directVideoUrl!}
+          controls
+          controlsList="nodownload noremoteplayback"
+          disablePictureInPicture
+          className="h-full w-full"
+        />
       )}
     </div>
   );
@@ -56,7 +63,7 @@ export default async function ProgrammeDetailPage({ params }: { params: Promise<
                   {detail.tierLabel}
                 </span>
                 <span className="text-[12px] text-neutral-600">
-                  {detail.code} · September 2026 intake
+                  {detail.code}
                 </span>
               </div>
               <h1 className="font-heading font-semibold text-[26px] sm:text-[30px] lg:text-[38px] leading-[1.12] mt-4 max-w-[22ch] tracking-[-0.022em]">{detail.title}</h1>
@@ -127,9 +134,20 @@ export default async function ProgrammeDetailPage({ params }: { params: Promise<
             {/* fee panel */}
             <div className="lg:sticky lg:top-8 rounded-2xl overflow-hidden border border-accent-200 shadow-[0_18px_44px_rgba(19,26,46,0.1)] bg-bg">
               <div className="px-[26px] pt-[26px] pb-[22px] bg-[linear-gradient(158deg,#0c356f,#08234a)] text-white">
-                <div className="text-[10px] tracking-[0.14em] uppercase text-accent-2">Programme fee</div>
-                <div className="font-heading font-bold text-[28px] sm:text-[32px] lg:text-[36px] leading-none mt-[10px]">{detail.fee}</div>
-                <div className="text-[12px] text-white/66 mt-2">{detail.feeNote}</div>
+                {detail.isComingSoon ? (
+                  <>
+                    <div className="text-[10px] tracking-[0.14em] uppercase text-accent-2">Coming soon</div>
+                    <div className="font-heading font-bold text-[22px] sm:text-[24px] leading-tight mt-[10px] max-w-[24ch]">
+                      {detail.comingSoonMessage || "We're putting the finishing touches on this programme."}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="text-[10px] tracking-[0.14em] uppercase text-accent-2">Programme fee</div>
+                    <div className="font-heading font-bold text-[28px] sm:text-[32px] lg:text-[36px] leading-none mt-[10px]">{detail.fee}</div>
+                    <div className="text-[12px] text-white/66 mt-2">{detail.feeNote}</div>
+                  </>
+                )}
               </div>
 
               <div className="px-[26px] pt-6 pb-[26px]">
@@ -144,7 +162,11 @@ export default async function ProgrammeDetailPage({ params }: { params: Promise<
                   </div>
                 )}
 
-                {detail.isArchived ? (
+                {detail.isComingSoon ? (
+                  <div className="mt-5">
+                    <NotifyMeForm listingId={detail.listingId} />
+                  </div>
+                ) : detail.isArchived ? (
                   <>
                     <div className="px-4 py-3 rounded-[9px] bg-neutral-100 border border-divider text-[12.5px] text-neutral-700 leading-relaxed text-center">
                       This programme is not currently open for enrolment.

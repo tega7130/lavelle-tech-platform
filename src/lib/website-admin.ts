@@ -11,6 +11,8 @@ export {
   publishListing,
   unpublishListing,
   reorderListings,
+  markComingSoon,
+  unmarkComingSoon,
   PublishCheckError,
   type UpsertListingInput,
   type PublishCheckFailure,

@@ -20,9 +20,12 @@ import {
   upsertQuiz,
   setLectureStatus,
   setQuizStatus,
+  setModuleStatus,
 } from "@/app/actions/programme-content";
 import { setProgrammeStatus } from "@/app/actions/programme";
 import { finaliseUpload } from "@/app/actions/uploads";
+import { uploadToStorage, probeMediaDuration } from "@/lib/storage-upload";
+import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import { formatNaira, statusLabel } from "@/lib/format";
 
 // ── Types — a plain mirror of getProgrammeContent()'s shape, kept free of
@@ -88,6 +91,7 @@ interface ModuleData {
   weekNumber: number;
   title: string;
   summary: string | null;
+  status: ContentStatus;
   examQuestionDraw: number;
   orderIndex: number;
   lectures: LectureData[];
@@ -157,16 +161,12 @@ function ContentStatusSelect({
 }
 
 async function uploadFile(file: File, kind: "audio" | "video" | "image" | "document") {
-  const signRes = await fetch("/api/uploads/sign", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ kind, mimeType: file.type, bytes: file.size }),
-  });
-  if (!signRes.ok) throw new Error("Could not get an upload URL.");
-  const { storageKey, uploadUrl } = await signRes.json();
-  const putRes = await fetch(uploadUrl, { method: "PUT", body: file });
-  if (!putRes.ok) throw new Error("Upload failed.");
-  return finaliseUpload({ storageKey, kind, mimeType: file.type, originalFilename: file.name });
+  // Duration no longer comes free from the upload response (Spaces doesn't
+  // probe media the way Cloudinary's upload API used to) — read it from
+  // the browser's own media metadata before uploading instead.
+  const durationSeconds = kind === "audio" || kind === "video" ? await probeMediaDuration(file) : null;
+  const { storageKey, bytes } = await uploadToStorage(file, "programme", kind);
+  return finaliseUpload({ storageKey, kind, mimeType: file.type, originalFilename: file.name, bytes, durationSeconds });
 }
 
 export function ProgrammeContentEditor({ programme }: { programme: ProgrammeData }) {
@@ -222,6 +222,16 @@ export function ProgrammeContentEditor({ programme }: { programme: ProgrammeData
     setBusy(true);
     try {
       await setQuizStatus(quizId, status);
+      refresh();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleSetModuleStatus(moduleId: string, status: ContentStatus) {
+    setBusy(true);
+    try {
+      await setModuleStatus(moduleId, status);
       refresh();
     } finally {
       setBusy(false);
@@ -359,6 +369,13 @@ export function ProgrammeContentEditor({ programme }: { programme: ProgrammeData
                     <span className="ml-auto text-[11.5px] text-neutral-600">{mod.lectures.length} lectures</span>
                     <span className="text-xs text-neutral-500">{expanded === mod.id ? "▾" : "▸"}</span>
                   </button>
+                  <span onClick={(e) => e.stopPropagation()}>
+                    <ContentStatusSelect
+                      value={mod.status}
+                      disabled={busy}
+                      onChange={(status) => handleSetModuleStatus(mod.id, status)}
+                    />
+                  </span>
                 </div>
 
                 {expanded === mod.id && (
@@ -942,29 +959,89 @@ function SlideNarrationList({ lecture, onSaved }: { lecture: LectureData; onSave
 }
 
 function ScenarioTab({ lecture, onSaved }: { lecture: LectureData; onSaved: () => void }) {
+  const promptRef = React.useRef(lecture.scenarioPrompt ?? "");
+  const guidanceRef = React.useRef(lecture.scenarioGuidance ?? "");
+  const [saving, setSaving] = React.useState(false);
+  const [saved, setSaved] = React.useState(false);
+
+  async function save() {
+    setSaving(true);
+    setSaved(false);
+    try {
+      await updateLecture(lecture.id, { scenarioPrompt: promptRef.current, scenarioGuidance: guidanceRef.current });
+      onSaved();
+      setSaved(true);
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
-    <div>
-      <label className="mb-1.5 block text-xs font-medium text-neutral-700">Practical scenario shown to candidates</label>
-      <textarea
-        defaultValue={lecture.scenarioPrompt ?? ""}
-        rows={6}
-        onBlur={(e) => updateLecture(lecture.id, { scenarioPrompt: e.target.value }).then(onSaved)}
-        className="w-full rounded-md border border-neutral-300 bg-bg px-3 py-2 text-sm"
-      />
+    <div className="flex flex-col gap-4">
+      <div>
+        <label className="mb-1.5 block text-xs font-medium text-neutral-700">Practical scenario shown to candidates</label>
+        <RichTextEditor
+          key={lecture.id}
+          value={lecture.scenarioPrompt ?? ""}
+          onChange={(markup) => {
+            promptRef.current = markup;
+            setSaved(false);
+          }}
+          minHeightPx={140}
+        />
+      </div>
+      <div>
+        <label className="mb-1.5 block text-xs font-medium text-neutral-700">Guidance shown after the scenario (optional)</label>
+        <RichTextEditor
+          key={lecture.id}
+          value={lecture.scenarioGuidance ?? ""}
+          onChange={(markup) => {
+            guidanceRef.current = markup;
+            setSaved(false);
+          }}
+          minHeightPx={100}
+        />
+      </div>
+      <div className="flex items-center gap-2">
+        <Button onClick={save} disabled={saving} className="px-[11px] py-[5px] text-xs">
+          {saving ? "Saving…" : "Save"}
+        </Button>
+        {saved && !saving && <span className="text-xs text-neutral-500">Saved</span>}
+      </div>
     </div>
   );
 }
 
 function DraftingTab({ lecture, onSaved }: { lecture: LectureData; onSaved: () => void }) {
+  const promptRef = React.useRef(lecture.draftingPrompt ?? "");
+  const wordLimitRef = React.useRef(lecture.draftingWordLimit ?? undefined);
+  const [saving, setSaving] = React.useState(false);
+  const [saved, setSaved] = React.useState(false);
+
+  async function save() {
+    setSaving(true);
+    setSaved(false);
+    try {
+      await updateLecture(lecture.id, { draftingPrompt: promptRef.current, draftingWordLimit: wordLimitRef.current });
+      onSaved();
+      setSaved(true);
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <div className="flex flex-col gap-3">
       <div>
         <label className="mb-1.5 block text-xs font-medium text-neutral-700">Exercise prompt</label>
-        <textarea
-          defaultValue={lecture.draftingPrompt ?? ""}
-          rows={3}
-          onBlur={(e) => updateLecture(lecture.id, { draftingPrompt: e.target.value }).then(onSaved)}
-          className="w-full rounded-md border border-neutral-300 bg-bg px-3 py-2 text-sm"
+        <RichTextEditor
+          key={lecture.id}
+          value={lecture.draftingPrompt ?? ""}
+          onChange={(markup) => {
+            promptRef.current = markup;
+            setSaved(false);
+          }}
+          minHeightPx={100}
         />
       </div>
       <div className="w-40">
@@ -972,11 +1049,18 @@ function DraftingTab({ lecture, onSaved }: { lecture: LectureData; onSaved: () =
         <input
           type="number"
           defaultValue={lecture.draftingWordLimit ?? undefined}
-          onBlur={(e) =>
-            updateLecture(lecture.id, { draftingWordLimit: e.target.value ? Number(e.target.value) : undefined }).then(onSaved)
-          }
+          onChange={(e) => {
+            wordLimitRef.current = e.target.value ? Number(e.target.value) : undefined;
+            setSaved(false);
+          }}
           className="h-9 w-full rounded-md border border-neutral-300 bg-bg px-2.5 text-sm"
         />
+      </div>
+      <div className="flex items-center gap-2">
+        <Button onClick={save} disabled={saving} className="px-[11px] py-[5px] text-xs">
+          {saving ? "Saving…" : "Save"}
+        </Button>
+        {saved && !saving && <span className="text-xs text-neutral-500">Saved</span>}
       </div>
     </div>
   );

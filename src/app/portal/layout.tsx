@@ -5,6 +5,7 @@ import { listCandidateNotifications } from "@/lib/candidate-notifications";
 import { getCandidateIdCard, getCandidateCohortStatus } from "@/lib/profile-reads";
 import { CandidateShell } from "@/components/shell/candidate-shell";
 import { SessionExpiryBanner } from "@/components/shell/session-expiry-banner";
+import { ToastProvider } from "@/components/ui/toast";
 
 export default async function PortalLayout({ children }: { children: React.ReactNode }) {
   const candidate = await getCurrentCandidate();
@@ -19,7 +20,7 @@ export default async function PortalLayout({ children }: { children: React.React
 
   return (
     <>
-      <SessionExpiryBanner expiresAt={candidate.sessionExpiresAt} signInPath="/sign-in" />
+      <SessionExpiryBanner expiresAt={candidate.sessionExpiresAt.toISOString()} signInPath="/sign-in" />
       <CandidateShell
         candidate={{
           name: `${candidate.firstName} ${candidate.lastName}`,
@@ -31,7 +32,7 @@ export default async function PortalLayout({ children }: { children: React.React
         onSignOut={signOutCandidate}
         initialNotifications={notifications}
       >
-        {children}
+        <ToastProvider>{children}</ToastProvider>
       </CandidateShell>
     </>
   );

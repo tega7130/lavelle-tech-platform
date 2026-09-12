@@ -76,7 +76,7 @@ export function SupportThread({ request }: { request: Thread }) {
       </Link>
 
       <div className="flex items-center justify-between mt-3 mb-[var(--space-3)]">
-        <div>
+        <div className="flex-1">
           <CardKicker>{request.category}</CardKicker>
           <h1 className="font-heading text-xl">{request.subject}</h1>
           <div className="text-neutral-600 text-[12.5px]">
@@ -89,7 +89,10 @@ export function SupportThread({ request }: { request: Thread }) {
               </>
             ) : (
               <>
-                {request.guestName} &middot; {request.guestEmail} &middot; <span className="uppercase tracking-[0.06em] text-[10px]">Website enquiry</span>
+                {request.guestName} &middot; {request.guestEmail}
+                {request.enquiry?.phone && <> &middot; {request.enquiry.phone}</>}
+                {request.enquiry?.programmeOfInterest && <> &middot; {request.enquiry.programmeOfInterest.title}</>}
+                {" "}<span className="uppercase tracking-[0.06em] text-[10px]">Website enquiry</span>
               </>
             )}
           </div>
@@ -121,7 +124,29 @@ export function SupportThread({ request }: { request: Thread }) {
         </div>
       )}
 
+      {!request.candidate && request.enquiry && (
+        <div className="px-4 py-3 rounded-md bg-neutral-50 border border-divider mb-[var(--space-4)]">
+          <div className="text-[11px] text-neutral-500 tracking-[0.1em] uppercase mb-2">Enquiry Details</div>
+          <div className="text-[12.5px] text-neutral-700 space-y-1">
+            <div><strong>Name:</strong> {request.guestName}</div>
+            <div><strong>Email:</strong> {request.guestEmail}</div>
+            {request.enquiry.phone && <div><strong>Phone:</strong> {request.enquiry.phone}</div>}
+            {request.enquiry.programmeOfInterest && <div><strong>Programme:</strong> {request.enquiry.programmeOfInterest.title}</div>}
+          </div>
+        </div>
+      )}
+
       <div className="flex flex-col gap-2 mb-[var(--space-4)]">
+        {!request.candidate && (
+          <div className="self-start max-w-[70%]">
+            <Card elev="sm">
+              <div className="text-[13px]">{request.body}</div>
+              <div className="text-[11px] text-neutral-500 mt-1">
+                {request.guestName} · {new Date(request.createdAt).toLocaleString("en-NG", { dateStyle: "medium", timeStyle: "short" })}
+              </div>
+            </Card>
+          </div>
+        )}
         {request.messages.map((m) => (
           <div key={m.id} className={m.authorStaff ? "self-end max-w-[70%]" : "self-start max-w-[70%]"}>
             <Card elev="sm" className={m.authorStaff ? "bg-accent-100" : ""}>

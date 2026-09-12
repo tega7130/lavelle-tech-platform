@@ -83,6 +83,29 @@ export async function updateModule(moduleId: string, input: unknown) {
   return updated;
 }
 
+/**
+ * DRAFT/PUBLISHED/ARCHIVED, the umbrella control above a lecture's own
+ * status — a DRAFT/ARCHIVED module drops its entire subtree out of the
+ * candidate-facing tree (loadModuleTree in player-reads.ts only loads
+ * PUBLISHED modules) regardless of what any individual lecture inside it
+ * is set to. Never a hard delete, same rule as setLectureStatus below.
+ */
+export async function setModuleStatus(moduleId: string, status: ContentStatus) {
+  const staff = await requireStaffPermission(Permission.MANAGE_PROGRAMMES);
+
+  const updated = await prisma.module.update({ where: { id: moduleId }, data: { status } });
+
+  await recordAuditEvent(prisma, {
+    actorStaffId: staff.id,
+    subjectType: "programme",
+    subjectId: updated.programmeId,
+    action: "programme.module_status_changed",
+    description: `Changed module "${updated.title}" status to ${status}`,
+  });
+  await revalidateContent(updated.programmeId);
+  return updated;
+}
+
 /** Writes orderIndex for the whole set in one transaction (rule 9) — never insertion order or createdAt for sequence. */
 export async function reorderModules(programmeId: string, orderedModuleIds: string[]) {
   const staff = await requireStaffPermission(Permission.MANAGE_PROGRAMMES);

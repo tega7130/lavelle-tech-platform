@@ -148,3 +148,56 @@ export async function reorderListings(orderedProgrammeIds: string[]) {
     )
   );
 }
+
+/**
+ * Coming Soon: a published listing that's visible on both catalogues but
+ * not yet purchasable — no fee shown, initiatePayment/initiateGuestCheckout
+ * refuse it server-side (see payment-errors.ts), and it's excluded from the
+ * homepage's "X programmes available" count (that stat counts what a
+ * candidate can actually enrol in today, not what's coming).
+ */
+export async function markComingSoon(programmeId: string, message: string | null, actingStaffId: string) {
+  const listing = await prisma.programmeListing.findUnique({ where: { programmeId }, include: { programme: { select: { title: true } } } });
+  if (!listing) throw new ListingNotFoundError();
+
+  await prisma.$transaction(async (tx) => {
+    await tx.programmeListing.update({
+      where: { programmeId },
+      data: { isComingSoon: true, comingSoonMessage: message },
+    });
+    await recordAuditEvent(tx, {
+      actorStaffId: actingStaffId,
+      subjectType: "programme_listing",
+      subjectId: listing.id,
+      action: "listing.marked_coming_soon",
+      description: `Marked the ${listing.programme.title} listing as Coming Soon`,
+    });
+  });
+}
+
+/**
+ * Going live: clears the flag and, in the same transaction, snapshots
+ * every not-yet-notified subscriber so sendProgrammeGoLiveNotification
+ * (called by the caller, outside the transaction — it sends email) knows
+ * exactly who to email without a second read racing a fresh subscription.
+ */
+export async function unmarkComingSoon(programmeId: string, actingStaffId: string) {
+  const listing = await prisma.programmeListing.findUnique({ where: { programmeId }, include: { programme: { select: { title: true } } } });
+  if (!listing) throw new ListingNotFoundError();
+
+  await prisma.$transaction(async (tx) => {
+    await tx.programmeListing.update({
+      where: { programmeId },
+      data: { isComingSoon: false, comingSoonMessage: null },
+    });
+    await recordAuditEvent(tx, {
+      actorStaffId: actingStaffId,
+      subjectType: "programme_listing",
+      subjectId: listing.id,
+      action: "listing.unmarked_coming_soon",
+      description: `Marked the ${listing.programme.title} listing as open for enrolment (was Coming Soon)`,
+    });
+  });
+
+  return listing.id;
+}

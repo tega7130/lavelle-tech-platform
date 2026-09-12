@@ -14,15 +14,17 @@ export async function getPublishedBlogPosts() {
     orderBy: { publishedAt: "desc" },
     include: { heroAsset: { select: { storageKey: true } } },
   });
-  return rows.map((p) => ({
-    slug: p.slug,
-    title: p.title,
-    excerpt: p.excerpt,
-    tags: (p.tags as string[] | null) ?? [],
-    authorName: p.authorName,
-    publishedAt: p.publishedAt!,
-    heroImageUrl: p.heroAsset ? getSignedAssetUrl(p.heroAsset.storageKey) : null,
-  }));
+  return Promise.all(
+    rows.map(async (p) => ({
+      slug: p.slug,
+      title: p.title,
+      excerpt: p.excerpt,
+      tags: (p.tags as string[] | null) ?? [],
+      authorName: p.authorName,
+      publishedAt: p.publishedAt!,
+      heroImageUrl: p.heroAsset ? await getSignedAssetUrl(p.heroAsset.storageKey) : null,
+    }))
+  );
 }
 
 /** Returns null if the post doesn't exist or isn't published — same shape as getListingDetail's not-published-returns-null rule. */
@@ -41,6 +43,6 @@ export async function getPublishedBlogPost(slug: string) {
     tags: (post.tags as string[] | null) ?? [],
     authorName: post.authorName,
     publishedAt: post.publishedAt!,
-    heroImageUrl: post.heroAsset ? getSignedAssetUrl(post.heroAsset.storageKey) : null,
+    heroImageUrl: post.heroAsset ? await getSignedAssetUrl(post.heroAsset.storageKey) : null,
   };
 }

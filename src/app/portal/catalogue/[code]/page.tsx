@@ -1,21 +1,23 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getProgrammeDetail } from "@/lib/catalogue-reads";
+import { getCurrentCandidate } from "@/lib/candidate-session";
 import { formatNaira, tierLabel, youtubeEmbedUrl } from "@/lib/format";
 import { getSignedAssetUrl } from "@/lib/storage";
 import { Card, CardKicker } from "@/components/ui/card";
 import { Tag } from "@/components/ui/tag";
 import { buttonClassName } from "@/components/ui/button";
 import { EnrolButton } from "@/components/portal/enrol-button";
+import { NotifyMeForm } from "@/components/site/notify-me-form";
 
 export default async function ProgrammeDetailPage({ params }: { params: Promise<{ code: string }> }) {
   const { code } = await params;
-  const programme = await getProgrammeDetail(code);
+  const [programme, candidate] = await Promise.all([getProgrammeDetail(code), getCurrentCandidate()]);
   if (!programme) notFound();
 
   const embedUrl = programme.coverVideoUrl ? youtubeEmbedUrl(programme.coverVideoUrl) : null;
   const directVideoUrl = programme.coverVideoAsset
-    ? getSignedAssetUrl(programme.coverVideoAsset.storageKey)
+    ? await getSignedAssetUrl(programme.coverVideoAsset.storageKey)
     : !embedUrl
       ? programme.coverVideoUrl
       : null;
@@ -44,7 +46,13 @@ export default async function ProgrammeDetailPage({ params }: { params: Promise<
             />
           ) : (
             // eslint-disable-next-line jsx-a11y/media-has-caption
-            <video src={directVideoUrl!} controls className="h-full w-full" />
+            <video
+              src={directVideoUrl!}
+              controls
+              controlsList="nodownload noremoteplayback"
+              disablePictureInPicture
+              className="h-full w-full"
+            />
           )}
         </div>
       )}
@@ -79,18 +87,29 @@ export default async function ProgrammeDetailPage({ params }: { params: Promise<
         </div>
 
         <Card elev="md" className="h-fit">
-          <CardKicker>Intake</CardKicker>
-          <div className="text-[15px]">Next open intake</div>
-          <div className="border-t border-dashed border-neutral-300 my-2" />
-          <CardKicker>Programme fee</CardKicker>
-          <div className="font-heading text-[26px]">{formatNaira(programme.feeMinor)}</div>
-          <div className="text-[12px] text-neutral-500 mb-2">Nigerian rails &amp; international cards accepted</div>
-          {programme.viewerEnrolled ? (
-            <Link href={`/portal/programme?programme=${code}`} className={buttonClassName("secondary", "w-full justify-center")}>
-              Enrolled — go to programme
-            </Link>
+          {programme.isComingSoon ? (
+            <>
+              <div className="flex items-center gap-2 mb-1">
+                <Tag variant="warning">Coming soon</Tag>
+              </div>
+              <div className="text-[13px] text-neutral-700 leading-[1.55] mb-3">
+                {programme.comingSoonMessage || "We're putting the finishing touches on this programme."}
+              </div>
+              <NotifyMeForm listingId={programme.listingId!} initialEmail={candidate?.email} />
+            </>
           ) : (
-            <EnrolButton programmeId={programme.id} label="Enrol now" />
+            <>
+              <CardKicker>Programme fee</CardKicker>
+              <div className="font-heading text-[26px]">{formatNaira(programme.feeMinor)}</div>
+              <div className="text-[12px] text-neutral-500 mb-2">Nigerian rails &amp; international cards accepted</div>
+              {programme.viewerEnrolled ? (
+                <Link href={`/portal/programme?programme=${code}`} className={buttonClassName("secondary", "w-full justify-center")}>
+                  Enrolled — go to programme
+                </Link>
+              ) : (
+                <EnrolButton programmeId={programme.id} label="Enrol now" />
+              )}
+            </>
           )}
         </Card>
       </div>

@@ -9,8 +9,15 @@ import { Textarea, Field, Label, Input } from "@/components/ui/field";
 import { Dialog } from "@/components/ui/dialog";
 import { cn } from "@/lib/cn";
 import { formatNaira, tierLabel } from "@/lib/format";
-import { upsertListingAction, publishListingAction, unpublishListingAction } from "@/app/actions/website-admin";
+import {
+  upsertListingAction,
+  publishListingAction,
+  unpublishListingAction,
+  markComingSoonAction,
+  unmarkComingSoonAction,
+} from "@/app/actions/website-admin";
 import { finaliseUpload } from "@/app/actions/uploads";
+import { uploadToStorage, probeMediaDuration } from "@/lib/storage-upload";
 import type { getListingForEditor } from "@/lib/website-admin";
 
 type ListingData = Awaited<ReturnType<typeof getListingForEditor>>;
@@ -23,16 +30,9 @@ const TABS: { key: TabKey; label: string }[] = [
 ];
 
 async function uploadVideo(file: File) {
-  const signRes = await fetch("/api/uploads/sign", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ kind: "video", mimeType: file.type, bytes: file.size }),
-  });
-  if (!signRes.ok) throw new Error("Could not get an upload URL.");
-  const { storageKey, uploadUrl } = await signRes.json();
-  const putRes = await fetch(uploadUrl, { method: "PUT", body: file });
-  if (!putRes.ok) throw new Error("Upload failed.");
-  return finaliseUpload({ storageKey, kind: "video", mimeType: file.type, originalFilename: file.name });
+  const durationSeconds = await probeMediaDuration(file);
+  const { storageKey, bytes } = await uploadToStorage(file, "programme", "video");
+  return finaliseUpload({ storageKey, kind: "video", mimeType: file.type, originalFilename: file.name, bytes, durationSeconds });
 }
 
 export function WebsiteListingEditor({ listing: programme, initialTab }: { listing: ListingData; initialTab: TabKey }) {
@@ -56,8 +56,11 @@ export function WebsiteListingEditor({ listing: programme, initialTab }: { listi
   const [notice, setNotice] = React.useState<string | null>(null);
   const [unpublishing, setUnpublishing] = React.useState(false);
   const [reason, setReason] = React.useState("");
+  const [comingSoonMessage, setComingSoonMessage] = React.useState(existing?.comingSoonMessage ?? "");
+  const [comingSoonBusy, setComingSoonBusy] = React.useState(false);
 
   const isPublished = existing?.isPublished ?? false;
+  const isComingSoon = existing?.isComingSoon ?? false;
   const totalLectures = programme.modules.reduce((sum, m) => sum + m.lectures.length, 0);
 
   // Shallow URL sync only — the tab itself is local state, switched
@@ -138,6 +141,25 @@ export function WebsiteListingEditor({ listing: programme, initialTab }: { listi
     }
   }
 
+  async function toggleComingSoon() {
+    setComingSoonBusy(true);
+    setError(null);
+    try {
+      if (isComingSoon) {
+        await unmarkComingSoonAction(programme.id);
+        setNotice("This programme is now open for enrolment. Subscribers who asked to be notified have been emailed.");
+      } else {
+        await markComingSoonAction(programme.id, comingSoonMessage.trim() || null);
+        setNotice("Marked Coming Soon. Visitors see the listing with no price and can leave their email to be notified.");
+      }
+      router.refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not update Coming Soon.");
+    } finally {
+      setComingSoonBusy(false);
+    }
+  }
+
   // Status note: an error always wins, then a just-saved confirmation,
   // then a steady-state description of what the current publish state
   // means for a visitor — visible regardless of which tab is open, same
@@ -189,6 +211,32 @@ export function WebsiteListingEditor({ listing: programme, initialTab }: { listi
             <span className="flex-none font-bold">{statusNote.tone === "error" ? "!" : statusNote.tone === "success" ? "✓" : "i"}</span>
             <div className="text-wrap-pretty">{statusNote.text}</div>
           </div>
+
+          {isPublished && (
+            <div className="flex flex-col gap-3 px-4 py-3 rounded-md mt-3 border border-divider bg-neutral-100">
+              <div className="flex items-center justify-between gap-4 flex-wrap">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-[13px]">Coming Soon</span>
+                    {isComingSoon && <Tag variant="warning">Active</Tag>}
+                  </div>
+                  <div className="text-neutral-600 text-[11.5px] leading-[1.5] mt-1 max-w-[52ch]">
+                    Visible on the website and candidate portal catalogues with no price and no enrol button. Visitors can leave
+                    their email to be notified the moment you turn this off.
+                  </div>
+                </div>
+                <Button variant={isComingSoon ? "secondary" : "primary"} className="h-9 text-[12.5px]" disabled={comingSoonBusy} onClick={toggleComingSoon}>
+                  {isComingSoon ? "Open for enrolment" : "Mark Coming Soon"}
+                </Button>
+              </div>
+              {!isComingSoon && (
+                <Field>
+                  <Label>Optional message (e.g. &ldquo;Launching soon&rdquo;)</Label>
+                  <Input value={comingSoonMessage} onChange={(e) => setComingSoonMessage(e.target.value)} placeholder="Coming soon" />
+                </Field>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="flex gap-1 border-b border-divider mt-4">

@@ -41,7 +41,11 @@ async function loadOwnedEnrolment(candidateId: string, enrolmentId: string) {
 async function loadModuleTree(enrolmentId: string, programmeId: string) {
   const [modules, progressRows, releaseDeadlines, quizAttempts] = await Promise.all([
     prisma.module.findMany({
-      where: { programmeId },
+      // PUBLISHED only — a DRAFT/ARCHIVED module drops its whole subtree
+      // out of the candidate-facing programme, regardless of any
+      // individual lecture's own status (module status is the umbrella
+      // control; lecture status only matters once its module is PUBLISHED).
+      where: { programmeId, status: "PUBLISHED" },
       orderBy: { orderIndex: "asc" },
       include: {
         // PUBLISHED only — DRAFT (not yet released) and ARCHIVED (soft-
@@ -178,13 +182,15 @@ export async function getLecturePlayer(candidateId: string, enrolmentId: string,
     },
   });
 
-  const slides = lecture.slides.map((s) => ({
-    id: s.id,
-    title: s.title,
-    body: s.body,
-    imageUrl: s.imageAsset ? getSignedAssetUrl(s.imageAsset.storageKey) : null,
-    narrationUrl: s.narrationAsset ? getSignedAssetUrl(s.narrationAsset.storageKey) : null,
-  }));
+  const slides = await Promise.all(
+    lecture.slides.map(async (s) => ({
+      id: s.id,
+      title: s.title,
+      body: s.body,
+      imageUrl: s.imageAsset ? await getSignedAssetUrl(s.imageAsset.storageKey) : null,
+      narrationUrl: s.narrationAsset ? await getSignedAssetUrl(s.narrationAsset.storageKey) : null,
+    }))
+  );
 
   const [progress, draftingSubmission, lectureNote] = await Promise.all([
     prisma.lectureProgress.findUnique({ where: { enrolmentId_lectureId: { enrolmentId, lectureId } } }),
@@ -221,11 +227,11 @@ export async function getLecturePlayer(candidateId: string, enrolmentId: string,
       id: lecture.id,
       title: lecture.title,
       mediaKind: lecture.mediaKind,
-      videoUrl: lecture.videoAsset ? getSignedAssetUrl(lecture.videoAsset.storageKey) : lecture.videoUrl,
+      videoUrl: lecture.videoAsset ? await getSignedAssetUrl(lecture.videoAsset.storageKey) : lecture.videoUrl,
       narrationMode: lecture.narrationMode,
       narrationAutoAdvance: lecture.narrationAutoAdvance,
       narrationRequireFull: lecture.narrationRequireFull,
-      fullNarrationUrl: lecture.fullNarrationAsset ? getSignedAssetUrl(lecture.fullNarrationAsset.storageKey) : null,
+      fullNarrationUrl: lecture.fullNarrationAsset ? await getSignedAssetUrl(lecture.fullNarrationAsset.storageKey) : null,
       scenarioPrompt: lecture.scenarioPrompt,
       scenarioGuidance: lecture.scenarioGuidance,
       draftingPrompt: lecture.draftingPrompt,
@@ -305,8 +311,8 @@ export async function listCandidateProgrammes(candidateId: string) {
         programmeTitle: e.programme.title,
         programmeCode: e.programme.code,
         tier: e.programme.tier,
-        intakeMonth: e.intake.month,
-        intakeYear: e.intake.year,
+        intakeMonth: e.intake?.month ?? null,
+        intakeYear: e.intake?.year ?? null,
         enrolledAt: e.enrolledAt,
         completedLectures: completed,
         totalLectures: total,

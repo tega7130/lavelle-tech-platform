@@ -66,7 +66,8 @@ export function ProgrammesList({ programmes }: { programmes: Programmes }) {
                     </div>
                     <div className="font-heading font-semibold text-[16px] mt-1.5">{p.programmeTitle}</div>
                     <div className="text-neutral-500 text-[12px] mt-1">
-                      {p.programmeCode} &middot; {intakeLabel(p.intakeMonth, p.intakeYear)} intake
+                      {p.programmeCode}
+                      {p.intakeMonth && p.intakeYear && <> &middot; {intakeLabel(p.intakeMonth, p.intakeYear)} intake</>}
                       {p.enrolledAt && ` · enrolled ${p.enrolledAt.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" })}`}
                     </div>
                   </div>

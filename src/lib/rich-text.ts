@@ -56,6 +56,17 @@ export function serializeEditableDom(root: HTMLElement): string {
     return text.length > 0 ? `${marker}${text}` : "";
   }
 
+  /** UL/OL -> its markup lines, or null if el isn't a list / has no items. */
+  function extractListBlock(el: Element): string | null {
+    if (el.tagName !== "UL" && el.tagName !== "OL") return null;
+    const marker = el.tagName === "UL" ? "- " : "1. ";
+    const lines = Array.from(el.children)
+      .filter((c) => c.tagName === "LI")
+      .map((li) => lineFromListItem(li as HTMLElement, marker))
+      .filter((line) => line.length > 0); // Skip empty list items
+    return lines.length ? lines.join("\n") : null;
+  }
+
   const blocks: string[] = [];
   for (const node of Array.from(root.childNodes)) {
     if (node.nodeType === Node.TEXT_NODE) {
@@ -65,16 +76,29 @@ export function serializeEditableDom(root: HTMLElement): string {
     }
     if (node.nodeType !== Node.ELEMENT_NODE) continue;
     const el = node as HTMLElement;
-    if (el.tagName === "UL" || el.tagName === "OL") {
-      const marker = el.tagName === "UL" ? "- " : "1. ";
-      const lines = Array.from(el.children)
-        .filter((c) => c.tagName === "LI")
-        .map((li) => lineFromListItem(li as HTMLElement, marker))
-        .filter((line) => line.length > 0); // Skip empty list items
-      if (lines.length) blocks.push(lines.join("\n"));
+
+    const directList = extractListBlock(el);
+    if (directList) {
+      blocks.push(directList);
       continue;
     }
     if (el.tagName === "BR") continue; // stray top-level break between blocks — the blank-line separator already carries that
+
+    // Chrome's insertOrderedList/insertUnorderedList sometimes nests the
+    // new list INSIDE the original block instead of replacing it (e.g.
+    // toggling "Numbered" on a <p> can leave <p><ol>...</ol></p>). When
+    // that wrapper's only real content is the nested list, unwrap it here
+    // — otherwise the generic paragraph branch below walks the list as
+    // plain inline text and the "1./2./3." markers vanish silently.
+    const onlyChildEl = el.children.length === 1 ? el.children[0]! : null;
+    if (onlyChildEl && (el.textContent ?? "").trim() === (onlyChildEl.textContent ?? "").trim()) {
+      const nestedList = extractListBlock(onlyChildEl);
+      if (nestedList) {
+        blocks.push(nestedList);
+        continue;
+      }
+    }
+
     let text = "";
     for (const child of Array.from(el.childNodes)) text += serializeInline(child, false, false);
     text = text.trim();

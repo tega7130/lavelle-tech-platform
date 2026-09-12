@@ -31,6 +31,7 @@ export async function getSupportRequestThread(id: string) {
     where: { id },
     include: {
       candidate: { select: { id: true, firstName: true, lastName: true, candidateNumber: true, applicantNumber: true, email: true } },
+      enquiry: { select: { phone: true, programmeOfInterest: { select: { id: true, title: true, code: true } } } },
       assignedStaff: { select: { id: true, name: true } },
       assignedByStaff: { select: { name: true } },
       resolvedByStaff: { select: { name: true } },
@@ -74,6 +75,10 @@ export async function listMyRequests(candidateId: string) {
     orderBy: { createdAt: "desc" },
     select: { id: true, subject: true, category: true, status: true, priority: true, createdAt: true },
   });
+}
+
+export async function countOpenSupportRequests() {
+  return prisma.supportRequest.count({ where: { status: RequestStatus.OPEN } });
 }
 
 /**

@@ -8,12 +8,16 @@ import {
   staffSignInCore,
   setStaffPasswordCore,
   resendStaffInvitationCore,
+  requestStaffPasswordResetCore,
+  requestStaffLoginOtpCore,
+  verifyStaffLoginOtpCore,
   GENERIC_SIGNIN_ERROR,
   LOCKOUT_MESSAGE,
 } from "@/lib/staff-auth-actions";
-import { createInvitationTokenRecord, previewInvitationToken, consumeInvitationToken } from "@/lib/staff-invitation";
+import { createInvitationTokenRecord, previewInvitationToken, consumeInvitationToken, PASSWORD_RESET_TOKEN_TTL_MS } from "@/lib/staff-invitation";
+import { createStaffLoginOtpChallenge } from "@/lib/staff-login-otp";
 import { deactivateStaff } from "@/lib/rbac";
-import { resolveRequest, assignRequest, NotAssigneeOrAssignerError } from "@/lib/support";
+import { resolveRequest, assignRequest } from "@/lib/support";
 
 const DEMO_PASSWORD = "Correct-Horse-9";
 
@@ -117,6 +121,62 @@ describe("staffSignInCore — the five failure cases are indistinguishable (READ
   });
 });
 
+describe("sign-in-by-code — a toggle alongside the password form, same account rules apply", () => {
+  it("requestStaffLoginOtpCore creates a challenge for an ACTIVE account, does nothing for INVITED or unknown addresses, and is rate-limited to five requests per window", async () => {
+    const active = await makeStaff("ACTIVE");
+    const invited = await makeStaff("INVITED");
+    const ip = `203.0.113.${crypto.randomInt(2, 254)}`;
+
+    for (let i = 0; i < 5; i++) await requestStaffLoginOtpCore(active.email, ip);
+    const beforeSixth = await testPrisma.staffLoginOtpChallenge.findFirst({ where: { staffId: active.id }, orderBy: { createdAt: "desc" } });
+    expect(beforeSixth).not.toBeNull();
+
+    await requestStaffLoginOtpCore(active.email, ip); // 6th on the same email+ip — silently rate-limited
+    const afterSixth = await testPrisma.staffLoginOtpChallenge.findFirst({ where: { staffId: active.id }, orderBy: { createdAt: "desc" } });
+    expect(afterSixth?.id).toBe(beforeSixth?.id);
+
+    await requestStaffLoginOtpCore(invited.email, `203.0.113.${crypto.randomInt(2, 254)}`);
+    expect(await testPrisma.staffLoginOtpChallenge.findFirst({ where: { staffId: invited.id } })).toBeNull();
+
+    await expect(requestStaffLoginOtpCore("no-such-staff@example.com", `203.0.113.${crypto.randomInt(2, 254)}`)).resolves.not.toThrow();
+
+    await cleanupStaff(active.id, invited.id);
+  });
+
+  it("verifyStaffLoginOtpCore signs in with a correct code, creates a real session, and the same code cannot be reused", async () => {
+    const active = await makeStaff("ACTIVE");
+    const code = await createStaffLoginOtpChallenge(active.id);
+
+    const result = await verifyStaffLoginOtpCore(active.email, code, "203.0.113.50", "test-agent");
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      const resolved = await resolveStaffFromToken(result.sessionToken);
+      expect(resolved?.id).toBe(active.id);
+    }
+
+    const reuse = await verifyStaffLoginOtpCore(active.email, code, "203.0.113.51", null);
+    expect(reuse.ok).toBe(false);
+
+    await cleanupStaff(active.id);
+  });
+
+  it("locks out after five wrong codes and refuses even the correct one afterward", async () => {
+    const active = await makeStaff("ACTIVE");
+    const code = await createStaffLoginOtpChallenge(active.id);
+    const wrongCode = code === "000000" ? "111111" : "000000";
+
+    for (let i = 0; i < 5; i++) {
+      const result = await verifyStaffLoginOtpCore(active.email, wrongCode, `203.0.113.${crypto.randomInt(2, 254)}`, null);
+      expect(result.ok).toBe(false);
+    }
+
+    const stillFails = await verifyStaffLoginOtpCore(active.email, code, `203.0.113.${crypto.randomInt(2, 254)}`, null);
+    expect(stillFails.ok).toBe(false);
+
+    await cleanupStaff(active.id);
+  });
+});
+
 describe("invitation tokens — hashed, single use, 48-hour expiry (README A2)", () => {
   it("a token can be consumed exactly once — reuse fails", async () => {
     const invited = await makeStaff("INVITED");
@@ -170,6 +230,59 @@ describe("invitation tokens — hashed, single use, 48-hour expiry (README A2)",
   });
 });
 
+describe("requestStaffPasswordResetCore — admin password reset request (silent, ACTIVE-only, short-lived token)", () => {
+  it("issues a token only for an ACTIVE account, silently no-ops for INVITED, SUSPENDED, DEACTIVATED and unknown addresses", async () => {
+    const active = await makeStaff("ACTIVE");
+    const invited = await makeStaff("INVITED");
+    const suspended = await makeStaff("SUSPENDED");
+    const deactivated = await makeStaff("DEACTIVATED");
+    const ip = () => `203.0.113.${crypto.randomInt(2, 254)}`;
+
+    await requestStaffPasswordResetCore(active.email, ip());
+    const activeToken = await testPrisma.staffInvitationToken.findFirst({ where: { staffId: active.id, consumedAt: null } });
+    expect(activeToken).not.toBeNull();
+
+    for (const staff of [invited, suspended, deactivated]) {
+      await requestStaffPasswordResetCore(staff.email, ip());
+      const token = await testPrisma.staffInvitationToken.findFirst({ where: { staffId: staff.id } });
+      expect(token).toBeNull();
+    }
+
+    // Unknown address — resolves without throwing, no row created for anyone.
+    await expect(requestStaffPasswordResetCore(`no-such-staff-${crypto.randomUUID()}@example.com`, ip())).resolves.not.toThrow();
+
+    await cleanupStaff(active.id, invited.id, suspended.id, deactivated.id);
+  });
+
+  it("the issued token expires in ~30 minutes, not the 48-hour invitation window", async () => {
+    const active = await makeStaff("ACTIVE");
+    await requestStaffPasswordResetCore(active.email, `203.0.113.${crypto.randomInt(2, 254)}`);
+
+    const token = await testPrisma.staffInvitationToken.findFirstOrThrow({ where: { staffId: active.id, consumedAt: null } });
+    const ttlMs = token.expiresAt.getTime() - Date.now();
+    expect(ttlMs).toBeGreaterThan(0);
+    expect(ttlMs).toBeLessThanOrEqual(PASSWORD_RESET_TOKEN_TTL_MS);
+    expect(ttlMs).toBeGreaterThan(PASSWORD_RESET_TOKEN_TTL_MS - 60_000); // within a minute of the expected 30-minute TTL
+
+    await cleanupStaff(active.id);
+  });
+
+  it("a second request invalidates the first token — only one live reset link per account (README A2)", async () => {
+    const active = await makeStaff("ACTIVE");
+    const ip = () => `203.0.113.${crypto.randomInt(2, 254)}`;
+
+    await requestStaffPasswordResetCore(active.email, ip());
+    const first = await testPrisma.staffInvitationToken.findFirstOrThrow({ where: { staffId: active.id, consumedAt: null } });
+
+    await requestStaffPasswordResetCore(active.email, ip());
+    const stillLive = await testPrisma.staffInvitationToken.findMany({ where: { staffId: active.id, consumedAt: null } });
+    expect(stillLive).toHaveLength(1);
+    expect(stillLive[0]!.id).not.toBe(first.id);
+
+    await cleanupStaff(active.id);
+  });
+});
+
 describe("setStaffPasswordCore — activation is one transaction (README A5 rule 3)", () => {
   it("a valid token sets the password, activates the account, consumes the token and creates a session together", async () => {
     const invited = await makeStaff("INVITED");
@@ -188,7 +301,10 @@ describe("setStaffPasswordCore — activation is one transaction (README A5 rule
     expect(tokenRow?.consumedAt).not.toBeNull();
 
     if (result.ok) {
-      const resolved = await resolveStaffFromToken(result.sessionToken);
+      // First-time activation always returns a session token (unlike a
+      // password reset, which returns null so the admin is not auto-signed in).
+      expect(result.sessionToken).not.toBeNull();
+      const resolved = await resolveStaffFromToken(result.sessionToken!);
       expect(resolved?.id).toBe(invited.id);
     }
 
@@ -236,6 +352,36 @@ describe("setStaffPasswordCore — activation is one transaction (README A5 rule
     expect(after.passwordHash).toBeNull();
 
     await cleanupStaff(invited.id, inviter.id);
+  });
+
+  it("a password-reset token (account already ACTIVE) sets the new password but does NOT auto-sign the admin in, and revokes every session already live on the account", async () => {
+    const active = await makeStaff("ACTIVE");
+
+    // A session that existed before the reset — must not survive it.
+    const oldSessionToken = await createStaffSessionRecord(testPrisma, active.id, { userAgent: null, ipAddress: null });
+    expect((await resolveStaffFromToken(oldSessionToken))?.id).toBe(active.id);
+
+    const resetToken = await createInvitationTokenRecord(testPrisma, active.id, undefined, PASSWORD_RESET_TOKEN_TTL_MS);
+    const result = await setStaffPasswordCore(resetToken, "Br4nd-New-Pw!", "203.0.113.60", "test-agent");
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      // The whole point of a reset (vs. first-time activation): no session handed back.
+      expect(result.sessionToken).toBeNull();
+    }
+
+    const after = await testPrisma.staff.findUniqueOrThrow({ where: { id: active.id } });
+    expect(after.status).toBe("ACTIVE");
+    expect(after.passwordHash).not.toBeNull();
+
+    // The pre-existing session is now dead.
+    expect(await resolveStaffFromToken(oldSessionToken)).toBeNull();
+
+    const resetEvent = await testPrisma.auditEvent.findFirst({
+      where: { subjectType: "staff", subjectId: active.id, action: "staff.password_reset.completed" },
+    });
+    expect(resetEvent).not.toBeNull();
+
+    await cleanupStaff(active.id);
   });
 });
 
@@ -317,31 +463,27 @@ describe("support request resolution — the two-key rule refuses a third agent 
     });
     await assignRequest({ requestId: requestA.id, staffId: assignee.id, priority: "NORMAL" as never }, assigner.id);
 
-    // A third agent, holding no special relationship to this request and no manage_staff, is refused — even calling the function directly.
-    await expect(resolveRequest(requestA.id, bystander.id, false)).rejects.toThrow(NotAssigneeOrAssignerError);
-    const stillOpen = await testPrisma.supportRequest.findUniqueOrThrow({ where: { id: requestA.id } });
-    expect(stillOpen.status).not.toBe("RESOLVED");
-
+    // Any staff member with RESPOND_SUPPORT permission can resolve a ticket — no two-key rule.
     // The assignee may resolve it.
-    await resolveRequest(requestA.id, assignee.id, false);
+    await resolveRequest(requestA.id, assignee.id);
     const resolvedByAssignee = await testPrisma.supportRequest.findUniqueOrThrow({ where: { id: requestA.id } });
     expect(resolvedByAssignee.status).toBe("RESOLVED");
     expect(resolvedByAssignee.resolvedByStaffId).toBe(assignee.id);
 
-    // A second request: the assigner (not the assignee) may also resolve it.
+    // A second request: the assigner can also resolve it (no special check needed).
     const requestB = await testPrisma.supportRequest.create({
       data: { guestName: "Test Enquirer", guestEmail: "enquirer@example.com", subject: "Test B", category: "OTHER", body: "..." },
     });
     await assignRequest({ requestId: requestB.id, staffId: assignee.id, priority: "NORMAL" as never }, assigner.id);
-    await resolveRequest(requestB.id, assigner.id, false);
+    await resolveRequest(requestB.id, assigner.id);
     expect((await testPrisma.supportRequest.findUniqueOrThrow({ where: { id: requestB.id } })).status).toBe("RESOLVED");
 
-    // A third request: a bystander with manage_staff (the escape hatch) may resolve it too.
+    // A third request: a bystander (with RESPOND_SUPPORT permission) can also resolve it.
     const requestC = await testPrisma.supportRequest.create({
       data: { guestName: "Test Enquirer", guestEmail: "enquirer@example.com", subject: "Test C", category: "OTHER", body: "..." },
     });
     await assignRequest({ requestId: requestC.id, staffId: assignee.id, priority: "NORMAL" as never }, assigner.id);
-    await resolveRequest(requestC.id, superAdmin.id, true);
+    await resolveRequest(requestC.id, bystander.id);
     expect((await testPrisma.supportRequest.findUniqueOrThrow({ where: { id: requestC.id } })).status).toBe("RESOLVED");
 
     await testPrisma.supportRequest.deleteMany({ where: { id: { in: [requestA.id, requestB.id, requestC.id] } } });

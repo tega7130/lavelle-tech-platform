@@ -63,8 +63,8 @@ model Candidate {
   email           String    @unique @db.Citext
   emailVerifiedAt DateTime?
 
-  phoneCountryCode String    @default("+234") @db.VarChar(6)
-  phone            String?   @db.VarChar(24)
+  phoneCountryCode String  @default("+234") @db.VarChar(6)
+  phone            String? @db.VarChar(24)
 
   passwordHash String
 
@@ -85,18 +85,21 @@ model Candidate {
   emailVerificationTokens    EmailVerificationToken[]
   passwordResetOtpChallenges PasswordResetOtpChallenge[]
   notifications              Notification[]
-  sessions                Session[]
-  enrolments              Enrolment[]
-  payments                Payment[]
-  idCards                 IdCard[]
-  certificates            Certificate[]
-  examRegistrations       ExamRegistration[]
-  supportRequests         SupportRequest[]
-  supportMessages         SupportMessage[]
-  candidateNotes          CandidateNote[]
-  announcementDeliveries  AnnouncementDelivery[]
-  reviews                 Review[]
-  uploadedMediaAssets     MediaAsset[]
+  sessions                   Session[]
+  enrolments                 Enrolment[]
+  payments                   Payment[]
+  idCards                    IdCard[]
+  certificates               Certificate[]
+  examRegistrations          ExamRegistration[]
+  supportRequests            SupportRequest[]
+  supportMessages            SupportMessage[]
+  candidateNotes             CandidateNote[]
+  announcementDeliveries     AnnouncementDelivery[]
+  reviews                    Review[]
+  uploadedMediaAssets        MediaAsset[]
+  documentFavorites          DocumentFavorite[]
+  documentPurchases          DocumentPurchase[]
+  programmeNotificationSubscriptions ProgrammeNotificationSubscription[]
 
   @@index([accountStatus])
 }
@@ -286,6 +289,7 @@ enum Permission {
   REVOKE_CERTIFICATES
   MANAGE_ANNOUNCEMENTS
   MANAGE_BLOG
+  MANAGE_DOCUMENT_LIBRARY
   RESPOND_SUPPORT
   MANAGE_STAFF
   VIEW_AUDIT_LOG
@@ -299,7 +303,14 @@ model Staff {
   // every existing display site (all seven prior slices) already reads
   // it this way. Documented deviation, not an oversight.
   name       String
-  email      String  @unique // the login
+  // Citext (not plain String, unlike this field's original declaration) —
+  // matches Candidate.email. Every lookup in this codebase lowercases the
+  // typed address first (staffSignInCore, OTP, password reset), so a
+  // case-sensitive column silently orphans any row whose stored email
+  // isn't already all-lowercase (e.g. a manually-inserted row) — sign-in,
+  // OTP and password reset all fail closed with no error, since a
+  // case-mismatched row is indistinguishable from "no such account".
+  email      String  @unique @db.Citext // the login
   phone      String?
   jobTitle   String?
   department String?
@@ -361,21 +372,41 @@ model Staff {
   publishedListings       ProgrammeListing[]    @relation("ListingPublishedBy")
   enquiriesHandled        ContactEnquiry[]      @relation("EnquiryHandledBy")
 
-  sessions             Session[]              @relation("StaffSessions")
-  notifications        Notification[]         @relation("StaffNotifications")
-  invitationTokens     StaffInvitationToken[] @relation("StaffInvitationTokenHolder")
-  sentInvitations      StaffInvitationToken[] @relation("StaffInvitationTokenSender")
-  assignedByRequests   SupportRequest[]       @relation("SupportRequestAssignedBy")
-  resolvedRequests     SupportRequest[]       @relation("SupportRequestResolvedBy")
-  reviewedSittings     Sitting[]              @relation("SittingReviewedBy")
-  moderatedReviews     Review[]               @relation("ReviewModeratedBy")
-  examAssignments      ExamStaffAssignment[]  @relation("ExamStaffAssignmentHolder")
-  examAssignmentsGiven ExamStaffAssignment[]  @relation("ExamStaffAssignmentGrantedBy")
-  blogPostsPublished   BlogPost[]             @relation("BlogPostPublishedBy")
-  blogPostsCreated     BlogPost[]             @relation("BlogPostCreatedBy")
+  sessions                  Session[]                @relation("StaffSessions")
+  notifications             Notification[]           @relation("StaffNotifications")
+  invitationTokens          StaffInvitationToken[]   @relation("StaffInvitationTokenHolder")
+  sentInvitations           StaffInvitationToken[]   @relation("StaffInvitationTokenSender")
+  assignedByRequests        SupportRequest[]         @relation("SupportRequestAssignedBy")
+  resolvedRequests          SupportRequest[]         @relation("SupportRequestResolvedBy")
+  reviewedSittings          Sitting[]                @relation("SittingReviewedBy")
+  moderatedReviews          Review[]                 @relation("ReviewModeratedBy")
+  examAssignments           ExamStaffAssignment[]    @relation("ExamStaffAssignmentHolder")
+  examAssignmentsGiven      ExamStaffAssignment[]    @relation("ExamStaffAssignmentGrantedBy")
+  blogPostsPublished        BlogPost[]               @relation("BlogPostPublishedBy")
+  blogPostsCreated          BlogPost[]               @relation("BlogPostCreatedBy")
+  loginOtpChallenges        StaffLoginOtpChallenge[]
+  uploadedDocumentTemplates DocumentTemplate[]       @relation("DocumentTemplateUploadedBy")
 
   @@index([role])
   @@index([status])
+}
+
+// Sign-in-by-code, an alternative to the password form on the same
+// /staff/sign-in page — mirrors PasswordResetOtpChallenge (10-minute
+// validity, 5-attempt cap, single verified use) but keyed to a staff
+// member who is already ACTIVE, not a password-reset flow.
+model StaffLoginOtpChallenge {
+  id      String @id @default(uuid())
+  staffId String
+  staff   Staff  @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  codeHash   String
+  expiresAt  DateTime
+  attempts   Int       @default(0)
+  verifiedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([staffId, verifiedAt])
 }
 
 // Slice 10 — mirrors EmailVerificationToken (Slice 01) deliberately:
@@ -537,6 +568,7 @@ model Module {
   weekNumber Int // 1-based
   title      String
   summary    String?
+  status     ContentStatus @default(PUBLISHED)
 
   // How many approved objective questions this module contributes to the
   // certifying examination. Slice 06 reads it and blocks publishing an
@@ -872,8 +904,9 @@ model Enrolment {
   // Assigned on confirmation (enrolment transaction step 5) — null until then.
   cohortId    String?
   cohort      Cohort?   @relation(fields: [cohortId], references: [id])
-  intakeId    String
-  intake      Intake    @relation(fields: [intakeId], references: [id])
+  // Programmes are independently enrollable; intake assignment is optional and may happen later via cohort assignment
+  intakeId    String?
+  intake      Intake?   @relation(fields: [intakeId], references: [id])
 
   // Business rule 1: this record's existence at ACTIVE, and the cohort
   // placement, follow confirmed payment — never acceptance, never an
@@ -1285,6 +1318,7 @@ model ProgrammeResult {
 enum PaymentPurpose {
   PROGRAMME_FEE
   EXAMINATION_FEE
+  DOCUMENT_PURCHASE
 }
 
 enum PaymentStatus {
@@ -1325,6 +1359,11 @@ model Payment {
   // (name/email/password) until confirmPayment turns them into a real
   // Candidate. Reverse back-relation only; the FK lives on GuestCheckout.
   guestCheckout    GuestCheckout?
+  // Document Library (Phase 2) — same reverse-FK shape as ExamRegistration
+  // above; the FK lives on DocumentPurchase, created at checkout initiation
+  // and only ever a real purchase once its own purchasedAt is set (see that
+  // model's comment — never this Payment's status alone).
+  documentPurchase DocumentPurchase?
 
   // Kobo. A snapshot of the fee at the time of payment — never read the
   // live programme fee when displaying a historic payment (rule 7).
@@ -1389,8 +1428,8 @@ model GuestCheckout {
 
   programmeId String
   programme   Programme @relation(fields: [programmeId], references: [id])
-  intakeId    String
-  intake      Intake    @relation(fields: [intakeId], references: [id])
+  intakeId    String?
+  intake      Intake?   @relation(fields: [intakeId], references: [id])
 
   firstName    String @db.VarChar(80)
   lastName     String @db.VarChar(80)
@@ -2243,10 +2282,36 @@ model ProgrammeListing {
   publishedByStaff   Staff?    @relation("ListingPublishedBy", fields: [publishedByStaffId], references: [id])
   unpublishedAt      DateTime?
 
+  isComingSoon       Boolean   @default(false)
+  comingSoonMessage  String?
+
+  notificationSubscriptions ProgrammeNotificationSubscription[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([isPublished, orderIndex])
+}
+
+model ProgrammeNotificationSubscription {
+  id String @id @default(uuid())
+
+  listingId String
+  listing   ProgrammeListing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  candidateId String?    @db.Uuid
+  candidate   Candidate? @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  email String
+
+  notifiedAt     DateTime?
+  unsubscribedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([listingId, email])
+  @@index([listingId, notifiedAt])
 }
 
 // Slice 11 Part D: three states, not two — a DECLINED review and one
@@ -2327,8 +2392,8 @@ model BlogPost {
   excerpt String
   // Rich-text markup (src/lib/rich-text.ts) — never HTML, same rule as
   // LectureNote.body. Rendered read-only via renderMarkupToReact.
-  body String
-  tags Json // string[], same Json-array convention as ProgrammeListing.outcomes/includes
+  body    String
+  tags    Json // string[], same Json-array convention as ProgrammeListing.outcomes/includes
 
   // Free-text byline — defaults to the writing staff member's name at
   // creation but is editable independently of who actually wrote it.
@@ -2352,6 +2417,241 @@ model BlogPost {
   // Ordering is chronological (publishedAt desc), not a manual orderIndex
   // like the curated FaqEntry/ProgrammeListing — nobody hand-orders a feed.
   @@index([isPublished, publishedAt(sort: Desc)])
+}
+
+// ─── Document Library (Phase 1: admin upload & management) ─────────────
+//
+// Contracts, MOUs, agreements and other legal/professional templates an
+// administrator uploads for the future candidate purchase flow (Phase 2 —
+// not built here). purchaseCount/revenueMinor exist now so that flow has
+// somewhere to write when it lands; nothing in this phase ever changes
+// them off their defaults.
+model DocumentTemplate {
+  id String @id @default(uuid())
+
+  title String
+
+  // Admin-manageable, same pattern as ProgrammeCategory — an administrator
+  // picks an existing category or creates one inline while uploading
+  // (createDocumentCategory). Case-insensitive dedupe on name happens in
+  // that service, not here, same discipline as ProgrammeCategory's own
+  // createCategory.
+  categoryId String
+  category   DocumentCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  description String?
+
+  // Kobo — same convention as Programme.feeMinor/Payment.amountMinor.
+  // Never a float. The stable "selling price" an admin sets — struck
+  // through wherever discountedPriceMinor is set and lower, but it is
+  // discountedPriceMinor (see below), not this field, that is actually
+  // charged whenever one is active.
+  priceMinor Int
+  currency   String @default("NGN")
+
+  // Optional flat naira sale price (never a percentage) — when set and
+  // lower than priceMinor, this becomes BOTH the prominent displayed price
+  // (with priceMinor struck through beside it) AND the amount actually
+  // charged at checkout in place of priceMinor. Unrelated to the
+  // DiscountCode system (no code to enter, nothing scoped, nothing
+  // redeemed) — see effectivePriceMinor() for the one place this and
+  // priceMinor are reconciled into what a purchase actually costs.
+  // DocumentPurchase.originalPriceMinor snapshots that effective price at
+  // purchase time, never raw priceMinor.
+  discountedPriceMinor Int?
+
+  storageKey String @unique // Cloudinary public_id
+  fileType   String // MIME type, as reported by Cloudinary at upload time
+  fileName   String // original filename, for display only
+  fileBytes  Int
+
+  // Whether candidates can see/purchase it once Phase 2 lands. An admin
+  // toggle, distinct from deletion — see deleteDocumentTemplate.
+  isActive Boolean @default(true)
+
+  // Soft delete, not a real row removal — deleteDocumentTemplate sets this
+  // (and isActive false) instead of DELETE-ing the row. A candidate who
+  // already purchased this template must keep permanent access to it
+  // (rule: paying for something and having it vanish because an admin
+  // later deleted the listing is never acceptable), and DocumentPurchase
+  // resolves the file by looking the row up directly, ignoring this
+  // column — only listDocumentTemplates (the admin list) filters it out.
+  deletedAt DateTime?
+
+  purchaseCount Int @default(0)
+  revenueMinor  Int @default(0)
+
+  uploadedByStaffId String
+  uploadedByStaff   Staff  @relation("DocumentTemplateUploadedBy", fields: [uploadedByStaffId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  favorites      DocumentFavorite[]
+  purchases      DocumentPurchase[]
+  discountScopes DiscountCodeDocument[]
+  relatedTo      DocumentTemplateRelation[] @relation("RelationSource")
+  relatedFrom    DocumentTemplateRelation[] @relation("RelationTarget")
+
+  @@index([categoryId])
+  @@index([isActive, createdAt(sort: Desc)])
+  @@index([deletedAt])
+}
+
+// Admin-curated "you might also need" pairing for the Phase 3 public
+// preview — directed (A -> B does not imply B -> A) and deliberately
+// simple: no scoring, no ML, just rows an admin picked. A -> B where B is
+// inactive/deleted is filtered out at read time (getPublicComplementaryTemplates),
+// never pruned here, so re-activating B doesn't require re-curating the pairing.
+model DocumentTemplateRelation {
+  documentTemplateId String
+  documentTemplate   DocumentTemplate @relation("RelationSource", fields: [documentTemplateId], references: [id], onDelete: Cascade)
+
+  relatedDocumentTemplateId String
+  relatedDocumentTemplate   DocumentTemplate @relation("RelationTarget", fields: [relatedDocumentTemplateId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@id([documentTemplateId, relatedDocumentTemplateId])
+  @@index([relatedDocumentTemplateId])
+}
+
+// Admin-manageable, mirrors ProgrammeCategory exactly (same dedupe
+// discipline, same slugify-on-create). Seeded with the five starting
+// categories from Phase 1's original spec (Contracts/MOUs/Agreements/
+// Employment/Other) — a starting list, not a closed set; adding one is a
+// row insert (createDocumentCategory), never a migration.
+model DocumentCategory {
+  id   String @id @default(uuid())
+  name String @unique
+  slug String @unique
+
+  createdAt DateTime @default(now())
+
+  documents DocumentTemplate[]
+}
+
+// ─── Document Library (Phase 2: candidate portal) ───────────────────────
+//
+// Browsing, favoriting and purchasing a DocumentTemplate. Nothing here
+// grants access on its own — see DocumentPurchase's comment for the one
+// rule that matters.
+
+// A candidate's saved-for-later list. Presence is the only state (no
+// "removed" flag) — toggling deletes the row outright, same discipline as
+// StaffPermission (rule 1 elsewhere in this schema: "the grant is the
+// authority"). The unique pair is what makes toggling safe to call
+// repeatedly without ever producing a duplicate.
+model DocumentFavorite {
+  id String @id @default(uuid())
+
+  candidateId String    @db.Uuid
+  candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  documentTemplateId String
+  documentTemplate   DocumentTemplate @relation(fields: [documentTemplateId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([candidateId, documentTemplateId])
+  @@index([documentTemplateId])
+}
+
+// One optional redeemable code, shared across all document purchases —
+// no admin authoring UI in this phase (out of scope for the candidate
+// portal); codes are inserted directly until Phase 1's admin console
+// grows one. code is citext for the same case-insensitive-lookup reason
+// as Candidate/Staff email.
+enum DiscountType {
+  PERCENT
+  FIXED
+}
+
+model DiscountCode {
+  id String @id @default(uuid())
+
+  code String @unique @db.Citext
+
+  type  DiscountType
+  // Percent (1-100) when type = PERCENT; kobo when type = FIXED. Always
+  // resolved server-side (validateAndComputeDiscount) — never trust a
+  // discount amount computed by the client.
+  value Int
+
+  isActive        Boolean   @default(true)
+  expiresAt       DateTime?
+  maxRedemptions  Int?
+  redemptionCount Int       @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  purchases      DocumentPurchase[]
+  documentScopes DiscountCodeDocument[]
+}
+
+// Explicit join, the same composite-id shape as StaffPermission/
+// AssessmentWeighting elsewhere in this schema. NO rows for a code means
+// "applies to every document" — the default, and exactly how every code
+// created before this table existed already behaved; a code is narrowed
+// to specific documents only once an admin adds rows here.
+// validateAndComputeDiscount is the only place this is ever read.
+model DiscountCodeDocument {
+  discountCodeId String
+  discountCode   DiscountCode @relation(fields: [discountCodeId], references: [id], onDelete: Cascade)
+
+  documentTemplateId String
+  documentTemplate   DocumentTemplate @relation(fields: [documentTemplateId], references: [id], onDelete: Cascade)
+
+  @@id([discountCodeId, documentTemplateId])
+  @@index([documentTemplateId])
+}
+
+// The purchase record. Created at checkout initiation (paymentId set
+// immediately, same as ExamRegistration) so a retried failed payment has
+// somewhere to attach a fresh Payment row — but ROW EXISTENCE IS NOT
+// OWNERSHIP. purchasedAt is null until confirmDocumentPurchase runs
+// inside the verified-webhook path, and every access check in this
+// phase (download, view-online, "already purchased" state, My
+// Purchases) filters on purchasedAt IS NOT NULL, never on the row's mere
+// presence — the one rule the whole purchase flow exists to enforce
+// ("do not grant access merely because the candidate was redirected back
+// from Nomba").
+model DocumentPurchase {
+  id String @id @default(uuid())
+
+  candidateId String    @db.Uuid
+  candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  documentTemplateId String
+  documentTemplate   DocumentTemplate @relation(fields: [documentTemplateId], references: [id])
+
+  // The FK lives here, not on Payment (same reverse-FK shape as
+  // ExamRegistration.paymentId) — Payment stays purpose-agnostic.
+  paymentId String  @unique
+  payment   Payment @relation(fields: [paymentId], references: [id])
+
+  // Snapshotted at initiation/retry, never re-derived from the live
+  // DocumentTemplate once paid — same discipline as Payment.amountMinor's
+  // own comment ("a snapshot of the fee... never read the live fee when
+  // displaying a historic payment"). This is the effective price at that
+  // moment (effectivePriceMinor: discountedPriceMinor ?? priceMinor), not
+  // necessarily raw priceMinor.
+  originalPriceMinor Int
+  discountMinor      Int    @default(0)
+  amountMinor        Int // originalPriceMinor - discountMinor; what was actually charged
+  currency           String @default("NGN")
+
+  discountCodeId String?
+  discountCode   DiscountCode? @relation(fields: [discountCodeId], references: [id])
+
+  purchasedAt DateTime? // set once, by confirmDocumentPurchase, on verified payment — see model comment
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([candidateId, documentTemplateId])
+  @@index([documentTemplateId])
 }
 
 // Lands in the Slice 08 support desk as a SupportRequest with no
@@ -2381,4 +2681,24 @@ model ContactEnquiry {
   createdAt DateTime @default(now())
 
   @@index([createdAt])
+}
+
+// ─── Email Delivery Logging ─────────────────────────────────────────────────
+
+model EmailLog {
+  id String @id @default(uuid())
+
+  template  String
+  recipient String
+  subject   String
+
+  status       String // "sent" | "failed"
+  errorMessage String?
+
+  sentAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([template, createdAt(sort: Desc)])
+  @@index([recipient, createdAt(sort: Desc)])
+  @@index([status, createdAt(sort: Desc)])
 }

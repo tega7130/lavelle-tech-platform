@@ -4,6 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { pollPaymentStatus } from "@/app/actions/payment";
 import { buttonClassName } from "@/components/ui/button";
+import { DownloadButton, ViewOnlineButton } from "@/components/portal/document-file-buttons";
 
 type PaymentStatusResult = Awaited<ReturnType<typeof pollPaymentStatus>>;
 
@@ -50,6 +51,60 @@ export function CheckoutStatus({ reference, initial }: { reference: string; init
         </div>
         <div className="font-heading font-semibold text-sm mt-4">Confirming your payment</div>
         <div className="text-neutral-500 text-xs mt-1">One moment — this updates automatically.</div>
+      </div>
+    );
+  }
+
+  // Document Library (Phase 2) — a document purchase has no enrolment to
+  // report on, so it branches here rather than falling into the
+  // enrolment-shaped copy below. See getPaymentStatus's comment for why
+  // this shared page, not a dedicated route, is what Nomba actually
+  // redirects a document purchase back to.
+  if (payment.purpose === "DOCUMENT_PURCHASE") {
+    const documentTemplateId = payment.documentPurchase?.documentTemplateId;
+    const documentTitle = payment.documentPurchase?.documentTemplate.title;
+
+    if (payment.status === "SUCCESS") {
+      return (
+        <div className="text-center py-8">
+          <div className="w-[52px] h-[52px] mx-auto rounded-full bg-[#e7f6ed] border border-[#bfe3cd] text-[#15803d] flex items-center justify-center text-xl font-bold">
+            ✓
+          </div>
+          <div className="font-heading font-semibold text-[17px] mt-4">Template purchased successfully!</div>
+          <p className="text-neutral-600 text-[13px] mt-2 max-w-[42ch] mx-auto">
+            {documentTitle ? `Your purchase of "${documentTitle}" is confirmed. It's now in My Purchases.` : "Your purchase has been confirmed."}
+          </p>
+          {documentTemplateId && (
+            <div className="flex flex-wrap items-center justify-center gap-2 mt-5">
+              <DownloadButton documentTemplateId={documentTemplateId} variant="primary" />
+              <ViewOnlineButton documentTemplateId={documentTemplateId} variant="secondary" />
+            </div>
+          )}
+          <div className="mt-4">
+            <Link href="/portal/library/purchases" className="text-accent text-[12.5px]">
+              Go to My Purchases
+            </Link>
+          </div>
+        </div>
+      );
+    }
+
+    // FAILED
+    return (
+      <div className="text-center py-8">
+        <div className="w-[52px] h-[52px] mx-auto rounded-full bg-[#fef3f2] border border-[#f3c4bf] text-[#b42318] flex items-center justify-center text-xl font-bold">
+          !
+        </div>
+        <div className="font-heading font-semibold text-[17px] mt-4">Payment failed. Please try again.</div>
+        <p className="text-neutral-600 text-[13px] mt-2 max-w-[44ch] mx-auto">
+          {payment.failureReason ?? "Your bank or card issuer declined this payment."} No money has left your account, and the template remains
+          unpurchased.
+        </p>
+        {documentTemplateId && (
+          <Link href={`/portal/library/templates/${documentTemplateId}`} className={buttonClassName("primary", "mt-5")}>
+            Try again
+          </Link>
+        )}
       </div>
     );
   }
