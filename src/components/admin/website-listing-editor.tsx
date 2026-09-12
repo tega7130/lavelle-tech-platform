@@ -11,6 +11,7 @@ import { cn } from "@/lib/cn";
 import { formatNaira, tierLabel } from "@/lib/format";
 import { upsertListingAction, publishListingAction, unpublishListingAction } from "@/app/actions/website-admin";
 import { finaliseUpload } from "@/app/actions/uploads";
+import { uploadToStorage, probeMediaDuration } from "@/lib/storage-upload";
 import type { getListingForEditor } from "@/lib/website-admin";
 
 type ListingData = Awaited<ReturnType<typeof getListingForEditor>>;
@@ -23,19 +24,9 @@ const TABS: { key: TabKey; label: string }[] = [
 ];
 
 async function uploadVideo(file: File) {
-  const formData = new FormData();
-  formData.append("file", file);
-  formData.append("purpose", "programme");
-  const res = await fetch("/api/uploads/cloudinary", {
-    method: "POST",
-    body: formData,
-  });
-  if (!res.ok) {
-    const error = await res.json();
-    throw new Error(error.error || "Upload failed.");
-  }
-  const { asset } = await res.json();
-  return asset;
+  const durationSeconds = await probeMediaDuration(file);
+  const { storageKey, bytes } = await uploadToStorage(file, "programme", "video");
+  return finaliseUpload({ storageKey, kind: "video", mimeType: file.type, originalFilename: file.name, bytes, durationSeconds });
 }
 
 export function WebsiteListingEditor({ listing: programme, initialTab }: { listing: ListingData; initialTab: TabKey }) {

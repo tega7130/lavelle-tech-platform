@@ -126,7 +126,7 @@ export async function initiateDocumentPurchaseAction(
 
 /**
  * Download and View Online share this one ownership-checked lookup —
- * the only difference is the Cloudinary `attachment` flag. Ownership is
+ * the only difference is the storage `attachment` flag. Ownership is
  * re-checked here every time, straight from the DB (never trusted from
  * anything the client sends), and only ever true when purchasedAt is set
  * (rule 16/20/23) — a candidate can never reach another candidate's file
@@ -143,5 +143,5 @@ export async function getDocumentFileAccessAction(documentTemplateId: string, mo
   if (!owns) throw new Error("You have not purchased this document template.");
 
   const document = await prisma.documentTemplate.findUniqueOrThrow({ where: { id: documentTemplateId } });
-  return getSignedAssetUrl(document.storageKey, "raw", 300, mode === "download");
+  return getSignedAssetUrl(document.storageKey, 300, mode === "download");
 }

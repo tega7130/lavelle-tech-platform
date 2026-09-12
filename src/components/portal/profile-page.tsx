@@ -11,7 +11,7 @@ import { Label, Input, FieldError } from "@/components/ui/field";
 import { LogoMark } from "@/components/ui/logo-mark";
 import { updateProfile, updateCandidateContactDetails } from "@/app/actions/candidate-auth";
 import { finaliseCandidatePhotoUpload } from "@/app/actions/uploads";
-import { uploadToCloudinary } from "@/lib/cloudinary-upload";
+import { uploadToStorage } from "@/lib/storage-upload";
 import { emptyActionState } from "@/lib/action-state";
 import { professionalStatusLabel, experienceBandLabel } from "@/lib/format";
 import type { CandidateProfile, IdCard } from "@/generated/prisma/client";
@@ -22,7 +22,7 @@ async function uploadPhoto(file: File) {
   if (file.size > MAX_PHOTO_BYTES) {
     throw new Error(`Photo must be smaller than 8MB (yours is ${(file.size / 1024 / 1024).toFixed(1)}MB)`);
   }
-  const { storageKey } = await uploadToCloudinary(file, "candidate_photo");
+  const { storageKey } = await uploadToStorage(file, "candidate_photo");
   return finaliseCandidatePhotoUpload({ storageKey, mimeType: file.type, originalFilename: file.name, bytes: file.size });
 }
 

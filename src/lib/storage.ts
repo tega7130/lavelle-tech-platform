@@ -1,84 +1,58 @@
 import "server-only";
-import { v2 as cloudinary } from "cloudinary";
+import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
-cloudinary.config({
-  cloud_name: process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
+const s3 = new S3Client({
+  endpoint: process.env.DO_SPACES_ENDPOINT,
+  region: process.env.DO_SPACES_REGION || "us-east-1", // Spaces ignores the value but the SDK requires one set
+  credentials: {
+    accessKeyId: process.env.DO_SPACES_KEY!,
+    secretAccessKey: process.env.DO_SPACES_SECRET!,
+  },
 });
+
+function bucket(): string {
+  const name = process.env.DO_SPACES_BUCKET;
+  if (!name) throw new Error("DO_SPACES_BUCKET is not set");
+  return name;
+}
 
 export const MAX_UPLOAD_BYTES = 2 * 1024 ** 3; // 2GB
 
-export interface CloudinaryUploadToken {
-  cloudName: string;
-  uploadPreset: string;
-  apiKey: string;
-  maxFileSize: number;
-}
-
-export interface PresignedUpload {
-  cloudName: string;
-  uploadPreset: string;
-  apiKey: string;
-  maxFileSize: number;
-  folder: string;
-}
-
-export function createPresignedUpload(params: { kind: string; mimeType: string; bytes: number }): PresignedUpload {
-  if (params.bytes <= 0 || params.bytes > MAX_UPLOAD_BYTES) {
-    throw new Error(`bytes must be between 1 and ${MAX_UPLOAD_BYTES}`);
-  }
-
-  const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
-  if (!cloudName) throw new Error("NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME is not set");
-
-  const uploadPreset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
-  if (!uploadPreset) throw new Error("NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET is not set");
-
-  const apiKey = process.env.NEXT_PUBLIC_CLOUDINARY_API_KEY;
-  if (!apiKey) throw new Error("NEXT_PUBLIC_CLOUDINARY_API_KEY is not set");
-
-  return {
-    cloudName,
-    uploadPreset,
-    apiKey,
-    maxFileSize: MAX_UPLOAD_BYTES,
-    folder: `lavelle/${params.kind}`,
-  };
-}
-
-export type CloudinaryResourceType = "image" | "video" | "raw";
-
-// MediaAsset.kind ("audio" | "image" | "video" | "document") to Cloudinary's
-// own resource_type ("image" | "video" | "raw") — Cloudinary has no
-// separate "audio" resource type; audio files live under "video".
-export function resourceTypeForKind(kind: string): CloudinaryResourceType {
-  if (kind === "video" || kind === "audio") return "video";
-  if (kind === "document") return "raw";
-  return "image";
-}
-
 /**
- * type: "upload" here must match the delivery type actually used at
- * upload time (uploadToCloudinary / /api/uploads/cloudinary, which don't
- * set `type`, so Cloudinary defaults new uploads to "upload"). Signing
- * this as "authenticated" instead — a different delivery type, not just a
- * stricter mode of the same one — points at a resource Cloudinary can't
- * find, which is why every uploaded video got stuck "loading" forever.
+ * Signed PUT URL — the browser uploads directly to Spaces, never through
+ * this app's own serverless function (Vercel's request-body ceiling makes
+ * proxying video-sized files impossible).
  */
-export function getSignedAssetUrl(
+export async function createUploadUrl(storageKey: string, mimeType: string, ttlSeconds = 300): Promise<string> {
+  const command = new PutObjectCommand({ Bucket: bucket(), Key: storageKey, ContentType: mimeType });
+  return getSignedUrl(s3, command, { expiresIn: ttlSeconds });
+}
+
+/** Fresh signed URLs for whatever assets a lecture/slide references — content is never reachable any other way. */
+export async function getSignedAssetUrl(
   storageKey: string,
-  resourceType: CloudinaryResourceType = "image",
   ttlSeconds = 300,
-  /** Adds Cloudinary's `attachment` delivery flag, forcing a Content-Disposition: attachment response — used by document Download (as opposed to View Online, which wants the browser's default inline/viewer behaviour). */
+  /** Forces a Content-Disposition: attachment response — used by document Download (as opposed to View Online, which wants the browser's default inline/viewer behaviour). */
   forceDownload = false
-): string {
-  return cloudinary.url(storageKey, {
-    secure: true,
-    sign_url: true,
-    type: "upload",
-    resource_type: resourceType,
-    expiration: Math.floor(Date.now() / 1000) + ttlSeconds,
-    ...(forceDownload ? { flags: "attachment" } : {}),
+): Promise<string> {
+  const command = new GetObjectCommand({
+    Bucket: bucket(),
+    Key: storageKey,
+    ...(forceDownload ? { ResponseContentDisposition: "attachment" } : {}),
   });
+  return getSignedUrl(s3, command, { expiresIn: ttlSeconds });
+}
+
+/** Server-side upload of bytes already in memory — certificate PDFs, generated server-side rather than uploaded from a browser. */
+export async function putObject(storageKey: string, body: Buffer, mimeType: string): Promise<void> {
+  await s3.send(new PutObjectCommand({ Bucket: bucket(), Key: storageKey, Body: body, ContentType: mimeType }));
+}
+
+/** Server-side read of the full object body — used where this app already runs on the server and a signed round-trip would be pointless (the certificate PDF route). */
+export async function getObjectBytes(storageKey: string): Promise<Buffer> {
+  const result = await s3.send(new GetObjectCommand({ Bucket: bucket(), Key: storageKey }));
+  const chunks: Uint8Array[] = [];
+  for await (const chunk of result.Body as AsyncIterable<Uint8Array>) chunks.push(chunk);
+  return Buffer.concat(chunks);
 }

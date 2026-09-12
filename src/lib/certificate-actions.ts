@@ -1,13 +1,7 @@
-import { v2 as cloudinary } from "cloudinary";
 import { prisma } from "@/lib/prisma";
 import { recordAuditEvent } from "@/lib/audit";
 import { renderCertificatePdf } from "@/lib/certificate-pdf";
-
-cloudinary.config({
-  cloud_name: process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
-});
+import { putObject } from "@/lib/storage";
 import { sendTransactionalEmailByTemplate } from "@/lib/send-transactional-email";
 import { getFirstName } from "@/lib/email-utils";
 import { EMAIL_CONFIG } from "@/lib/email-config";
@@ -21,25 +15,11 @@ import type { CertificateStatus, GradeBand, Prisma } from "@/generated/prisma/cl
 
 const BAND_LABEL: Record<GradeBand, string> = { DISTINCTION: "Distinction", MERIT: "Merit", PASS: "Pass", REFER: "Refer" };
 
-async function uploadCertificatePdfToCloudinary(
-  pdfBytes: Buffer,
-  certificateNumber: string
-): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const uploadStream = cloudinary.uploader.upload_stream(
-      {
-        folder: "lavelle/certificates",
-        resource_type: "raw",
-        original_filename: `${certificateNumber}.pdf`,
-        type: "authenticated",
-      },
-      (error, result) => {
-        if (error) reject(error);
-        else resolve((result as any).public_id);
-      }
-    );
-    uploadStream.end(pdfBytes);
-  });
+/** storageKey includes a fresh uuid — a certificate can be reissued, each reissue uploading a new PDF, and MediaAsset.storageKey is unique. */
+async function uploadCertificatePdf(pdfBytes: Buffer, certificateNumber: string): Promise<string> {
+  const storageKey = `lavelle/certificates/${certificateNumber}-${crypto.randomUUID()}.pdf`;
+  await putObject(storageKey, pdfBytes, "application/pdf");
+  return storageKey;
 }
 
 /**
@@ -156,7 +136,7 @@ export async function issueCertificate(sittingId: string, mintedByStaffId: strin
 
     const pdfBytes = await renderCertificatePdf({ certificateNumber, holderName, programmeTitle: programme.title });
 
-    const storageKey = await uploadCertificatePdfToCloudinary(pdfBytes, certificateNumber);
+    const storageKey = await uploadCertificatePdf(pdfBytes, certificateNumber);
     const pdfAsset = await tx.mediaAsset.create({
       data: {
         kind: "document",
@@ -324,7 +304,7 @@ export async function issueCertificateForCourseCompletion(enrolmentId: string) {
     const issuedAt = new Date();
 
     const pdfBytes = await renderCertificatePdf({ certificateNumber, holderName, programmeTitle: programme.title });
-    const storageKey = await uploadCertificatePdfToCloudinary(pdfBytes, certificateNumber);
+    const storageKey = await uploadCertificatePdf(pdfBytes, certificateNumber);
     const pdfAsset = await tx.mediaAsset.create({
       data: {
         kind: "document",
@@ -447,7 +427,7 @@ export async function issueCertificateManually(input: ManualIssueInput, staffId:
     const issuedAt = new Date();
 
     const pdfBytes = await renderCertificatePdf({ certificateNumber, holderName, programmeTitle: programme.title });
-    const storageKey = await uploadCertificatePdfToCloudinary(pdfBytes, certificateNumber);
+    const storageKey = await uploadCertificatePdf(pdfBytes, certificateNumber);
     const pdfAsset = await tx.mediaAsset.create({
       data: {
         kind: "document",
@@ -610,7 +590,7 @@ export async function reissueCertificate(id: string, reason: string, staffId: st
       holderName: original.holderName,
       programmeTitle: original.programmeTitle,
     });
-    const storageKey = await uploadCertificatePdfToCloudinary(pdfBytes, certificateNumber);
+    const storageKey = await uploadCertificatePdf(pdfBytes, certificateNumber);
     const pdfAsset = await tx.mediaAsset.create({
       data: {
         kind: "document",

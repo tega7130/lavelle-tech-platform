@@ -7,7 +7,7 @@ import { Dialog } from "@/components/ui/dialog";
 import { Field, Label, Input, Textarea, FieldError } from "@/components/ui/field";
 import { createDocumentTemplateAction } from "@/app/actions/document-library";
 import { finaliseUpload } from "@/app/actions/uploads";
-import { uploadToCloudinary } from "@/lib/cloudinary-upload";
+import { uploadToStorage } from "@/lib/storage-upload";
 import { ACCEPTED_DOCUMENT_EXTENSIONS, MAX_DOCUMENT_BYTES, isAcceptedDocumentMimeType } from "@/lib/document-library";
 import { DocumentCategoryPicker, type DocumentCategoryOption } from "@/components/admin/document-category-picker";
 
@@ -75,7 +75,7 @@ export function UploadDocumentButton({
     }
     setFileUploading(true);
     try {
-      const uploaded = await uploadToCloudinary(selected, "document_library");
+      const uploaded = await uploadToStorage(selected, "document_library");
       const asset = await finaliseUpload({
         storageKey: uploaded.storageKey,
         kind: "document",

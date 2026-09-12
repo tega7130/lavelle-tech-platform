@@ -67,10 +67,12 @@ export default async function CandidateRecordTabPage({ params }: { params: Promi
         getCandidateOverview(id).then((o) => o.candidate),
       ]);
       if (!candidate) notFound();
-      const paymentsWithReceipt = payments.map((p) => ({
-        ...p,
-        receiptUrl: p.receiptAsset ? getSignedAssetUrl(p.receiptAsset.storageKey, "raw") : null,
-      }));
+      const paymentsWithReceipt = await Promise.all(
+        payments.map(async (p) => ({
+          ...p,
+          receiptUrl: p.receiptAsset ? await getSignedAssetUrl(p.receiptAsset.storageKey) : null,
+        }))
+      );
       return (
         <CandidatePaymentsTab
           candidateId={id}
