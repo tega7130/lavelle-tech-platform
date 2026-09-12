@@ -175,7 +175,7 @@ export function AdminShell({ staff, crumb, headerTag, badges, initialNotificatio
   }
 
   return (
-    <div className="flex h-screen bg-bg text-text font-body">
+    <div className="flex h-dvh bg-bg text-text font-body">
       <aside
         className={cn(
           "hidden md:flex flex-none flex-col border-r border-divider py-[var(--space-4)] px-[var(--space-3)] overflow-y-auto overflow-x-hidden transition-[width] duration-[220ms] ease-in-out",

@@ -245,7 +245,7 @@ export function CandidateShell({
   }
 
   return (
-    <div className="flex h-screen bg-bg text-text font-body">
+    <div className="flex h-dvh bg-bg text-text font-body">
       <aside className="hidden md:flex w-[236px] flex-none flex-col border-r border-divider p-[var(--space-4)] px-[var(--space-3)]">
         {renderNavContent()}
       </aside>
