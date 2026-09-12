@@ -72,7 +72,7 @@ export async function getPublishedListings() {
  * only used as a direct <video> src when there's no recognizable
  * YouTube link.
  */
-function effectiveVideo(
+async function effectiveVideo(
   listing: {
     useCoverVideo: boolean;
     videoUrl: string | null;
@@ -88,7 +88,7 @@ function effectiveVideo(
   if (!url && !asset) return null;
 
   const embedUrl = url ? youtubeEmbedUrl(url) : null;
-  const directVideoUrl = asset ? getSignedAssetUrl(asset.storageKey, "video") : !embedUrl ? url : null;
+  const directVideoUrl = asset ? await getSignedAssetUrl(asset.storageKey) : !embedUrl ? url : null;
   if (!embedUrl && !directVideoUrl) return null;
   return { embedUrl, directVideoUrl };
 }
@@ -120,7 +120,7 @@ export async function getListingDetail(code: string) {
   if (!programme || !programme.listing || !programme.listing.isPublished) return null;
 
   const content = effectiveContent(programme.listing, programme);
-  const video = effectiveVideo(programme.listing, programme);
+  const video = await effectiveVideo(programme.listing, programme);
   const totalLectures = programme.modules.reduce((sum, m) => sum + m.lectures.length, 0);
 
   const ASSESSMENT_LABEL: Record<string, string> = { QUIZ: "Module quizzes", DRAFTING: "Drafting exercises", EXAMINATION: "Certifying examination" };

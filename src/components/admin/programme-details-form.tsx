@@ -6,25 +6,16 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createCategory } from "@/app/actions/programme";
 import { finaliseUpload } from "@/app/actions/uploads";
+import { uploadToStorage, probeMediaDuration } from "@/lib/storage-upload";
 import { emptyActionState, type FormActionState } from "@/lib/action-state";
 import { Button, buttonClassName } from "@/components/ui/button";
 import { Label, Input, Textarea, FieldError } from "@/components/ui/field";
 import { Dialog } from "@/components/ui/dialog";
 
-async function uploadVideoToCloudinary(file: File) {
-  const formData = new FormData();
-  formData.append("file", file);
-  formData.append("purpose", "programme");
-  const res = await fetch("/api/uploads/cloudinary", {
-    method: "POST",
-    body: formData,
-  });
-  if (!res.ok) {
-    const error = await res.json();
-    throw new Error(error.error || "Upload failed.");
-  }
-  const { asset } = await res.json();
-  return asset;
+async function uploadCoverVideo(file: File) {
+  const durationSeconds = await probeMediaDuration(file);
+  const { storageKey, bytes } = await uploadToStorage(file, "programme", "video");
+  return finaliseUpload({ storageKey, kind: "video", mimeType: file.type, originalFilename: file.name, bytes, durationSeconds });
 }
 
 export interface CategoryOption {
@@ -105,7 +96,7 @@ export function ProgrammeDetailsForm({
     setVideoError(null);
     setVideoUploading(true);
     try {
-      const asset = await uploadVideoToCloudinary(file);
+      const asset = await uploadCoverVideo(file);
       setCoverVideoAsset({ id: asset.id, originalFilename: asset.originalFilename });
     } catch (err) {
       setVideoError(err instanceof Error ? err.message : "Upload failed.");

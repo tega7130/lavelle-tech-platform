@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Field, Label, Input, Textarea, FieldError } from "@/components/ui/field";
 import { confirmPaymentManually, recordOfflinePayment } from "@/app/actions/payment";
 import { finaliseUpload } from "@/app/actions/uploads";
-import { uploadToCloudinary } from "@/lib/cloudinary-upload";
+import { uploadToStorage } from "@/lib/storage-upload";
 import { emptyActionState } from "@/lib/action-state";
 
 const MODES = [
@@ -18,7 +18,7 @@ const MODES = [
 ] as const;
 
 async function uploadReceipt(file: File) {
-  const { storageKey, bytes } = await uploadToCloudinary(file, "finance");
+  const { storageKey, bytes } = await uploadToStorage(file, "finance");
   return finaliseUpload({ storageKey, kind: "document", mimeType: file.type, originalFilename: file.name, bytes, durationSeconds: null, purpose: "finance" });
 }
 

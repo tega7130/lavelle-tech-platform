@@ -20,7 +20,7 @@ import {
   getBlogHeroPreviewUrlAction,
 } from "@/app/actions/blog-admin";
 import { finaliseUpload } from "@/app/actions/uploads";
-import { uploadToCloudinary } from "@/lib/cloudinary-upload";
+import { uploadToStorage } from "@/lib/storage-upload";
 import type { getBlogPostForEditor } from "@/lib/blog-admin-reads";
 
 type PostData = Awaited<ReturnType<typeof getBlogPostForEditor>> | null;
@@ -30,7 +30,7 @@ function formatDate(d: Date) {
 }
 
 async function uploadHeroImage(file: File) {
-  const { storageKey, bytes } = await uploadToCloudinary(file, "blog");
+  const { storageKey, bytes } = await uploadToStorage(file, "blog");
   return finaliseUpload({ storageKey, kind: "image", mimeType: file.type, originalFilename: file.name, bytes, durationSeconds: null, purpose: "blog" });
 }
 

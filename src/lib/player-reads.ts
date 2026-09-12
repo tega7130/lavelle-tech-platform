@@ -182,13 +182,15 @@ export async function getLecturePlayer(candidateId: string, enrolmentId: string,
     },
   });
 
-  const slides = lecture.slides.map((s) => ({
-    id: s.id,
-    title: s.title,
-    body: s.body,
-    imageUrl: s.imageAsset ? getSignedAssetUrl(s.imageAsset.storageKey, "image") : null,
-    narrationUrl: s.narrationAsset ? getSignedAssetUrl(s.narrationAsset.storageKey, "video") : null,
-  }));
+  const slides = await Promise.all(
+    lecture.slides.map(async (s) => ({
+      id: s.id,
+      title: s.title,
+      body: s.body,
+      imageUrl: s.imageAsset ? await getSignedAssetUrl(s.imageAsset.storageKey) : null,
+      narrationUrl: s.narrationAsset ? await getSignedAssetUrl(s.narrationAsset.storageKey) : null,
+    }))
+  );
 
   const [progress, draftingSubmission, lectureNote] = await Promise.all([
     prisma.lectureProgress.findUnique({ where: { enrolmentId_lectureId: { enrolmentId, lectureId } } }),
@@ -225,11 +227,11 @@ export async function getLecturePlayer(candidateId: string, enrolmentId: string,
       id: lecture.id,
       title: lecture.title,
       mediaKind: lecture.mediaKind,
-      videoUrl: lecture.videoAsset ? getSignedAssetUrl(lecture.videoAsset.storageKey, "video") : lecture.videoUrl,
+      videoUrl: lecture.videoAsset ? await getSignedAssetUrl(lecture.videoAsset.storageKey) : lecture.videoUrl,
       narrationMode: lecture.narrationMode,
       narrationAutoAdvance: lecture.narrationAutoAdvance,
       narrationRequireFull: lecture.narrationRequireFull,
-      fullNarrationUrl: lecture.fullNarrationAsset ? getSignedAssetUrl(lecture.fullNarrationAsset.storageKey, "video") : null,
+      fullNarrationUrl: lecture.fullNarrationAsset ? await getSignedAssetUrl(lecture.fullNarrationAsset.storageKey) : null,
       scenarioPrompt: lecture.scenarioPrompt,
       scenarioGuidance: lecture.scenarioGuidance,
       draftingPrompt: lecture.draftingPrompt,

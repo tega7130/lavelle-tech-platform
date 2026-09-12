@@ -97,7 +97,6 @@ model Candidate {
   announcementDeliveries     AnnouncementDelivery[]
   reviews                    Review[]
   uploadedMediaAssets        MediaAsset[]
-  videoUploads               VideoUpload[]
   documentFavorites          DocumentFavorite[]
   documentPurchases          DocumentPurchase[]
   programmeNotificationSubscriptions ProgrammeNotificationSubscription[]
@@ -2701,23 +2700,5 @@ model EmailLog {
 
   @@index([template, createdAt(sort: Desc)])
   @@index([recipient, createdAt(sort: Desc)])
-  @@index([status, createdAt(sort: Desc)])
-}
-
-model VideoUpload {
-  id String @id @default(uuid())
-
-  candidateId String    @db.Uuid
-  candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
-
-  cloudinaryId String @unique
-  url          String
-  fileSize     Int
-  status       String @default("COMPLETED") // COMPLETED, PROCESSING, FAILED
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([candidateId, createdAt(sort: Desc)])
   @@index([status, createdAt(sort: Desc)])
 }

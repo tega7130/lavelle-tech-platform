@@ -1,13 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { v2 as cloudinary } from "cloudinary";
 import { prisma } from "@/lib/prisma";
 import { verifyCertificatePdfLink } from "@/lib/certificate-pdf";
-
-cloudinary.config({
-  cloud_name: process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
-});
+import { getObjectBytes } from "@/lib/storage";
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -24,20 +18,13 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
   const asset = await prisma.mediaAsset.findUniqueOrThrow({ where: { id: certificate.pdfAssetId } });
 
-  const secureUrl = cloudinary.url(asset.storageKey, {
-    secure: true,
-    sign_url: true,
-    type: "authenticated",
-    resource_type: "raw",
-    expiration: Math.floor(Date.now() / 1000) + 3600,
-  });
-
-  const response = await fetch(secureUrl);
-  if (!response.ok) {
-    console.error(`Cloudinary fetch failed for certificate ${certificate.id} (${response.status}): ${await response.text()}`);
+  let bytes: Buffer;
+  try {
+    bytes = await getObjectBytes(asset.storageKey);
+  } catch (error) {
+    console.error(`Storage fetch failed for certificate ${certificate.id}:`, error);
     return NextResponse.json({ error: "pdf_unavailable" }, { status: 502 });
   }
-  const bytes = await response.arrayBuffer();
 
   return new NextResponse(new Uint8Array(bytes), {
     headers: {
