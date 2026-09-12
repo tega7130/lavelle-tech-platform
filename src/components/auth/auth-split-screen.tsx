@@ -34,7 +34,7 @@ export function AuthSplitScreen({
   return (
     <div className="flex min-h-screen bg-surface text-text font-body max-[900px]:flex-col">
       <div
-        className={`relative flex w-[42%] min-w-[360px] flex-none flex-col overflow-hidden p-12 text-white max-[900px]:w-auto max-[900px]:min-h-0 max-[900px]:px-6 max-[900px]:py-7 ${panelClassName}`}
+        className={`relative flex w-[42%] min-w-[360px] flex-none flex-col overflow-hidden p-12 text-white max-[900px]:order-2 max-[900px]:w-auto max-[900px]:min-w-0 max-[900px]:min-h-0 max-[900px]:px-6 max-[900px]:py-7 ${panelClassName}`}
       >
         <div
           className="pointer-events-none absolute -top-[140px] -right-[120px] h-[420px] w-[420px] rounded-full"
@@ -73,7 +73,7 @@ export function AuthSplitScreen({
         </div>
       </div>
 
-      <div className="flex min-w-0 flex-1 flex-col p-9 px-12 pb-14 max-[900px]:px-5 max-[900px]:pb-12">
+      <div className="flex min-w-0 flex-1 flex-col p-9 px-12 pb-14 max-[900px]:order-1 max-[900px]:px-5 max-[900px]:pb-12">
         <div className="flex items-center justify-end gap-2 text-[13px] text-neutral-600">{topRight}</div>
         <div
           className="mx-auto flex w-full flex-1 flex-col justify-center py-7"

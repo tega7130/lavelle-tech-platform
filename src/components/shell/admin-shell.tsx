@@ -1,11 +1,12 @@
 "use client";
 
 import * as React from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/cn";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { AdminNavIcon, ChevronLeftIcon, ChevronRightIcon } from "@/components/icons";
+import { AdminNavIcon, ChevronLeftIcon, ChevronRightIcon, MenuIcon } from "@/components/icons";
 import { Dialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { LogoMark } from "@/components/ui/logo-mark";
@@ -114,6 +115,13 @@ export function AdminShell({ staff, crumb, headerTag, badges, initialNotificatio
   const [inboxOpen, setInboxOpen] = React.useState(false);
   const [inbox, setInbox] = React.useState(initialNotifications ?? { unreadCount: 0, items: [] });
   const inboxRef = React.useRef<HTMLDivElement>(null);
+  const [navOpen, setNavOpen] = React.useState(false);
+
+  // Close the mobile drawer automatically whenever navigation completes —
+  // covers both a nav-link tap and any programmatic router.push elsewhere.
+  React.useEffect(() => {
+    setNavOpen(false);
+  }, [pathname]);
 
   React.useEffect(() => {
     if (!inboxOpen) return;
@@ -170,7 +178,7 @@ export function AdminShell({ staff, crumb, headerTag, badges, initialNotificatio
     <div className="flex h-screen bg-bg text-text font-body">
       <aside
         className={cn(
-          "flex-none flex flex-col border-r border-divider py-[var(--space-4)] px-[var(--space-3)] overflow-y-auto overflow-x-hidden transition-[width] duration-[220ms] ease-in-out",
+          "hidden md:flex flex-none flex-col border-r border-divider py-[var(--space-4)] px-[var(--space-3)] overflow-y-auto overflow-x-hidden transition-[width] duration-[220ms] ease-in-out",
           railOpen ? "w-[246px]" : "w-[66px]"
         )}
       >
@@ -289,6 +297,86 @@ export function AdminShell({ staff, crumb, headerTag, badges, initialNotificatio
         </div>
       </aside>
 
+      {navOpen &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div className="fixed inset-0 z-[70] flex md:hidden bg-[rgba(19,26,46,0.45)]" onClick={() => setNavOpen(false)}>
+            <div
+              role="dialog"
+              aria-modal="true"
+              onClick={(e) => e.stopPropagation()}
+              className="w-[246px] max-w-[82vw] h-full flex flex-col border-r border-divider bg-bg py-[var(--space-4)] px-[var(--space-3)] overflow-y-auto"
+            >
+              <div className="flex items-center gap-[10px] px-[2px] pb-[var(--space-6)]">
+                <LogoMark size={34} />
+                <div className="flex-1 min-w-0">
+                  <div className="font-heading font-bold text-[17px] tracking-[-0.01em]">Lavelle</div>
+                  <div className="text-[10px] tracking-[0.08em] uppercase text-neutral-500">Administration</div>
+                </div>
+              </div>
+
+              <nav className="flex flex-col gap-[var(--space-4)] flex-1">
+                {ADMIN_NAV.map((group) => (
+                  <div key={group.label} className="flex flex-col gap-[2px]">
+                    <div className="text-[10px] tracking-[0.1em] uppercase text-neutral-500 px-[var(--space-3)] pb-1">
+                      {group.label}
+                    </div>
+                    {group.items.map((item) => {
+                      const active = pathname?.startsWith(item.href);
+                      const badgeValue = badges?.[item.key] ?? item.badge;
+                      return (
+                        <Link
+                          key={item.key}
+                          href={item.href}
+                          onClick={() => setNavOpen(false)}
+                          className={cn(
+                            "relative flex items-center gap-[10px] px-[var(--space-3)] py-2 rounded-md text-[13.5px] no-underline justify-start",
+                            active ? "text-accent bg-accent-100" : "text-text hover:bg-neutral-100"
+                          )}
+                        >
+                          <AdminNavIcon name={item.key} />
+                          <span className="flex-1 min-w-0">{item.label}</span>
+                          {badgeValue && (
+                            <span className="inline-flex items-center rounded-full text-[10px] font-medium px-[7px] py-[2px] bg-accent-100 text-accent-700">
+                              {badgeValue}
+                            </span>
+                          )}
+                        </Link>
+                      );
+                    })}
+                  </div>
+                ))}
+              </nav>
+
+              <div className="border-t border-divider pt-[var(--space-3)] mt-[var(--space-4)] flex items-center gap-[10px]">
+                <div className="w-8 h-8 flex-none rounded-full bg-accent-100 text-accent-700 flex items-center justify-center text-xs font-heading font-semibold">
+                  {staff.initials}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-[13px]">{staff.name}</div>
+                  <div className="text-[11px] text-neutral-500">{staff.role}</div>
+                </div>
+                <button
+                  onClick={() => {
+                    setNavOpen(false);
+                    setSignOutOpen(true);
+                  }}
+                  aria-label="Sign out"
+                  title="Sign out"
+                  className="flex-none w-7 h-7 rounded-md border border-divider bg-bg text-neutral-600 flex items-center justify-center hover:bg-neutral-100 cursor-pointer"
+                >
+                  <svg viewBox="0 0 18 18" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M7 15.5H4a1.5 1.5 0 0 1-1.5-1.5v-10A1.5 1.5 0 0 1 4 2.5h3" />
+                    <path d="M12 12.5 15.5 9 12 5.5" />
+                    <path d="M15.5 9H7" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
+
       <Dialog
         open={signOutOpen}
         onClose={() => setSignOutOpen(false)}
@@ -308,14 +396,24 @@ export function AdminShell({ staff, crumb, headerTag, badges, initialNotificatio
       </Dialog>
 
       <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
-        <header className="flex-none flex items-center justify-between gap-[var(--space-4)] px-[var(--space-6)] py-[var(--space-4)] border-b border-divider">
-          <div>
-            <div className="text-[11px] tracking-[0.08em] uppercase text-neutral-500">
-              {resolvedCrumb.section}
+        <header className="flex-none flex items-center justify-between gap-3 px-[var(--space-4)] md:px-[var(--space-6)] py-[var(--space-4)] border-b border-divider">
+          <div className="flex items-center gap-3 min-w-0">
+            <button
+              onClick={() => setNavOpen(true)}
+              aria-label="Open menu"
+              title="Open menu"
+              className="flex-none md:hidden w-[38px] h-[38px] rounded-md border border-neutral-300 bg-bg text-text flex items-center justify-center hover:bg-neutral-100 cursor-pointer"
+            >
+              <MenuIcon />
+            </button>
+            <div className="min-w-0">
+              <div className="text-[11px] tracking-[0.08em] uppercase text-neutral-500 truncate">
+                {resolvedCrumb.section}
+              </div>
+              <h2 className="mt-[2px] mb-0 truncate">{resolvedCrumb.title}</h2>
             </div>
-            <h2 className="mt-[2px] mb-0">{resolvedCrumb.title}</h2>
           </div>
-          <div className="flex items-center gap-[var(--space-3)]">
+          <div className="flex items-center gap-[var(--space-3)] flex-none">
             {headerTag && (
               <span className="inline-flex items-center rounded-full text-[11px] font-medium px-[10px] py-[3px] border border-accent-300 text-accent-700 bg-bg">
                 {headerTag}
@@ -338,7 +436,7 @@ export function AdminShell({ staff, crumb, headerTag, badges, initialNotificatio
                 )}
               </button>
               {inboxOpen && (
-                <div className="absolute top-[calc(100%+8px)] right-0 z-[60] w-[390px] max-h-[440px] overflow-y-auto rounded-md bg-bg border border-divider shadow-lg">
+                <div className="absolute top-[calc(100%+8px)] right-0 z-[60] w-[min(390px,calc(100vw-32px))] max-h-[440px] overflow-y-auto rounded-md bg-bg border border-divider shadow-lg">
                   <div className="flex justify-between items-center gap-3 px-4 pt-4 pb-3 border-b border-dashed border-neutral-300 sticky top-0 bg-bg">
                     <div className="font-heading font-semibold text-[13.5px]">Your notifications</div>
                     <button onClick={markAllRead} className="text-[11.5px] font-medium text-accent hover:underline cursor-pointer">
@@ -374,7 +472,7 @@ export function AdminShell({ staff, crumb, headerTag, badges, initialNotificatio
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto p-[var(--space-6)]">{children}</main>
+        <main className="flex-1 overflow-y-auto p-[var(--space-4)] md:p-[var(--space-6)]">{children}</main>
       </div>
     </div>
   );

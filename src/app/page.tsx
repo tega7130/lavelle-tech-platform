@@ -79,7 +79,7 @@ export default async function HomePage() {
               </Reveal>
 
               <Reveal delay={270} threshold={0}>
-                <div className="flex gap-[13px] mt-[34px] flex-wrap">
+                <div className="flex flex-col items-center sm:flex-row sm:items-stretch gap-[13px] mt-[34px] flex-wrap">
                   <Link href="/programmes" className={cn(buttonClassName("primary"), "h-[50px] px-6 rounded-[9px] text-[14.5px]", CTA_HOVER)}>
                     Start your specialisation
                   </Link>
