@@ -30,7 +30,13 @@ function effectiveContent(listing: {
   };
 }
 
-/** The specializations grid + contact dropdown source — published only, ordered. */
+/**
+ * The specializations grid + contact dropdown source — published only,
+ * ordered. Coming Soon listings are included (visible, building
+ * anticipation) but carry no fee — hidden at the source here, not just
+ * in the UI, so a page that forgets to check isComingSoon can't leak a
+ * price for a programme that isn't purchasable yet.
+ */
 export async function getPublishedListings() {
   const rows = await prisma.programmeListing.findMany({
     where: { isPublished: true },
@@ -42,13 +48,16 @@ export async function getPublishedListings() {
   return rows.map((r) => {
     const content = effectiveContent(r, r.programme);
     return {
+      listingId: r.id,
       code: r.programme.code,
       title: content.headline,
       blurb: content.summary,
       tier: r.programme.tier,
       tierLabel: tierLabel(r.programme.tier),
       weeks: `${r.programme.weeks} weeks`,
-      fee: formatNaira(r.programme.feeMinor),
+      fee: r.isComingSoon ? null : formatNaira(r.programme.feeMinor),
+      isComingSoon: r.isComingSoon,
+      comingSoonMessage: r.isComingSoon ? r.comingSoonMessage : null,
     };
   });
 }
@@ -123,16 +132,19 @@ export async function getListingDetail(code: string) {
 
   return {
     code: programme.code,
+    listingId: programme.listing.id,
     tier: programme.tier,
     tierLabel: tierLabel(programme.tier),
     // Slice 11 Part C: the listing itself stays live and visible on
     // archiving (README C1) — only the enrol action changes.
     isArchived: programme.status === "ARCHIVED",
+    isComingSoon: programme.listing.isComingSoon,
+    comingSoonMessage: programme.listing.isComingSoon ? programme.listing.comingSoonMessage : null,
     title: content.headline,
     pitch: content.summary,
     video,
-    fee: formatNaira(programme.feeMinor),
-    feeNote: content.paymentNote,
+    fee: programme.listing.isComingSoon ? null : formatNaira(programme.feeMinor),
+    feeNote: programme.listing.isComingSoon ? null : content.paymentNote,
     facts: [
       { label: "Length", value: `${programme.weeks} weeks` },
       { label: "Commitment", value: programme.weeklyHoursLabel },

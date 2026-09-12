@@ -9,8 +9,11 @@ import {
   publishListing as publishListingLib,
   unpublishListing as unpublishListingLib,
   reorderListings as reorderListingsLib,
+  markComingSoon as markComingSoonLib,
+  unmarkComingSoon as unmarkComingSoonLib,
   type UpsertListingInput,
 } from "@/lib/website-admin";
+import { sendProgrammeGoLiveNotification } from "@/lib/programme-notifications";
 
 function revalidateSite(code?: string) {
   revalidatePath("/");
@@ -58,4 +61,39 @@ export async function reorderListingsAction(orderedProgrammeIds: string[]) {
   await reorderListingsLib(orderedProgrammeIds);
   revalidateSite();
   revalidatePath("/admin/website");
+}
+
+export async function markComingSoonAction(programmeId: string, message: string | null) {
+  const staff = await requireStaffPermission(Permission.MANAGE_PROGRAMMES);
+  await markComingSoonLib(programmeId, message?.trim() || null, staff.id);
+  const programme = await prisma.programme.findUnique({ where: { id: programmeId }, select: { code: true } });
+  revalidateSite(programme?.code);
+  revalidatePath("/portal/catalogue");
+  if (programme?.code) revalidatePath(`/portal/programmes/${programme.code}`);
+  revalidateAdmin(programmeId);
+}
+
+/**
+ * Going live: flips the flag, then emails every not-yet-notified
+ * subscriber. The email send happens after the DB write and isn't
+ * awaited-as-critical-path for the staff member's confirmation — a slow
+ * batch of emails shouldn't make "unmark coming soon" hang, but it is
+ * still awaited here (not fire-and-forget) so a failure is at least
+ * visible in server logs tied to this action, not silently lost the way
+ * an un-awaited promise can be on a serverless runtime.
+ */
+export async function unmarkComingSoonAction(programmeId: string) {
+  const staff = await requireStaffPermission(Permission.MANAGE_PROGRAMMES);
+  const listingId = await unmarkComingSoonLib(programmeId, staff.id);
+  const programme = await prisma.programme.findUnique({ where: { id: programmeId }, select: { code: true } });
+  revalidateSite(programme?.code);
+  revalidatePath("/portal/catalogue");
+  if (programme?.code) revalidatePath(`/portal/programmes/${programme.code}`);
+  revalidateAdmin(programmeId);
+
+  try {
+    await sendProgrammeGoLiveNotification(listingId);
+  } catch (e) {
+    console.error(`unmarkComingSoonAction: notification send failed for listing ${listingId}:`, e);
+  }
 }

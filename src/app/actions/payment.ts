@@ -8,7 +8,7 @@ import { getCurrentCandidate } from "@/lib/candidate-session";
 import { getClientIp } from "@/lib/request-info";
 import { recordAuditEvent } from "@/lib/audit";
 import { createProviderCheckout, generateInternalReference } from "@/lib/payment-provider";
-import { LiveEnrolmentExistsError, PaymentNotPendingError, ProgrammeNotOpenError, assertProgrammeOpenForEnrolment } from "@/lib/payment-errors";
+import { LiveEnrolmentExistsError, PaymentNotPendingError, ProgrammeNotOpenError, ProgrammeComingSoonError, assertProgrammeOpenForEnrolment } from "@/lib/payment-errors";
 import { applyOfflineRecording } from "@/lib/offline-recording";
 import { offlinePaymentInputSchema, recordOfflinePaymentSchema, fieldErrors } from "@/lib/validation/payment";
 import { guestCheckoutSchema } from "@/lib/validation/candidate";
@@ -169,7 +169,10 @@ export async function initiatePayment(programmeId: string): Promise<{ checkoutUr
   const candidate = await getCurrentCandidate();
   if (!candidate) throw new Error("Sign in required.");
 
-  const programme = await prisma.programme.findUniqueOrThrow({ where: { id: programmeId } });
+  const programme = await prisma.programme.findUniqueOrThrow({
+    where: { id: programmeId },
+    include: { listing: { select: { isComingSoon: true } } },
+  });
 
   try {
     assertProgrammeOpenForEnrolment(programme);
@@ -183,7 +186,7 @@ export async function initiatePayment(programmeId: string): Promise<{ checkoutUr
     revalidatePath("/portal/catalogue");
     return { internalReference: payment.internalReference, checkoutUrl: checkout.checkoutUrl };
   } catch (e) {
-    if (e instanceof ProgrammeNotOpenError || e instanceof LiveEnrolmentExistsError) {
+    if (e instanceof ProgrammeNotOpenError || e instanceof ProgrammeComingSoonError || e instanceof LiveEnrolmentExistsError) {
       return { checkoutUrl: null, internalReference: null, error: e.message };
     }
     console.error(`initiatePayment failed for candidate ${candidate.id}, programme ${programmeId}:`, e);
@@ -220,11 +223,14 @@ export async function initiateGuestCheckout(_prev: FormActionState, formData: Fo
     return { errors: { email: "An account with this email already exists" }, values: raw };
   }
 
-  const programme = await prisma.programme.findUniqueOrThrow({ where: { id: data.programmeId } });
+  const programme = await prisma.programme.findUniqueOrThrow({
+    where: { id: data.programmeId },
+    include: { listing: { select: { isComingSoon: true } } },
+  });
   try {
     assertProgrammeOpenForEnrolment(programme);
   } catch (e) {
-    if (e instanceof ProgrammeNotOpenError) return { message: e.message, values: raw };
+    if (e instanceof ProgrammeNotOpenError || e instanceof ProgrammeComingSoonError) return { message: e.message, values: raw };
     throw e;
   }
 

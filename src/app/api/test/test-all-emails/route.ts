@@ -185,6 +185,16 @@ const templateTestData: Record<TemplateName, Record<string, any>> = {
     supportEmail: EMAIL_CONFIG.supportEmail,
     currentYear: 2026,
   },
+  "programme-golive-notification": {
+    firstName: "John",
+    programmeName: "Energy Transactions",
+    tier: "Specialist",
+    programmePitch: "Master the regulatory framework and commercial structures of upstream energy deals.",
+    weeklyCommitment: "5-7 hours",
+    programmeFee: "₦450,000",
+    programmeUrl: "http://localhost:3000/programmes/ELR-201",
+    currentYear: 2026,
+  },
 };
 
 export async function POST(request: Request) {
