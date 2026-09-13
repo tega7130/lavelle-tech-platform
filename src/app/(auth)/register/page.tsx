@@ -305,7 +305,14 @@ export default function RegisterPage() {
                 <label className="flex items-start gap-2.5 text-[13px] leading-[1.5] text-neutral-700">
                   <Checkbox name="terms" checked={values.terms} onChange={check("terms")} className="mt-0.5" />
                   <span>
-                    I accept the <a href="#">Terms of Use</a> and <a href="#">Privacy Policy</a>
+                    I accept the{" "}
+                    <Link href="/terms" target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">
+                      Terms of Use
+                    </Link>{" "}
+                    and{" "}
+                    <Link href="/privacy" target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">
+                      Privacy Policy
+                    </Link>
                   </span>
                 </label>
                 <FieldError>{errors.terms}</FieldError>
