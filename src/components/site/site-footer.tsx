@@ -1,5 +1,11 @@
 import Link from "next/link";
 import { LogoMark } from "@/components/ui/logo-mark";
+import { InstagramIcon, LinkedinIcon } from "@/components/icons";
+
+const SOCIAL_LINKS = [
+  { label: "Instagram", href: "https://www.instagram.com/lavelleinstitute", Icon: InstagramIcon },
+  { label: "LinkedIn", href: "https://www.linkedin.com/company/join-lavelle/", Icon: LinkedinIcon },
+] as const;
 
 const FOOTER_COLS = [
   {
@@ -53,6 +59,20 @@ export function SiteFooter() {
                 candidates@lavelle.ng
               </a>
               <span className="text-neutral-600">+234 700 528 3553</span>
+            </div>
+            <div className="flex gap-[10px] mt-[18px]">
+              {SOCIAL_LINKS.map(({ label, href, Icon }) => (
+                <a
+                  key={label}
+                  href={href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={label}
+                  className="w-8 h-8 rounded-full border border-neutral-300 text-neutral-600 flex items-center justify-center hover:border-accent hover:text-accent transition-colors"
+                >
+                  <Icon width={15} height={15} />
+                </a>
+              ))}
             </div>
           </div>
 

@@ -237,3 +237,21 @@ export const EyeOffIcon = (p: IconProps) => (
     <path d="M2.5 2.5l13 13" />
   </Svg>
 );
+
+export const InstagramIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <rect x="2.5" y="2.5" width="13" height="13" rx="3.5" />
+    <circle cx="9" cy="9" r="3.4" />
+    <circle cx="13" cy="5" r="0.6" fill="currentColor" stroke="none" />
+  </Svg>
+);
+
+export const LinkedinIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <rect x="2.5" y="2.5" width="13" height="13" rx="1.5" />
+    <line x1="6" y1="7.8" x2="6" y2="13" />
+    <circle cx="6" cy="5.2" r="0.15" fill="currentColor" stroke="currentColor" strokeWidth="1.6" />
+    <path d="M9.3 13V9.6c0-1.1.7-1.8 1.8-1.8s1.7.7 1.7 1.8V13" />
+    <line x1="9.3" y1="7.8" x2="9.3" y2="13" />
+  </Svg>
+);
