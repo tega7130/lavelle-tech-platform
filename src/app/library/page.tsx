@@ -4,8 +4,7 @@ import { SiteCompactHeader } from "@/components/site/site-header";
 import { SiteFooter } from "@/components/site/site-footer";
 import { LibraryCatalogue } from "@/components/site/library-catalogue";
 import { getPublicDocumentTemplates, getPublicDocumentCategories, getActiveLibraryPromotion } from "@/lib/public-document-library-reads";
-
-const SITE_URL = "https://lavelle.africa";
+import { SITE_URL } from "@/lib/site-url";
 const PAGE_TITLE = "Library — Professional Legal Templates | Lavelle Institute";
 const PAGE_DESCRIPTION =
   "Browse professional contracts, MOUs, agreements and other legal templates drafted by Nigerian legal experts. Create a free Lavelle account to purchase and download.";
@@ -21,6 +20,7 @@ export const metadata: Metadata = {
     siteName: "Lavelle Institute",
     type: "website",
   },
+  twitter: { card: "summary_large_image" },
 };
 
 const FAQS = [

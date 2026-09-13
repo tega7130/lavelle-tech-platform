@@ -60,6 +60,7 @@ export function ProgrammeCatalogue({ listings }: { listings: Listing[] }) {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search programmes"
+            aria-label="Search programmes"
             className="w-full h-10 pl-9 pr-3 rounded-[9px] border border-divider bg-bg text-[13px] outline-none focus:border-accent-200"
           />
         </div>

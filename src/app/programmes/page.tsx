@@ -1,7 +1,27 @@
+import type { Metadata } from "next";
 import { SiteCompactHeader } from "@/components/site/site-header";
 import { SiteFooter } from "@/components/site/site-footer";
 import { ProgrammeCatalogue } from "@/components/site/programme-catalogue";
 import { getPublishedListings } from "@/lib/website-reads";
+import { SITE_URL } from "@/lib/site-url";
+
+const PAGE_TITLE = "All Programmes — Specializations | Lavelle Institute";
+const PAGE_DESCRIPTION =
+  "Browse every Lavelle Institute specialization currently open for enrolment across Foundation, Specialist and Advanced Practitioner tiers.";
+
+export const metadata: Metadata = {
+  title: PAGE_TITLE,
+  description: PAGE_DESCRIPTION,
+  alternates: { canonical: `${SITE_URL}/programmes` },
+  openGraph: {
+    title: PAGE_TITLE,
+    description: PAGE_DESCRIPTION,
+    url: `${SITE_URL}/programmes`,
+    siteName: "Lavelle Institute",
+    type: "website",
+  },
+  twitter: { card: "summary_large_image" },
+};
 
 export default async function ProgrammesPage() {
   const listings = await getPublishedListings();

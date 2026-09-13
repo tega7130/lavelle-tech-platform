@@ -3,10 +3,23 @@ import type { Metadata } from "next";
 import { SiteCompactHeader } from "@/components/site/site-header";
 import { SiteFooter } from "@/components/site/site-footer";
 import { getPublishedBlogPosts } from "@/lib/blog-reads";
+import { SITE_URL } from "@/lib/site-url";
+
+const PAGE_TITLE = "Blog — Lavelle Institute";
+const PAGE_DESCRIPTION = "Legal commentary, programme news and updates from the Lavelle Institute.";
 
 export const metadata: Metadata = {
-  title: "Blog — Lavelle Institute",
-  description: "Legal commentary, programme news and updates from the Lavelle Institute.",
+  title: PAGE_TITLE,
+  description: PAGE_DESCRIPTION,
+  alternates: { canonical: `${SITE_URL}/blog` },
+  openGraph: {
+    title: PAGE_TITLE,
+    description: PAGE_DESCRIPTION,
+    url: `${SITE_URL}/blog`,
+    siteName: "Lavelle Institute",
+    type: "website",
+  },
+  twitter: { card: "summary_large_image" },
 };
 
 function formatDate(d: Date) {

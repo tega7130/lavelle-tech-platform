@@ -75,12 +75,12 @@ export function SiteFooter() {
         <div className="flex justify-between gap-6 mt-11 pt-[22px] border-t border-dashed border-neutral-300 flex-wrap text-[11.5px] text-neutral-700">
           <span>&copy; 2026 Lavelle Institute. All rights reserved.</span>
           <div className="flex gap-[22px]">
-            <a href="#" className="text-neutral-700 no-underline hover:text-accent">
+            <Link href="/terms" className="text-neutral-700 no-underline hover:text-accent">
               Terms of Use
-            </a>
-            <a href="#" className="text-neutral-700 no-underline hover:text-accent">
+            </Link>
+            <Link href="/privacy" className="text-neutral-700 no-underline hover:text-accent">
               Privacy Policy
-            </a>
+            </Link>
             <Link href="/verify" className="text-neutral-700 no-underline hover:text-accent">
               Verify a credential
             </Link>

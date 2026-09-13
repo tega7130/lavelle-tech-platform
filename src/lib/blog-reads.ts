@@ -3,6 +3,21 @@ import { prisma } from "@/lib/prisma";
 import { getSignedAssetUrl } from "@/lib/storage";
 
 /**
+ * A broken hero image (bad storage credentials, a deleted asset) must
+ * degrade to "no image" for that one post, never take down the whole
+ * /blog index or /blog/[slug] for every visitor.
+ */
+async function safeHeroImageUrl(storageKey: string | undefined): Promise<string | null> {
+  if (!storageKey) return null;
+  try {
+    return await getSignedAssetUrl(storageKey);
+  } catch (error) {
+    console.error(`Failed to build hero image URL for asset ${storageKey}:`, error);
+    return null;
+  }
+}
+
+/**
  * Not staff-gated — called from both the public marketing site (/blog)
  * and the signed-in candidate portal (/portal/blog), which read the same
  * published rows since a post has no candidate-specific or payment-gated
@@ -22,7 +37,7 @@ export async function getPublishedBlogPosts() {
       tags: (p.tags as string[] | null) ?? [],
       authorName: p.authorName,
       publishedAt: p.publishedAt!,
-      heroImageUrl: p.heroAsset ? await getSignedAssetUrl(p.heroAsset.storageKey) : null,
+      heroImageUrl: await safeHeroImageUrl(p.heroAsset?.storageKey),
     }))
   );
 }
@@ -43,6 +58,6 @@ export async function getPublishedBlogPost(slug: string) {
     tags: (post.tags as string[] | null) ?? [],
     authorName: post.authorName,
     publishedAt: post.publishedAt!,
-    heroImageUrl: post.heroAsset ? await getSignedAssetUrl(post.heroAsset.storageKey) : null,
+    heroImageUrl: await safeHeroImageUrl(post.heroAsset?.storageKey),
   };
 }

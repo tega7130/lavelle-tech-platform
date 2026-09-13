@@ -63,6 +63,7 @@ export function SiteHeroHeader() {
           <button
             onClick={() => setMenuOpen(true)}
             aria-label="Open menu"
+            aria-expanded={menuOpen}
             title="Open menu"
             className="md:hidden flex-none w-[38px] h-[38px] rounded-md border border-white/28 text-white flex items-center justify-center hover:bg-white/[0.09] cursor-pointer"
           >

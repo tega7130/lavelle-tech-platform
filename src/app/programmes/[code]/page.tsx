@@ -1,11 +1,13 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import type { Metadata } from "next";
 import { SiteCompactHeader } from "@/components/site/site-header";
 import { SiteFooter } from "@/components/site/site-footer";
 import { buttonClassName } from "@/components/ui/button";
 import { cn } from "@/lib/cn";
 import { getListingDetail, getPublishedListings } from "@/lib/website-reads";
 import { NotifyMeForm } from "@/components/site/notify-me-form";
+import { SITE_URL } from "@/lib/site-url";
 
 function ProgrammeVideo({ video, title }: { video: { embedUrl: string | null; directVideoUrl: string | null }; title: string }) {
   return (
@@ -39,6 +41,24 @@ function ProgrammeVideo({ video, title }: { video: { embedUrl: string | null; di
 export async function generateStaticParams() {
   const listings = await getPublishedListings();
   return listings.map((l) => ({ code: l.code }));
+}
+
+export async function generateMetadata({ params }: { params: Promise<{ code: string }> }): Promise<Metadata> {
+  const { code } = await params;
+  const detail = await getListingDetail(code);
+  if (!detail) return {};
+
+  const title = `${detail.title} — ${detail.tierLabel} | Lavelle Institute`;
+  const description = detail.pitch.length > 160 ? `${detail.pitch.slice(0, 157)}...` : detail.pitch;
+  const url = `${SITE_URL}/programmes/${code}`;
+
+  return {
+    title,
+    description,
+    alternates: { canonical: url },
+    openGraph: { title, description, url, siteName: "Lavelle Institute", type: "website" },
+    twitter: { card: "summary_large_image" },
+  };
 }
 
 export default async function ProgrammeDetailPage({ params }: { params: Promise<{ code: string }> }) {

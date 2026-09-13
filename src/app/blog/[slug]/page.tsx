@@ -5,6 +5,7 @@ import { SiteCompactHeader } from "@/components/site/site-header";
 import { SiteFooter } from "@/components/site/site-footer";
 import { BlogPostView } from "@/components/site/blog-post-view";
 import { getPublishedBlogPost, getPublishedBlogPosts } from "@/lib/blog-reads";
+import { SITE_URL } from "@/lib/site-url";
 
 function formatDate(d: Date) {
   return new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
@@ -28,9 +29,16 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const { slug } = await params;
   const post = await getPublishedBlogPost(slug);
   if (!post) return {};
+
+  const title = `${post.title} — Lavelle Institute Blog`;
+  const url = `${SITE_URL}/blog/${slug}`;
+
   return {
-    title: `${post.title} — Lavelle Institute Blog`,
+    title,
     description: post.excerpt,
+    alternates: { canonical: url },
+    openGraph: { title, description: post.excerpt, url, siteName: "Lavelle Institute", type: "article" },
+    twitter: { card: "summary_large_image" },
   };
 }
 
