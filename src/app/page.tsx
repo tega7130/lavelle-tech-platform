@@ -9,7 +9,7 @@ import { Reveal, AnimatedNumber, CTA_HOVER } from "@/components/site/motion";
 import { TierCard } from "@/components/site/tier-card";
 import { buttonClassName } from "@/components/ui/button";
 import { cn } from "@/lib/cn";
-import { getPublishedListings, getPublishedFaqs } from "@/lib/website-reads";
+import { getPublishedListings } from "@/lib/website-reads";
 import { SITE_URL, SITE_HOST } from "@/lib/site-url";
 
 const PAGE_TITLE = "Lavelle Institute — Professional Legal Specialization for Nigeria";
@@ -71,8 +71,39 @@ const HERO_STATS = [
   { value: 11, suffix: "", label: "Specializations across three tiers" },
 ] as const;
 
+// Hardcoded rather than DB-driven (FaqEntry/getPublishedFaqs) — content
+// changes rarely enough that editing it here beats depending on every
+// environment's database being seeded with real answers.
+const FAQS = [
+  {
+    id: "pay-to-register",
+    question: "Do I need to pay to register?",
+    answer: "No. Registration is free. You can register and explore every programme in full, then pay only for the specialisation you choose to begin. The certifying examination fee is charged separately, and only when you register for a sitting.",
+  },
+  {
+    id: "programme-time",
+    question: "How much time does a programme take?",
+    answer: "Twelve weeks at six to eight hours a week, delivered online. Lectures are recorded with narration so you set your own pace, but drafting exercises carry submission deadlines and the examination sits in a fixed window.",
+  },
+  {
+    id: "verify-credential",
+    question: "Can an employer or client verify my credential?",
+    answer: "Yes, and without contacting us. Every certificate carries an identifier checkable on our public verification portal, which returns the holder, programme, tier, grade and issue date, and clearly shows a credential that has been revoked or superseded.",
+  },
+  {
+    id: "not-yet-called",
+    question: "I am not yet called to the Bar. Can I enrol?",
+    answer: "Yes. Law graduates and students may take Foundation programmes, and non-lawyers working in regulated industries are welcome on the compliance pathways. Your professional status is recorded so your credential reflects your standing accurately.",
+  },
+  {
+    id: "complete-before-exam",
+    question: "Do I need to complete a programme before sitting an examination?",
+    answer: "At Foundation and Specialist level, no. You may register for an examination directly. At Advanced Practitioner level a completed programme at the tier below is a prerequisite. Candidates who complete the programme carry a Lavelle pathway credential, which records both the study and the examination.",
+  },
+] as const;
+
 export default async function HomePage() {
-  const [listings, faqs] = await Promise.all([getPublishedListings(), getPublishedFaqs()]);
+  const listings = await getPublishedListings();
 
   return (
     <div id="top" className="bg-bg">
@@ -370,7 +401,7 @@ export default async function HomePage() {
             </div>
 
             <div className="flex flex-col gap-[10px]">
-              {faqs.map((q, i) => (
+              {FAQS.map((q, i) => (
                 <details key={q.id} className="group border border-divider rounded-xl bg-bg overflow-hidden open:border-accent-200 open:bg-accent-100" open={i === 0}>
                   <summary className="flex items-start gap-4 px-[22px] py-5 cursor-pointer list-none">
                     <span className="flex-1 min-w-0 font-heading font-semibold text-[15px] leading-[1.45]">{q.question}</span>
