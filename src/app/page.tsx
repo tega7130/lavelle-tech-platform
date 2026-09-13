@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import type { Metadata } from "next";
 import { SiteHeroHeader } from "@/components/site/site-header";
 import { SiteFooter } from "@/components/site/site-footer";
 import { ContactForm } from "@/components/site/contact-form";
@@ -9,6 +10,25 @@ import { TierCard } from "@/components/site/tier-card";
 import { buttonClassName } from "@/components/ui/button";
 import { cn } from "@/lib/cn";
 import { getPublishedListings, getPublishedFaqs } from "@/lib/website-reads";
+import { SITE_URL, SITE_HOST } from "@/lib/site-url";
+
+const PAGE_TITLE = "Lavelle Institute — Professional Legal Specialization for Nigeria";
+const PAGE_DESCRIPTION =
+  "Structured specialization and examined credentialing for the Nigerian legal market. Foundation, Specialist and Advanced Practitioner programmes with publicly verifiable certification.";
+
+export const metadata: Metadata = {
+  title: PAGE_TITLE,
+  description: PAGE_DESCRIPTION,
+  alternates: { canonical: SITE_URL },
+  openGraph: {
+    title: PAGE_TITLE,
+    description: PAGE_DESCRIPTION,
+    url: SITE_URL,
+    siteName: "Lavelle Institute",
+    type: "website",
+  },
+  twitter: { card: "summary_large_image" },
+};
 
 const TIERS = [
   {
@@ -126,7 +146,7 @@ export default async function HomePage() {
                   LVL-CERT-2026-01188 · Specialist, Energy Law &amp; Regulation · issued 4 Aug 2026
                 </div>
                 <div className="h-px border-t border-dashed border-neutral-300 my-[11px]" />
-                <div className="text-[10px] text-neutral-500">Checkable by any employer at lavelle.africa/verify</div>
+                <div className="text-[10px] text-neutral-700">Checkable by any employer at {SITE_HOST}/verify</div>
               </div>
             </Reveal>
           </div>

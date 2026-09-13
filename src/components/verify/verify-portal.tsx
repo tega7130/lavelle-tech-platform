@@ -72,8 +72,9 @@ export function VerifyPortal({ initialNumber }: { initialNumber: string }) {
           </div>
 
           <Card elev="md" className="p-6 mt-6">
-            <Label>Certificate ID</Label>
+            <Label htmlFor="certificate-id">Certificate ID</Label>
             <Input
+              id="certificate-id"
               placeholder="LVL-CERT-YYYY-NNNNN"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
