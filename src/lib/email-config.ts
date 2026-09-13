@@ -11,7 +11,7 @@ export const EMAIL_CONFIG = {
 
   // Support Contact
   supportPhoneNumber: process.env.SUPPORT_PHONE || '+234 XXX XXX XXXX',
-  supportEmail: process.env.SUPPORT_EMAIL || 'candidates@lavelle.ng',
+  supportEmail: process.env.SUPPORT_EMAIL || 'candidates@learnlavelle.com',
   securityContactEmail: process.env.SECURITY_EMAIL || 'security@lavelle.ng',
   examCoordinatorEmail: process.env.EXAM_COORDINATOR_EMAIL || 'exams@lavelle.ng',
 
