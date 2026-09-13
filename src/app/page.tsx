@@ -371,21 +371,19 @@ export default async function HomePage() {
 
             <div className="flex flex-col gap-[10px]">
               {faqs.map((q, i) => (
-                <Reveal key={q.id} delay={Math.min(i, 5) * 80} threshold={0.05}>
-                  <details className="group border border-divider rounded-xl bg-bg overflow-hidden open:border-accent-200 open:bg-accent-100" open={i === 0}>
-                    <summary className="flex items-start gap-4 px-[22px] py-5 cursor-pointer list-none">
-                      <span className="flex-1 min-w-0 font-heading font-semibold text-[15px] leading-[1.45]">{q.question}</span>
-                      <span className="w-6 h-6 flex-none rounded-[7px] border border-neutral-300 flex items-center justify-center text-neutral-700 transition group-open:rotate-180">
-                        <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M4.5 6.5 8 10l3.5-3.5" />
-                        </svg>
-                      </span>
-                    </summary>
-                    <div className="px-[22px] sm:pr-[60px] pb-[22px]">
-                      <p className="text-[13.5px] leading-[1.72] text-neutral-700 m-0">{q.answer}</p>
-                    </div>
-                  </details>
-                </Reveal>
+                <details key={q.id} className="group border border-divider rounded-xl bg-bg overflow-hidden open:border-accent-200 open:bg-accent-100" open={i === 0}>
+                  <summary className="flex items-start gap-4 px-[22px] py-5 cursor-pointer list-none">
+                    <span className="flex-1 min-w-0 font-heading font-semibold text-[15px] leading-[1.45]">{q.question}</span>
+                    <span className="w-6 h-6 flex-none rounded-[7px] border border-neutral-300 flex items-center justify-center text-neutral-700 transition group-open:rotate-180">
+                      <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M4.5 6.5 8 10l3.5-3.5" />
+                      </svg>
+                    </span>
+                  </summary>
+                  <div className="px-[22px] sm:pr-[60px] pb-[22px]">
+                    <p className="text-[13.5px] leading-[1.72] text-neutral-700 m-0">{q.answer}</p>
+                  </div>
+                </details>
               ))}
             </div>
           </div>
