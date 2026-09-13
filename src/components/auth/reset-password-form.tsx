@@ -44,7 +44,7 @@ export function ResetPasswordForm({ token, preview }: { token: string; preview: 
         panelClassName="lv-gradient-dark"
         logoSubtitle="Administration"
         topRight={null}
-        footer={<span>Access issues: registrar@lavelle.ng</span>}
+        footer={<span>Access issues: registrar@learnlavelle.com</span>}
         formChildren={
           <div className="rounded-xl border border-divider bg-bg p-9 text-center shadow-md">
             <div className="mx-auto flex h-[54px] w-[54px] items-center justify-center rounded-full border-[1.5px] border-accent-2-300 bg-accent-2-100">
@@ -78,7 +78,7 @@ export function ResetPasswordForm({ token, preview }: { token: string; preview: 
         panelClassName="lv-gradient-dark"
         logoSubtitle="Administration"
         topRight={null}
-        footer={<span>Access issues: registrar@lavelle.ng</span>}
+        footer={<span>Access issues: registrar@learnlavelle.com</span>}
         formChildren={
           <div className="rounded-xl border border-divider bg-bg p-9 text-center shadow-md">
             <div className="mx-auto flex h-[52px] w-[52px] items-center justify-center rounded-full border border-warning-border bg-warning-bg text-[22px] font-bold text-warning-text">
@@ -112,7 +112,7 @@ export function ResetPasswordForm({ token, preview }: { token: string; preview: 
           </Link>
         </>
       }
-      footer={<span>Not expecting this? Contact registrar@lavelle.ng</span>}
+      footer={<span>Not expecting this? Contact registrar@learnlavelle.com</span>}
       formChildren={
         <div className="rounded-xl border border-divider bg-bg p-8 pb-7 shadow-md">
           <h2 className="text-[22px] font-semibold tracking-[-0.01em]">Reset your password</h2>

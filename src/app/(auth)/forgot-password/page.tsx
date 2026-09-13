@@ -224,7 +224,7 @@ export default function ForgotPasswordPage() {
           )}
 
           <div className="mx-auto mt-[18px] max-w-[46ch] text-center text-[11.5px] leading-[1.6] text-neutral-500 text-pretty">
-            Trouble resetting? Email <a href="mailto:candidates@lavelle.ng">candidates@lavelle.ng</a> with your
+            Trouble resetting? Email <a href="mailto:candidates@learnlavelle.com">candidates@learnlavelle.com</a> with your
             candidate number and a representative will assist.
           </div>
         </>

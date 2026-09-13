@@ -32,7 +32,7 @@ const FAQS = [
   { q: "Can I modify the templates?", a: "Templates are editable where the purchased file format supports editing — Word (.docx) templates can be edited directly; PDF templates can be edited with standard PDF tools." },
   {
     q: "What's the refund policy?",
-    a: "Our refund policy is being finalised. If you have a question about a specific purchase, contact us at candidates@lavelle.ng.",
+    a: "Our refund policy is being finalised. If you have a question about a specific purchase, contact us at candidates@learnlavelle.com.",
   },
 ] as const;
 

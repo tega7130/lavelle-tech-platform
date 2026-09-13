@@ -436,7 +436,7 @@ export default async function HomePage() {
               </Reveal>
               <Reveal delay={240} className="flex flex-col gap-4 mt-8 pt-[26px] border-t border-dashed border-neutral-300">
                 {[
-                  ["@", "candidates@lavelle.ng"],
+                  ["@", "candidates@learnlavelle.com"],
                   ["☎", "+234 700 528 3553", "Monday to Friday, 9am – 5pm WAT"],
                   ["W", "+234 803 552 8841"],
                 ].map(([mark, value, meta]) => (

@@ -67,7 +67,7 @@ export function AuthSplitScreen({
           {footer ?? (
             <>
               <span>Intakes: January · April · September</span>
-              <span>candidates@lavelle.ng</span>
+              <span>candidates@learnlavelle.com</span>
             </>
           )}
         </div>

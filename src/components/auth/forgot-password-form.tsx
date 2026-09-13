@@ -128,7 +128,7 @@ export function ForgotPasswordForm() {
           </>
         )
       }
-      footer={<span>Access issues: registrar@lavelle.ng</span>}
+      footer={<span>Access issues: registrar@learnlavelle.com</span>}
       formChildren={
         view === "email" ? (
           <form
