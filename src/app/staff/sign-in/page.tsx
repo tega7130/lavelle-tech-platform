@@ -75,7 +75,7 @@ function SignInForm() {
       panelClassName="lv-gradient-dark"
       logoSubtitle="Administration"
       topRight={null}
-      footer={<span>Access issues: registrar@lavelle.ng</span>}
+      footer={<span>Access issues: registrar@learnlavelle.com</span>}
       formChildren={
         <div className="rounded-xl border border-divider bg-bg p-8 pb-7 shadow-md">
           {expired && (

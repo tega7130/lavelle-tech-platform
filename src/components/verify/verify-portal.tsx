@@ -111,7 +111,7 @@ function ResultCard({ result }: { result: VerifyResult }) {
         </div>
         <p className="text-neutral-700 text-[13.5px] mt-3">
           We could not find a certificate with that ID. Check the ID for transcription errors, or contact the registrar at{" "}
-          <a href="mailto:registrar@lavelle.ng">registrar@lavelle.ng</a> if you believe a credential is being misrepresented.
+          <a href="mailto:registrar@learnlavelle.com">registrar@learnlavelle.com</a> if you believe a credential is being misrepresented.
         </p>
       </Card>
     );
@@ -162,7 +162,7 @@ function ResultCard({ result }: { result: VerifyResult }) {
           </div>
         )}
         <div className="text-neutral-500 text-[11.5px] mt-4">
-          Register as of today. Queries about a revocation should be directed to <a href="mailto:registrar@lavelle.ng">registrar@lavelle.ng</a>.
+          Register as of today. Queries about a revocation should be directed to <a href="mailto:registrar@learnlavelle.com">registrar@learnlavelle.com</a>.
         </div>
       </Card>
     );

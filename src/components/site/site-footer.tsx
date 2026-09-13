@@ -33,7 +33,7 @@ const FOOTER_COLS = [
       { label: "Create an account", href: "/register" },
       { label: "Sign in", href: "/sign-in" },
       { label: "Verify a credential", href: "/verify" },
-      { label: "Contact a representative", href: "mailto:candidates@lavelle.ng" },
+      { label: "Contact a representative", href: "mailto:candidates@learnlavelle.com" },
     ],
   },
 ];
@@ -55,8 +55,8 @@ export function SiteFooter() {
               Structured specialization and examined credentialing for the Nigerian legal market. Lagos, Nigeria.
             </p>
             <div className="flex flex-col gap-[5px] mt-[18px] text-[12.5px]">
-              <a href="mailto:candidates@lavelle.ng" className="text-accent no-underline hover:underline">
-                candidates@lavelle.ng
+              <a href="mailto:candidates@learnlavelle.com" className="text-accent no-underline hover:underline">
+                candidates@learnlavelle.com
               </a>
               <span className="text-neutral-600">+234 700 528 3553</span>
             </div>
