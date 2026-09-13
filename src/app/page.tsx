@@ -112,6 +112,7 @@ export default async function HomePage() {
                 </div>
               </Reveal>
 
+              {/* HERO STATS — commented out until we have real figures to report
               <div className="flex gap-10 mt-[52px] pt-[30px] border-t border-dashed border-white/20 flex-wrap">
                 {HERO_STATS.map((s, i) => (
                   <Reveal key={s.label} delay={360 + i * 100} threshold={0}>
@@ -122,6 +123,7 @@ export default async function HomePage() {
                   </Reveal>
                 ))}
               </div>
+              */}
             </div>
 
             <Reveal variant="scale" delay={220} threshold={0} className="hidden lg:block relative">
@@ -153,7 +155,7 @@ export default async function HomePage() {
         </div>
       </div>
 
-      {/* TRUST STRIP */}
+      {/* TRUST STRIP — commented out until we have real firm partnerships to list
       <div className="border-b border-divider bg-neutral-100">
         <div className="mx-auto max-w-[1200px] px-5 sm:px-6 md:px-8 lg:px-10 py-[26px] flex items-center justify-between gap-9 flex-wrap">
           <div className="text-[11px] tracking-[0.18em] uppercase font-semibold text-neutral-700">Candidates practise at</div>
@@ -166,6 +168,7 @@ export default async function HomePage() {
           </div>
         </div>
       </div>
+      */}
 
       {/* THE LADDER */}
       <div id="ladder" className="py-[104px]">
@@ -368,21 +371,19 @@ export default async function HomePage() {
 
             <div className="flex flex-col gap-[10px]">
               {faqs.map((q, i) => (
-                <Reveal key={q.id} delay={Math.min(i, 5) * 80} threshold={0.05}>
-                  <details className="group border border-divider rounded-xl bg-bg overflow-hidden open:border-accent-200 open:bg-accent-100" open={i === 0}>
-                    <summary className="flex items-start gap-4 px-[22px] py-5 cursor-pointer list-none">
-                      <span className="flex-1 min-w-0 font-heading font-semibold text-[15px] leading-[1.45]">{q.question}</span>
-                      <span className="w-6 h-6 flex-none rounded-[7px] border border-neutral-300 flex items-center justify-center text-neutral-700 transition group-open:rotate-180">
-                        <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M4.5 6.5 8 10l3.5-3.5" />
-                        </svg>
-                      </span>
-                    </summary>
-                    <div className="px-[22px] sm:pr-[60px] pb-[22px]">
-                      <p className="text-[13.5px] leading-[1.72] text-neutral-700 m-0">{q.answer}</p>
-                    </div>
-                  </details>
-                </Reveal>
+                <details key={q.id} className="group border border-divider rounded-xl bg-bg overflow-hidden open:border-accent-200 open:bg-accent-100" open={i === 0}>
+                  <summary className="flex items-start gap-4 px-[22px] py-5 cursor-pointer list-none">
+                    <span className="flex-1 min-w-0 font-heading font-semibold text-[15px] leading-[1.45]">{q.question}</span>
+                    <span className="w-6 h-6 flex-none rounded-[7px] border border-neutral-300 flex items-center justify-center text-neutral-700 transition group-open:rotate-180">
+                      <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M4.5 6.5 8 10l3.5-3.5" />
+                      </svg>
+                    </span>
+                  </summary>
+                  <div className="px-[22px] sm:pr-[60px] pb-[22px]">
+                    <p className="text-[13.5px] leading-[1.72] text-neutral-700 m-0">{q.answer}</p>
+                  </div>
+                </details>
               ))}
             </div>
           </div>
