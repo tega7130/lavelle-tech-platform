@@ -388,8 +388,6 @@ export default function PrivacyPolicyPage() {
         General enquiries: <a href="mailto:candidates@learnlavelle.com">candidates@learnlavelle.com</a>
         <br />
         Data protection and account issues: <a href="mailto:registrar@learnlavelle.com">registrar@learnlavelle.com</a>
-        <br />
-        Address: Surulere, Lagos, Nigeria
       </p>
       <p>
         We aim to resolve any data protection concerns promptly. If you are dissatisfied with our response, you have

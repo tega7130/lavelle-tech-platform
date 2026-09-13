@@ -367,8 +367,6 @@ export default function TermsOfUsePage() {
         General enquiries: <a href="mailto:candidates@learnlavelle.com">candidates@learnlavelle.com</a>
         <br />
         Credential/account issues: <a href="mailto:registrar@learnlavelle.com">registrar@learnlavelle.com</a>
-        <br />
-        Address: Surulere, Lagos, Nigeria
       </p>
     </LegalPage>
   );
