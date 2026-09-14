@@ -13,6 +13,16 @@ import { PasswordInput } from "@/components/ui/password-input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { PHONE_CODES } from "@/lib/phone-codes";
 
+async function initiateGoogleOAuth() {
+  try {
+    const res = await fetch("/api/auth/google/authorize", { method: "POST" });
+    const { url } = await res.json();
+    window.location.href = url;
+  } catch (error) {
+    console.error("Failed to initiate Google OAuth:", error);
+  }
+}
+
 const LADDER = (
   <div className="mt-9 border-t border-dashed border-white/22 pt-[26px]">
     <div className="text-[10px] tracking-[0.16em] text-white/50 uppercase">Credentialing ladder</div>
@@ -42,6 +52,8 @@ const LADDER = (
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]{2,}$/;
 
 export default function RegisterPage() {
+  const [choiceScreenOpen, setChoiceScreenOpen] = React.useState(true);
+  const [googleLoading, setGoogleLoading] = React.useState(false);
   const [values, setValues] = React.useState({
     firstName: "",
     lastName: "",
@@ -154,7 +166,8 @@ export default function RegisterPage() {
       }
       formChildren={
         <>
-          <form action={registerAction} className="rounded-xl border border-divider bg-bg p-[34px_34px_30px] shadow-md">
+          {!choiceScreenOpen && (
+            <form action={registerAction} className="rounded-xl border border-divider bg-bg p-[34px_34px_30px] shadow-md">
             <h2 className="text-[23px] font-semibold tracking-[-0.01em]">Create your candidate account</h2>
             <p className="mt-2.5 text-[13.5px] leading-[1.6] text-neutral-600 text-pretty">
               Registration takes a minute and commits you to nothing. You will receive a provisional applicant
@@ -343,9 +356,8 @@ export default function RegisterPage() {
 
               <button
                 type="button"
-                disabled
-                title="Not available yet"
-                className="flex h-[46px] w-full cursor-not-allowed items-center justify-center gap-2.5 rounded-md border border-neutral-300 bg-bg text-sm font-medium text-text opacity-60"
+                onClick={() => setChoiceScreenOpen(true)}
+                className="flex h-[46px] w-full items-center justify-center gap-2.5 rounded-md border border-neutral-300 bg-bg text-sm font-medium text-text hover:border-neutral-400 hover:bg-neutral-50 transition-colors"
               >
                 <svg width="17" height="17" viewBox="0 0 18 18" aria-hidden="true">
                   <path fill="#4285F4" d="M17.6 9.2c0-.6-.1-1.2-.2-1.7H9v3.3h4.8a4.1 4.1 0 0 1-1.8 2.7v2.2h2.9c1.7-1.5 2.7-3.8 2.7-6.5Z" />
@@ -357,15 +369,65 @@ export default function RegisterPage() {
               </button>
             </div>
           </form>
+          )}
 
-          <div className="mx-auto mt-[18px] max-w-[46ch] text-center text-[11.5px] leading-[1.6] text-neutral-500 text-pretty">
-            Registration does not enrol you in a programme. Enrolment is confirmed once payment for a selected
-            programme is received.
-          </div>
+          {!choiceScreenOpen && (
+            <div className="mx-auto mt-[18px] max-w-[46ch] text-center text-[11.5px] leading-[1.6] text-neutral-500 text-pretty">
+              Registration does not enrol you in a programme. Enrolment is confirmed once payment for a selected
+              programme is received.
+            </div>
+          )}
         </>
       }
     >
       {LADDER}
+
+      <Dialog
+        open={choiceScreenOpen}
+        onClose={() => setChoiceScreenOpen(false)}
+        title="Get started"
+        className="bg-bg text-text"
+      >
+        <div className="flex flex-col gap-4">
+          <p className="text-[13.5px] leading-[1.6] text-neutral-600 text-pretty">
+            Choose how you'd like to sign up for your candidate account.
+          </p>
+
+          <button
+            type="button"
+            onClick={() => setChoiceScreenOpen(false)}
+            className="flex h-[52px] w-full flex-col items-center justify-center gap-2 rounded-lg border border-neutral-300 bg-bg hover:border-neutral-400 hover:bg-neutral-50 transition-colors font-medium text-[14.5px]"
+          >
+            <span>Sign up with email</span>
+            <span className="text-[11px] text-neutral-500 font-normal">Create account & set password</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={async () => {
+              setGoogleLoading(true);
+              await initiateGoogleOAuth();
+            }}
+            disabled={googleLoading}
+            className="flex h-[52px] w-full items-center justify-center gap-2.5 rounded-lg border border-neutral-300 bg-bg hover:border-neutral-400 hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-60 transition-colors font-medium text-[14.5px]"
+          >
+            <svg width="17" height="17" viewBox="0 0 18 18" aria-hidden="true">
+              <path fill="#4285F4" d="M17.6 9.2c0-.6-.1-1.2-.2-1.7H9v3.3h4.8a4.1 4.1 0 0 1-1.8 2.7v2.2h2.9c1.7-1.5 2.7-3.8 2.7-6.5Z" />
+              <path fill="#34A853" d="M9 18c2.4 0 4.5-.8 6-2.2l-2.9-2.2c-.8.5-1.8.9-3.1.9-2.4 0-4.5-1.6-5.2-3.8H.8v2.3A9 9 0 0 0 9 18Z" />
+              <path fill="#FBBC05" d="M3.8 10.7a5.4 5.4 0 0 1 0-3.4V5H.8a9 9 0 0 0 0 8l3-2.3Z" />
+              <path fill="#EA4335" d="M9 3.6c1.3 0 2.5.5 3.4 1.3l2.6-2.6A9 9 0 0 0 .8 5l3 2.3C4.5 5.1 6.6 3.6 9 3.6Z" />
+            </svg>
+            <span>{googleLoading ? "Redirecting…" : "Continue with Google"}</span>
+          </button>
+
+          <p className="text-center text-[11.5px] text-neutral-600 mt-2">
+            Already have an account?{" "}
+            <Link href="/sign-in" className="text-accent font-medium hover:underline">
+              Sign in
+            </Link>
+          </p>
+        </div>
+      </Dialog>
 
       <Dialog
         open={otpModalOpen}

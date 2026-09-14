@@ -269,7 +269,7 @@ export async function signInCandidate(
   const candidate = await prisma.candidate.findUnique({ where: { email: data.email.toLowerCase() } });
   const invalid: FormActionState = { values: raw, message: "Incorrect email or password." };
   if (!candidate) return invalid;
-  if (!(await verifyPassword(data.password, candidate.passwordHash))) return invalid;
+  if (!candidate.passwordHash || !(await verifyPassword(data.password, candidate.passwordHash))) return invalid;
 
   if (candidate.accountStatus === "SUSPENDED") {
     return {
