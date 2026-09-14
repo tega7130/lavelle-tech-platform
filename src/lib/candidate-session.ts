@@ -123,6 +123,7 @@ export interface CurrentCandidate {
   firstName: string;
   lastName: string;
   email: string;
+  phoneCountryCode: string;
   phone: string | null;
   emailVerifiedAt: Date | null;
   accountStatus: CandidateAccountStatus;
@@ -203,6 +204,7 @@ export async function resolveCandidateFromToken(token: string): Promise<CurrentC
     firstName: candidate.firstName,
     lastName: candidate.lastName,
     email: candidate.email,
+    phoneCountryCode: candidate.phoneCountryCode,
     phone: candidate.phone,
     emailVerifiedAt: candidate.emailVerifiedAt,
     accountStatus: candidate.accountStatus,

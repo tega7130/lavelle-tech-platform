@@ -11,8 +11,9 @@ import { PermissionDeniedError } from "@/lib/rbac";
 import { slugify } from "@/lib/slug";
 import { CodeImmutableError, PublishCheckError } from "@/lib/programme-errors";
 import { computePublishFailures } from "@/lib/programme-publish";
-import { createProgrammeSchema, updateProgrammeSchema, fieldErrors } from "@/lib/validation/programme";
+import { createProgrammeSchema, updateProgrammeSchema, fieldErrors, type CreateProgrammeInput } from "@/lib/validation/programme";
 import type { FormActionState } from "@/lib/action-state";
+import { publishListingAsComingSoonAction } from "@/app/actions/website-admin";
 
 const DEFAULT_WEIGHTS = { QUIZ: 20, DRAFTING: 40, EXAMINATION: 40 } as const;
 
@@ -47,69 +48,72 @@ export async function createCategory(name: string) {
   return created;
 }
 
-/** Step 1 of the builder — creates the programme, its category if new, and the three weighting rows in one transaction. */
+/** Shared by createProgramme and createFutureProgramme — the programme row, its category if new, and the three weighting rows in one transaction. */
+async function createProgrammeCore(staff: { id: string }, data: CreateProgrammeInput) {
+  return prisma.$transaction(async (tx) => {
+    let categoryId = data.categoryId;
+    if (!categoryId && data.newCategoryName) {
+      const trimmed = data.newCategoryName.trim();
+      const existing = await tx.programmeCategory.findFirst({
+        where: { name: { equals: trimmed, mode: "insensitive" } },
+      });
+      const category = existing ?? (await tx.programmeCategory.create({ data: { name: trimmed, slug: slugify(trimmed) } }));
+      categoryId = category.id;
+    }
+    if (!categoryId) throw new Error("A category is required.");
+
+    const created = await tx.programme.create({
+      data: {
+        code: data.code,
+        title: data.title,
+        categoryId,
+        tier: data.tier,
+        summary: data.summary,
+        authorName: data.authorName ?? null,
+        weeks: data.weeks,
+        weeklyHoursLabel: data.weeklyHoursLabel,
+        feeMinor: Math.round(data.feeNaira * 100),
+        currency: data.currency,
+        deliveryLabel: data.deliveryLabel,
+        prerequisiteTier: data.prerequisiteTier,
+        // Mutually exclusive at the UI level — whichever the form sent
+        // wins; the other stays unset since a fresh programme has
+        // neither yet.
+        coverVideoUrl: data.coverVideoAssetId ? null : data.coverVideoUrl,
+        coverVideoAssetId: data.coverVideoUrl ? null : data.coverVideoAssetId,
+        createdByStaffId: staff.id,
+      },
+    });
+
+    await tx.assessmentWeighting.createMany({
+      data: (Object.entries(DEFAULT_WEIGHTS) as [keyof typeof DEFAULT_WEIGHTS, number][]).map(([kind, weightPercent]) => ({
+        programmeId: created.id,
+        kind,
+        weightPercent,
+      })),
+    });
+
+    await recordAuditEvent(tx, {
+      actorStaffId: staff.id,
+      subjectType: "programme",
+      subjectId: created.id,
+      action: "programme.created",
+      description: `Created programme ${created.code} — ${created.title}`,
+    });
+
+    return created;
+  });
+}
+
+/** Step 1 of the builder — creates the programme, lands the admin on course content next. */
 export async function createProgramme(_prev: FormActionState, formData: FormData): Promise<FormActionState> {
   const staff = await requireStaffPermission(Permission.MANAGE_PROGRAMMES);
   const raw = formToObject(formData);
   const parsed = createProgrammeSchema.safeParse(raw);
   if (!parsed.success) return { errors: fieldErrors(parsed.error), values: raw };
-  const data = parsed.data;
 
   try {
-    const programme = await prisma.$transaction(async (tx) => {
-      let categoryId = data.categoryId;
-      if (!categoryId && data.newCategoryName) {
-        const trimmed = data.newCategoryName.trim();
-        const existing = await tx.programmeCategory.findFirst({
-          where: { name: { equals: trimmed, mode: "insensitive" } },
-        });
-        const category = existing ?? (await tx.programmeCategory.create({ data: { name: trimmed, slug: slugify(trimmed) } }));
-        categoryId = category.id;
-      }
-      if (!categoryId) throw new Error("A category is required.");
-
-      const created = await tx.programme.create({
-        data: {
-          code: data.code,
-          title: data.title,
-          categoryId,
-          tier: data.tier,
-          summary: data.summary,
-          authorName: data.authorName ?? null,
-          weeks: data.weeks,
-          weeklyHoursLabel: data.weeklyHoursLabel,
-          feeMinor: Math.round(data.feeNaira * 100),
-          currency: data.currency,
-          deliveryLabel: data.deliveryLabel,
-          prerequisiteTier: data.prerequisiteTier,
-          // Mutually exclusive at the UI level — whichever the form sent
-          // wins; the other stays unset since a fresh programme has
-          // neither yet.
-          coverVideoUrl: data.coverVideoAssetId ? null : data.coverVideoUrl,
-          coverVideoAssetId: data.coverVideoUrl ? null : data.coverVideoAssetId,
-          createdByStaffId: staff.id,
-        },
-      });
-
-      await tx.assessmentWeighting.createMany({
-        data: (Object.entries(DEFAULT_WEIGHTS) as [keyof typeof DEFAULT_WEIGHTS, number][]).map(([kind, weightPercent]) => ({
-          programmeId: created.id,
-          kind,
-          weightPercent,
-        })),
-      });
-
-      await recordAuditEvent(tx, {
-        actorStaffId: staff.id,
-        subjectType: "programme",
-        subjectId: created.id,
-        action: "programme.created",
-        description: `Created programme ${created.code} — ${created.title}`,
-      });
-
-      return created;
-    });
-
+    const programme = await createProgrammeCore(staff, parsed.data);
     revalidatePath("/programmes");
     return { ok: true, data: { id: programme.id, code: programme.code } };
   } catch (e) {
@@ -118,6 +122,54 @@ export async function createProgramme(_prev: FormActionState, formData: FormData
     }
     throw e;
   }
+}
+
+/**
+ * "Create Future Programme" — same administrative fields as createProgramme,
+ * but in one motion also publishes the listing straight to Coming Soon
+ * (publishListingAsComingSoonAction, which runs the lighter
+ * checkComingSoonPublishable bar — no lectures required yet). If the
+ * programme itself is created but the Coming Soon publish fails for some
+ * reason, that's surfaced explicitly rather than reported as full success
+ * — the admin lands on the programme either way and can retry from the
+ * Website page.
+ */
+export async function createFutureProgramme(_prev: FormActionState, formData: FormData): Promise<FormActionState> {
+  const staff = await requireStaffPermission(Permission.MANAGE_PROGRAMMES);
+  const raw = formToObject(formData);
+  const parsed = createProgrammeSchema.safeParse(raw);
+  if (!parsed.success) return { errors: fieldErrors(parsed.error), values: raw };
+
+  let programme;
+  try {
+    programme = await createProgrammeCore(staff, parsed.data);
+  } catch (e) {
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
+      return { errors: { code: "A programme with this code already exists" }, values: raw };
+    }
+    throw e;
+  }
+
+  revalidatePath("/programmes");
+
+  const comingSoonMessage = formData.get("comingSoonMessage");
+  const message = typeof comingSoonMessage === "string" && comingSoonMessage.trim() ? comingSoonMessage.trim() : null;
+
+  try {
+    await publishListingAsComingSoonAction(programme.id, message);
+  } catch (e) {
+    return {
+      ok: true,
+      data: {
+        id: programme.id,
+        code: programme.code,
+        comingSoonFailed: true,
+        comingSoonError: e instanceof Error ? e.message : "Could not publish as Coming Soon.",
+      },
+    };
+  }
+
+  return { ok: true, data: { id: programme.id, code: programme.code, comingSoon: true } };
 }
 
 /** Rejects a code change once any enrolment exists (rule 3) — code appears on certificates and in candidate correspondence. */

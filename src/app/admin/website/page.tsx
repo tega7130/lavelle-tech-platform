@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { listListings } from "@/lib/website-admin";
 import { WebsiteListingRail } from "@/components/admin/website-listing-rail";
 import { buttonClassName } from "@/components/ui/button";
@@ -11,11 +12,17 @@ export default async function AdminWebsitePage() {
   if (listings.length === 0) {
     return (
       <div className="max-w-[1000px]">
-        <h1 className="font-heading text-2xl mb-[var(--space-4)]">Website</h1>
+        <div className="flex items-start justify-between gap-4 flex-wrap mb-[var(--space-4)]">
+          <h1 className="font-heading text-2xl">Website</h1>
+          <Link href="/admin/programmes/new-future" className={buttonClassName("primary", "h-[38px] text-[13px]")}>
+            Create future programme
+          </Link>
+        </div>
         <div className="text-center py-12 border border-divider rounded-md">
           <div className="font-heading font-semibold text-[15px]">No programmes published yet</div>
           <p className="text-neutral-600 text-[13px] mt-1.5 max-w-[44ch] mx-auto">
-            Create a programme first — its listing can then be published from here.
+            Create a programme first — its listing can then be published from here. Or announce one that doesn&rsquo;t exist
+            yet with Create future programme above.
           </p>
         </div>
       </div>
@@ -37,9 +44,14 @@ export default async function AdminWebsitePage() {
             Choose which programmes appear on the public site. A listing inherits the syllabus and assessment weighting from the programme record; everything else on this page is what a visitor reads before they register.
           </div>
         </div>
-        <a href="/" target="_blank" rel="noreferrer" className={buttonClassName("secondary", "h-[38px] text-[13px]")}>
-          View public site
-        </a>
+        <div className="flex items-center gap-2 flex-none">
+          <Link href="/admin/programmes/new-future" className={buttonClassName("primary", "h-[38px] text-[13px]")}>
+            Create future programme
+          </Link>
+          <a href="/" target="_blank" rel="noreferrer" className={buttonClassName("secondary", "h-[38px] text-[13px]")}>
+            View public site
+          </a>
+        </div>
       </div>
 
       {archivedLive.length > 0 && (

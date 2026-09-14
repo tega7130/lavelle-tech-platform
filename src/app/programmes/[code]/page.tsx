@@ -157,9 +157,12 @@ export default async function ProgrammeDetailPage({ params }: { params: Promise<
                 {detail.isComingSoon ? (
                   <>
                     <div className="text-[10px] tracking-[0.14em] uppercase text-accent-2">Coming soon</div>
-                    <div className="font-heading font-bold text-[22px] sm:text-[24px] leading-tight mt-[10px] max-w-[24ch]">
-                      {detail.comingSoonMessage || "We're putting the finishing touches on this programme."}
+                    <div className="font-heading font-bold text-[28px] sm:text-[32px] lg:text-[36px] leading-none mt-[10px]">
+                      Coming Soon
                     </div>
+                    {detail.comingSoonMessage && (
+                      <div className="text-[12px] text-white/66 mt-2 max-w-[24ch]">{detail.comingSoonMessage}</div>
+                    )}
                   </>
                 ) : (
                   <>

@@ -120,6 +120,70 @@ export async function publishListing(programmeId: string, actingStaffId: string)
   });
 }
 
+/**
+ * The lighter checklist for a Coming Soon-only publish — deliberately
+ * skips checkPublishable's ACTIVE-status and lecture-content rules,
+ * since a Coming Soon listing shows no price/CTA and payment is refused
+ * server-side (payment-errors.ts) regardless of content. Only the basics
+ * that actually render on the teaser card are required.
+ */
+export async function checkComingSoonPublishable(programmeId: string): Promise<PublishCheckFailure[]> {
+  const programme = await prisma.programme.findUniqueOrThrow({
+    where: { id: programmeId },
+    select: { title: true, summary: true, feeMinor: true },
+  });
+
+  const failures: PublishCheckFailure[] = [];
+  if (!programme.title?.trim()) failures.push({ reason: "The programme needs a title." });
+  if (!programme.summary?.trim()) failures.push({ reason: "The programme needs a summary." });
+  if (programme.feeMinor <= 0) failures.push({ reason: "The programme fee is ₦0. Set a fee before publishing." });
+  return failures;
+}
+
+/**
+ * Publishes straight to Coming Soon in one step — used by "Create Future
+ * Programme" so a brand-new programme (no modules/lectures yet) can go
+ * live as a teaser immediately, without passing the full checkPublishable
+ * bar that a real Open for enrolment publish requires. One audit event
+ * covers both the publish and the Coming Soon flag since, from this
+ * entry point, they happen together.
+ */
+export async function publishListingAsComingSoon(programmeId: string, message: string | null, actingStaffId: string) {
+  const failures = await checkComingSoonPublishable(programmeId);
+  if (failures.length > 0) throw new PublishCheckError(failures);
+
+  const programme = await prisma.programme.findUniqueOrThrow({ where: { id: programmeId }, select: { title: true } });
+  const now = new Date();
+  await prisma.$transaction(async (tx) => {
+    const listing = await tx.programmeListing.upsert({
+      where: { programmeId },
+      create: {
+        programmeId,
+        isPublished: true,
+        publishedAt: now,
+        publishedByStaffId: actingStaffId,
+        isComingSoon: true,
+        comingSoonMessage: message,
+      },
+      update: {
+        isPublished: true,
+        publishedAt: now,
+        publishedByStaffId: actingStaffId,
+        unpublishedAt: null,
+        isComingSoon: true,
+        comingSoonMessage: message,
+      },
+    });
+    await recordAuditEvent(tx, {
+      actorStaffId: actingStaffId,
+      subjectType: "programme_listing",
+      subjectId: listing.id,
+      action: "listing.published_as_coming_soon",
+      description: `Published the ${programme.title} listing to the website as Coming Soon`,
+    });
+  });
+}
+
 /** Never touches enrolment (rule 5) — a programme pulled from the site stays open to enrolled candidates. */
 export async function unpublishListing(programmeId: string, reason: string, actingStaffId: string) {
   const listing = await prisma.programmeListing.findUnique({ where: { programmeId }, include: { programme: { select: { title: true } } } });
@@ -180,10 +244,20 @@ export async function markComingSoon(programmeId: string, message: string | null
  * every not-yet-notified subscriber so sendProgrammeGoLiveNotification
  * (called by the caller, outside the transaction — it sends email) knows
  * exactly who to email without a second read racing a fresh subscription.
+ *
+ * Runs the full checkPublishable bar first — not checkComingSoonPublishable
+ * — because "Create Future Programme" can now mark a listing Coming Soon
+ * with zero lectures (see publishListingAsComingSoon above). Without this,
+ * flipping the flag off would open real payment on a programme nobody has
+ * built yet; this is the one point in the whole Coming Soon lifecycle
+ * where that gap would otherwise slip through.
  */
 export async function unmarkComingSoon(programmeId: string, actingStaffId: string) {
   const listing = await prisma.programmeListing.findUnique({ where: { programmeId }, include: { programme: { select: { title: true } } } });
   if (!listing) throw new ListingNotFoundError();
+
+  const failures = await checkPublishable(programmeId);
+  if (failures.length > 0) throw new PublishCheckError(failures);
 
   await prisma.$transaction(async (tx) => {
     await tx.programmeListing.update({

@@ -95,7 +95,13 @@ export default async function ProgrammeDetailPage({ params }: { params: Promise<
               <div className="text-[13px] text-neutral-700 leading-[1.55] mb-3">
                 {programme.comingSoonMessage || "We're putting the finishing touches on this programme."}
               </div>
-              <NotifyMeForm listingId={programme.listingId!} initialEmail={candidate?.email} />
+              <NotifyMeForm
+                listingId={programme.listingId!}
+                initialName={candidate ? `${candidate.firstName} ${candidate.lastName}`.trim() : undefined}
+                initialPhoneCountryCode={candidate?.phoneCountryCode}
+                initialPhone={candidate?.phone ?? undefined}
+                initialEmail={candidate?.email}
+              />
             </>
           ) : (
             <>

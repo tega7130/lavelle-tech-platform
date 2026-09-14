@@ -11,14 +11,7 @@ import { Dialog } from "@/components/ui/dialog";
 import { Label, Input, FieldError } from "@/components/ui/field";
 import { PasswordInput } from "@/components/ui/password-input";
 import { Checkbox } from "@/components/ui/checkbox";
-
-const PHONE_CODES = [
-  { value: "+234", label: "🇳🇬 +234" },
-  { value: "+233", label: "🇬🇭 +233" },
-  { value: "+254", label: "🇰🇪 +254" },
-  { value: "+44", label: "🇬🇧 +44" },
-  { value: "+1", label: "🇺🇸 +1" },
-];
+import { PHONE_CODES } from "@/lib/phone-codes";
 
 const LADDER = (
   <div className="mt-9 border-t border-dashed border-white/22 pt-[26px]">
@@ -253,10 +246,10 @@ export default function RegisterPage() {
                     name="phoneCountryCode"
                     value={values.phoneCountryCode}
                     onChange={field("phoneCountryCode")}
-                    className="h-11 w-[104px] flex-none rounded-md border border-neutral-300 bg-bg px-2 text-sm text-text"
+                    className="h-11 w-[132px] sm:w-[180px] flex-none rounded-md border border-neutral-300 bg-bg px-2 text-sm text-text"
                   >
                     {PHONE_CODES.map((c) => (
-                      <option key={c.value} value={c.value}>
+                      <option key={c.label} value={c.value}>
                         {c.label}
                       </option>
                     ))}

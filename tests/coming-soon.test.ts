@@ -157,13 +157,15 @@ describe("Coming Soon notification subscriptions", () => {
     const listing = await testPrisma.programmeListing.findUniqueOrThrow({ where: { programmeId: programme.id } });
 
     const email = `notify-test-${crypto.randomUUID()}@example.com`;
-    await subscribeToProgrammeNotification(listing.id, email);
+    await subscribeToProgrammeNotification(listing.id, email, "Test Subscriber", "+234", "08012345678");
     const rows = await testPrisma.programmeNotificationSubscription.findMany({ where: { listingId: listing.id, email } });
     expect(rows).toHaveLength(1);
     expect(rows[0]!.unsubscribedAt).toBeNull();
+    expect(rows[0]!.name).toBe("Test Subscriber");
+    expect(rows[0]!.phone).toBe("08012345678");
 
     // Repeat submission is a no-op, not a duplicate row or a thrown error.
-    await subscribeToProgrammeNotification(listing.id, email);
+    await subscribeToProgrammeNotification(listing.id, email, "Test Subscriber", "+234", "08012345678");
     const stillOne = await testPrisma.programmeNotificationSubscription.findMany({ where: { listingId: listing.id, email } });
     expect(stillOne).toHaveLength(1);
 
@@ -172,7 +174,7 @@ describe("Coming Soon notification subscriptions", () => {
     expect(unsubscribed.unsubscribedAt).not.toBeNull();
 
     // Subscribing again after unsubscribing clears unsubscribedAt on the same row rather than erroring.
-    await subscribeToProgrammeNotification(listing.id, email);
+    await subscribeToProgrammeNotification(listing.id, email, "Test Subscriber", "+234", "08012345678");
     const resubscribed = await testPrisma.programmeNotificationSubscription.findUniqueOrThrow({ where: { id: rows[0]!.id } });
     expect(resubscribed.unsubscribedAt).toBeNull();
 
@@ -188,8 +190,8 @@ describe("Coming Soon notification subscriptions", () => {
     const listing = await testPrisma.programmeListing.findUniqueOrThrow({ where: { programmeId: programme.id } });
 
     const email = `Case-Test-${crypto.randomUUID()}@Example.com`;
-    await subscribeToProgrammeNotification(listing.id, email);
-    await subscribeToProgrammeNotification(listing.id, email.toUpperCase());
+    await subscribeToProgrammeNotification(listing.id, email, "Test Subscriber", "+234", "08012345678");
+    await subscribeToProgrammeNotification(listing.id, email.toUpperCase(), "Test Subscriber", "+234", "08012345678");
     const rows = await testPrisma.programmeNotificationSubscription.findMany({ where: { listingId: listing.id } });
     expect(rows).toHaveLength(1);
 

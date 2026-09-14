@@ -4,8 +4,24 @@ import * as React from "react";
 import { buttonClassName } from "@/components/ui/button";
 import { cn } from "@/lib/cn";
 import { subscribeToComingSoonAction } from "@/app/actions/programme-notifications";
+import { PHONE_CODES } from "@/lib/phone-codes";
 
-export function NotifyMeForm({ listingId, initialEmail }: { listingId: string; initialEmail?: string }) {
+export function NotifyMeForm({
+  listingId,
+  initialName,
+  initialPhoneCountryCode,
+  initialPhone,
+  initialEmail,
+}: {
+  listingId: string;
+  initialName?: string;
+  initialPhoneCountryCode?: string;
+  initialPhone?: string;
+  initialEmail?: string;
+}) {
+  const [name, setName] = React.useState(initialName ?? "");
+  const [phoneCountryCode, setPhoneCountryCode] = React.useState(initialPhoneCountryCode ?? "+234");
+  const [phone, setPhone] = React.useState(initialPhone ?? "");
   const [email, setEmail] = React.useState(initialEmail ?? "");
   const [busy, setBusy] = React.useState(false);
   const [state, setState] = React.useState<"idle" | "done" | "error">("idle");
@@ -15,7 +31,7 @@ export function NotifyMeForm({ listingId, initialEmail }: { listingId: string; i
     e.preventDefault();
     setBusy(true);
     setError(null);
-    const result = await subscribeToComingSoonAction(listingId, email);
+    const result = await subscribeToComingSoonAction(listingId, name, phoneCountryCode, phone, email);
     setBusy(false);
     if (result?.ok) {
       setState("done");
@@ -35,6 +51,38 @@ export function NotifyMeForm({ listingId, initialEmail }: { listingId: string; i
 
   return (
     <form onSubmit={submit} className="flex flex-col gap-2">
+      <input
+        type="text"
+        required
+        aria-label="Your name"
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        placeholder="Your name"
+        className="w-full h-11 px-3 rounded-[9px] border border-divider bg-bg text-[13px] outline-none focus:border-accent-200"
+      />
+      <div className="flex gap-2">
+        <select
+          aria-label="Country code"
+          value={phoneCountryCode}
+          onChange={(e) => setPhoneCountryCode(e.target.value)}
+          className="h-11 w-[132px] sm:w-[180px] flex-none rounded-[9px] border border-divider bg-bg px-2 text-[13px] outline-none focus:border-accent-200"
+        >
+          {PHONE_CODES.map((c) => (
+            <option key={c.label} value={c.value}>
+              {c.label}
+            </option>
+          ))}
+        </select>
+        <input
+          type="tel"
+          required
+          aria-label="Phone number"
+          value={phone}
+          onChange={(e) => setPhone(e.target.value)}
+          placeholder="803 552 8841"
+          className="w-full h-11 px-3 rounded-[9px] border border-divider bg-bg text-[13px] outline-none focus:border-accent-200"
+        />
+      </div>
       <input
         type="email"
         required
