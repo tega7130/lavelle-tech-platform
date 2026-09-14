@@ -47,6 +47,7 @@ export async function GET(request: NextRequest) {
         // Already-linked Google account — plain returning sign-in, regardless
         // of which page ("Continue with Google" was clicked from.
         let candidate = await prisma.candidate.findUnique({ where: { googleId: googleUser.googleId } });
+        let isNewCandidate = false;
 
         if (!candidate) {
             const existingPasswordAccount = await prisma.candidate.findUnique({ where: { email } });
@@ -113,18 +114,32 @@ export async function GET(request: NextRequest) {
                 });
 
                 candidate = result;
+                isNewCandidate = true;
+            }
+        }
 
+        // Session must be created before anything that can throw for
+        // reasons unrelated to auth (e.g. the email provider) — a
+        // candidate who was successfully created/linked above must never
+        // be bounced back to /sign-in just because a downstream email
+        // failed. That previously sent Google registrants to
+        // /sign-in?error=auth_failed instead of straight into the
+        // dashboard, even though their account existed.
+        const sessionToken = await createSessionRecord(prisma, candidate.id, { userAgent, ipAddress: ip });
+        await setSessionCookie(sessionToken, true);
+
+        if (isNewCandidate) {
+            try {
                 // Same welcome email a password registrant gets.
                 await sendTransactionalEmailByTemplate('account-welcome', candidate.email, {
                     firstName: getFirstName(candidate.firstName),
                     exploreProgrammesUrl: `${process.env.NEXTAUTH_URL}/programmes`,
                     currentYear: new Date().getFullYear(),
                 });
+            } catch (emailError) {
+                console.error('Failed to send Google signup welcome email:', emailError);
             }
         }
-
-        const sessionToken = await createSessionRecord(prisma, candidate.id, { userAgent, ipAddress: ip });
-        await setSessionCookie(sessionToken, true);
 
         return NextResponse.redirect(new URL('/portal/dashboard', request.url));
     } catch (error) {
