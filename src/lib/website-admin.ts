@@ -62,3 +62,21 @@ export async function getListingForEditor(programmeId: string) {
   });
   return programme;
 }
+
+/** Everyone who left their details on the "Notify me" card for this listing — excludes anyone who's since unsubscribed. */
+export async function listComingSoonSubscribers(listingId: string) {
+  await requireStaffPermission(Permission.MANAGE_PROGRAMMES);
+  return prisma.programmeNotificationSubscription.findMany({
+    where: { listingId, unsubscribedAt: null },
+    orderBy: { createdAt: "desc" },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      phoneCountryCode: true,
+      phone: true,
+      createdAt: true,
+      notifiedAt: true,
+    },
+  });
+}

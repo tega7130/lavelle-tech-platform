@@ -19,9 +19,10 @@ import {
 } from "@/app/actions/website-admin";
 import { finaliseUpload } from "@/app/actions/uploads";
 import { uploadToStorage, probeMediaDuration } from "@/lib/storage-upload";
-import type { getListingForEditor } from "@/lib/website-admin";
+import type { getListingForEditor, listComingSoonSubscribers } from "@/lib/website-admin";
 
 type ListingData = Awaited<ReturnType<typeof getListingForEditor>>;
+type Subscriber = Awaited<ReturnType<typeof listComingSoonSubscribers>>[number];
 type TabKey = "content" | "pricing" | "inherited";
 
 const TABS: { key: TabKey; label: string }[] = [
@@ -36,7 +37,15 @@ async function uploadVideo(file: File) {
   return finaliseUpload({ storageKey, kind: "video", mimeType: file.type, originalFilename: file.name, bytes, durationSeconds });
 }
 
-export function WebsiteListingEditor({ listing: programme, initialTab }: { listing: ListingData; initialTab: TabKey }) {
+export function WebsiteListingEditor({
+  listing: programme,
+  initialTab,
+  subscribers,
+}: {
+  listing: ListingData;
+  initialTab: TabKey;
+  subscribers: Subscriber[];
+}) {
   const router = useRouter();
   const pathname = usePathname();
   const existing = programme.listing;
@@ -59,10 +68,18 @@ export function WebsiteListingEditor({ listing: programme, initialTab }: { listi
   const [reason, setReason] = React.useState("");
   const [comingSoonMessage, setComingSoonMessage] = React.useState(existing?.comingSoonMessage ?? "");
   const [comingSoonBusy, setComingSoonBusy] = React.useState(false);
+  const [subscriberPage, setSubscriberPage] = React.useState(0);
 
   const isPublished = existing?.isPublished ?? false;
   const isComingSoon = existing?.isComingSoon ?? false;
   const totalLectures = programme.modules.reduce((sum, m) => sum + m.lectures.length, 0);
+
+  const SUBSCRIBERS_PAGE_SIZE = 10;
+  const subscriberPageCount = Math.max(1, Math.ceil(subscribers.length / SUBSCRIBERS_PAGE_SIZE));
+  const pagedSubscribers = subscribers.slice(
+    subscriberPage * SUBSCRIBERS_PAGE_SIZE,
+    subscriberPage * SUBSCRIBERS_PAGE_SIZE + SUBSCRIBERS_PAGE_SIZE
+  );
 
   // Shallow URL sync only — the tab itself is local state, switched
   // instantly with no server round-trip, so an in-progress edit on one
@@ -467,6 +484,70 @@ export function WebsiteListingEditor({ listing: programme, initialTab }: { listi
             Save
           </Button>
         </div>
+      </Card>
+
+      <Card elev="sm">
+        <div className="mb-3">
+          <div className="font-heading font-semibold text-[15px]">Notify me subscribers</div>
+          <div className="text-neutral-600 text-[12px] mt-0.5">
+            {subscribers.length === 0
+              ? "Nobody has asked to be notified yet."
+              : `${subscribers.length} ${subscribers.length === 1 ? "person" : "people"} waiting to hear when this opens.`}
+          </div>
+        </div>
+        {subscribers.length > 0 && (
+          <div className="overflow-x-auto">
+            <table className="w-full text-[13px] border-collapse">
+              <thead>
+                <tr className="text-left text-neutral-500 text-[11px] uppercase tracking-[0.06em]">
+                  <th className="pb-2 pr-4 font-medium">Name</th>
+                  <th className="pb-2 pr-4 font-medium">Email</th>
+                  <th className="pb-2 pr-4 font-medium">Phone</th>
+                  <th className="pb-2 font-medium">Subscribed</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pagedSubscribers.map((s) => (
+                  <tr key={s.id} className="border-t border-divider">
+                    <td className="py-2 pr-4 whitespace-nowrap">{s.name || "—"}</td>
+                    <td className="py-2 pr-4">{s.email}</td>
+                    <td className="py-2 pr-4 tabular-nums whitespace-nowrap">
+                      {s.phone ? `${s.phoneCountryCode ?? ""} ${s.phone}` : "—"}
+                    </td>
+                    <td className="py-2 text-neutral-600 whitespace-nowrap">
+                      {new Date(s.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {subscribers.length > SUBSCRIBERS_PAGE_SIZE && (
+          <div className="flex items-center justify-between gap-3 mt-3 pt-3 border-t border-dashed border-neutral-300">
+            <div className="text-[11.5px] text-neutral-600">
+              Page {subscriberPage + 1} of {subscriberPageCount}
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="secondary"
+                className="h-8 px-3 text-[12px]"
+                disabled={subscriberPage === 0}
+                onClick={() => setSubscriberPage((p) => Math.max(0, p - 1))}
+              >
+                Previous
+              </Button>
+              <Button
+                variant="secondary"
+                className="h-8 px-3 text-[12px]"
+                disabled={subscriberPage >= subscriberPageCount - 1}
+                onClick={() => setSubscriberPage((p) => Math.min(subscriberPageCount - 1, p + 1))}
+              >
+                Next
+              </Button>
+            </div>
+          </div>
+        )}
       </Card>
 
       {unpublishing && (
