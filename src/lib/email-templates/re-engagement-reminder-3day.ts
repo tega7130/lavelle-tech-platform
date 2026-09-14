@@ -63,7 +63,6 @@ export function generateReEngagementReminder3dayEmail(variables: ReEngagementRem
         <h3>What You Can Do Now</h3>
         <div class="benefit-item">✓ Review recent lectures and materials</div>
         <div class="benefit-item">✓ Complete pending module assessments</div>
-        <div class="benefit-item">✓ Practice exam questions</div>
         <div class="benefit-item">✓ Check your progress dashboard</div>
       </div>
 
@@ -101,7 +100,6 @@ Continue Your Learning: {{portalUrl}}
 WHAT YOU CAN DO NOW
 ✓ Review recent lectures and materials
 ✓ Complete pending module assessments
-✓ Practice exam questions
 ✓ Check your progress dashboard
 
 💪 You're Making Progress!

@@ -59,7 +59,6 @@ export function generateReEngagementReminder7dayEmail(variables: ReEngagementRem
       <div class="impact-box">
         <h3>Impact of Extended Absence</h3>
         <div class="impact-item">⚠️ You may fall behind on course content</div>
-        <div class="impact-item">⚠️ Exam preparation time is limited</div>
         <div class="impact-item">⚠️ Missed assignments or activities</div>
         <div class="impact-item">⚠️ Risk to overall programme completion</div>
       </div>
@@ -102,7 +101,6 @@ We understand that life gets busy, but consistent engagement is crucial for your
 
 IMPACT OF EXTENDED ABSENCE
 ⚠️ You may fall behind on course content
-⚠️ Exam preparation time is limited
 ⚠️ Missed assignments or activities
 ⚠️ Risk to overall programme completion
 

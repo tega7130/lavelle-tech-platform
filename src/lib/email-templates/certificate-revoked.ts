@@ -102,7 +102,6 @@ export function generateCertificateRevokedEmail(variables: CertificateRevokedVar
       <div class="support-links">
         <strong>Need Help?</strong>
         <ul style="margin: 10px 0; padding-left: 20px;">
-          <li>Learn more about the appeal process and submit evidence: <a href="{{appealInstructionsUrl}}">Appeal Instructions</a></li>
           <li>Questions about your certificate status: <a href="mailto:{{supportEmail}}">{{supportEmail}}</a></li>
           <li>Concerns about the fairness of this decision: <a href="mailto:{{securityContactEmail}}">{{securityContactEmail}}</a></li>
         </ul>
@@ -148,7 +147,6 @@ WHAT HAPPENS NEXT:
 IMPORTANT: Do not use this certificate for any professional or educational purposes until the review is complete.
 
 NEED HELP?
-- Appeal Process & Submit Evidence: {{appealInstructionsUrl}}
 - Questions About Your Certificate: {{supportEmail}}
 - Concerns About This Decision: {{securityContactEmail}}
 
