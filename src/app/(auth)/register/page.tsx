@@ -15,7 +15,11 @@ import { PHONE_CODES } from "@/lib/phone-codes";
 
 async function initiateGoogleOAuth() {
   try {
-    const res = await fetch("/api/auth/google/authorize", { method: "POST" });
+    const res = await fetch("/api/auth/google/authorize", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ intent: "register" }),
+    });
     const { url } = await res.json();
     window.location.href = url;
   } catch (error) {

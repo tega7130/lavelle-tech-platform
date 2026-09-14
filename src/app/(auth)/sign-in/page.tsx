@@ -12,15 +12,30 @@ import { Label, Input, FieldError } from "@/components/ui/field";
 import { PasswordInput } from "@/components/ui/password-input";
 import { Checkbox } from "@/components/ui/checkbox";
 
-async function initiateGoogleOAuth() {
+function readCookie(name: string): string | null {
+  if (typeof document === "undefined") return null;
+  const match = document.cookie.match(new RegExp(`(?:^|; )${name}=([^;]*)`));
+  return match ? decodeURIComponent(match[1]!) : null;
+}
+
+async function initiateGoogleOAuth(intent: "signin" | "register") {
   try {
-    const res = await fetch("/api/auth/google/authorize", { method: "POST" });
+    const res = await fetch("/api/auth/google/authorize", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ intent }),
+    });
     const { url } = await res.json();
     window.location.href = url;
   } catch (error) {
     console.error("Failed to initiate Google OAuth:", error);
   }
 }
+
+// Mirrors LAST_AUTH_METHOD_COOKIE in @/lib/candidate-session — kept as a
+// plain string here since that module is server-only and can't be
+// imported into this client component.
+const LAST_AUTH_METHOD_COOKIE = "lavelle_last_auth_method";
 
 const ASSURANCES = [
   "Programme progress, deadlines and drafting submissions stay exactly as you left them.",
@@ -33,8 +48,18 @@ function SignInForm() {
   const signedOut = searchParams.get("signedOut") === "1";
   const expired = searchParams.get("expired") === "1";
   const nextPath = searchParams.get("next");
+  const oauthError = searchParams.get("error");
+  const accountExists = oauthError === "account_exists";
   const [state, formAction, pending] = useActionState(signInCandidate, emptyActionState);
   const [googleLoading, setGoogleLoading] = React.useState(false);
+  // Read once on mount — a plain, non-httpOnly cookie this browser's last
+  // successful sign-in wrote, purely to hint which option to reach for
+  // again. Not available during SSR, so this can't be computed during
+  // render like the error-state syncing elsewhere in this file.
+  const [lastAuthMethod, setLastAuthMethod] = React.useState<string | null>(null);
+  React.useEffect(() => {
+    setLastAuthMethod(readCookie(LAST_AUTH_METHOD_COOKIE));
+  }, []);
   // Prefilled after a guest checkout ("Apply for this programme") confirms
   // payment — the candidate already knows the password they just set,
   // this just saves retyping the email they were shown on that page.
@@ -98,6 +123,22 @@ function SignInForm() {
                 <span className="flex-none text-xs font-bold text-accent">✓</span>
                 <div className="text-xs leading-[1.55] text-accent-800 text-pretty">
                   You have been signed out. Your progress was saved.
+                </div>
+              </div>
+            )}
+
+            {accountExists && !suspended && (
+              <div className="mb-5 flex items-start gap-2.5 rounded-md border border-warning-border bg-warning-bg px-3.5 py-3">
+                <span className="flex-none text-sm font-bold text-warning-text">!</span>
+                <div className="text-xs leading-[1.55] text-warning-text text-pretty">
+                  <div className="font-heading font-semibold">This email is already registered</div>
+                  <div className="mt-1">
+                    Sign in with your password below, or{" "}
+                    <Link href="/forgot-password" className="font-medium underline">
+                      reset it
+                    </Link>{" "}
+                    if you don&rsquo;t remember it.
+                  </div>
                 </div>
               </div>
             )}
@@ -184,23 +225,34 @@ function SignInForm() {
                 <div className="flex-1 border-t border-dashed border-neutral-300" />
               </div>
 
-              <button
-                type="button"
-                onClick={async () => {
-                  setGoogleLoading(true);
-                  await initiateGoogleOAuth();
-                }}
-                disabled={googleLoading}
-                className="flex h-[46px] w-full items-center justify-center gap-2.5 rounded-md border border-neutral-300 bg-bg text-sm font-medium text-text hover:border-neutral-400 hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-60 transition-colors"
-              >
-                <svg width="17" height="17" viewBox="0 0 18 18" aria-hidden="true">
-                  <path fill="#4285F4" d="M17.6 9.2c0-.6-.1-1.2-.2-1.7H9v3.3h4.8a4.1 4.1 0 0 1-1.8 2.7v2.2h2.9c1.7-1.5 2.7-3.8 2.7-6.5Z" />
-                  <path fill="#34A853" d="M9 18c2.4 0 4.5-.8 6-2.2l-2.9-2.2c-.8.5-1.8.9-3.1.9-2.4 0-4.5-1.6-5.2-3.8H.8v2.3A9 9 0 0 0 9 18Z" />
-                  <path fill="#FBBC05" d="M3.8 10.7a5.4 5.4 0 0 1 0-3.4V5H.8a9 9 0 0 0 0 8l3-2.3Z" />
-                  <path fill="#EA4335" d="M9 3.6c1.3 0 2.5.5 3.4 1.3l2.6-2.6A9 9 0 0 0 .8 5l3 2.3C4.5 5.1 6.6 3.6 9 3.6Z" />
-                </svg>
-                <span>{googleLoading ? "Redirecting…" : "Continue with Google"}</span>
-              </button>
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setGoogleLoading(true);
+                    await initiateGoogleOAuth("signin");
+                  }}
+                  disabled={googleLoading}
+                  className="flex h-[46px] w-full items-center justify-center gap-2.5 rounded-md border border-neutral-300 bg-bg text-sm font-medium text-text hover:border-neutral-400 hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-60 transition-colors"
+                >
+                  <svg width="17" height="17" viewBox="0 0 18 18" aria-hidden="true">
+                    <path fill="#4285F4" d="M17.6 9.2c0-.6-.1-1.2-.2-1.7H9v3.3h4.8a4.1 4.1 0 0 1-1.8 2.7v2.2h2.9c1.7-1.5 2.7-3.8 2.7-6.5Z" />
+                    <path fill="#34A853" d="M9 18c2.4 0 4.5-.8 6-2.2l-2.9-2.2c-.8.5-1.8.9-3.1.9-2.4 0-4.5-1.6-5.2-3.8H.8v2.3A9 9 0 0 0 9 18Z" />
+                    <path fill="#FBBC05" d="M3.8 10.7a5.4 5.4 0 0 1 0-3.4V5H.8a9 9 0 0 0 0 8l3-2.3Z" />
+                    <path fill="#EA4335" d="M9 3.6c1.3 0 2.5.5 3.4 1.3l2.6-2.6A9 9 0 0 0 .8 5l3 2.3C4.5 5.1 6.6 3.6 9 3.6Z" />
+                  </svg>
+                  <span>{googleLoading ? "Redirecting…" : "Continue with Google"}</span>
+                </button>
+                {lastAuthMethod === "google" && !googleLoading && (
+                  <span className="pointer-events-none absolute -top-2 right-3 rounded-full border border-accent-200 bg-accent-100 px-2 py-[1px] text-[10px] font-medium text-accent-800">
+                    Last used
+                  </span>
+                )}
+              </div>
+
+              <p className="-mt-1 text-center text-[11.5px] text-neutral-500">
+                Registered with Google? Use the button above to sign in.
+              </p>
             </div>
           </form>
 
