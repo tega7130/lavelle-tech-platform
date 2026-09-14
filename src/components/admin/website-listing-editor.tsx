@@ -31,6 +31,33 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: "inherited", label: "Inherited" },
 ];
 
+// Same pattern as programme-enrolments-table.tsx's exportCsv.
+function csvEscape(value: string): string {
+  return /[",\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
+}
+
+function exportSubscribersCsv(subscribers: Subscriber[], programmeCode: string) {
+  const header = ["Name", "Email", "Phone", "Subscribed"];
+  const lines = subscribers.map((s) =>
+    [
+      s.name ?? "",
+      s.email,
+      s.phone ? `${s.phoneCountryCode ?? ""} ${s.phone}` : "",
+      new Date(s.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }),
+    ]
+      .map(csvEscape)
+      .join(",")
+  );
+  const csv = [header.join(","), ...lines].join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${programmeCode}-notify-me-subscribers.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 async function uploadVideo(file: File) {
   const durationSeconds = await probeMediaDuration(file);
   const { storageKey, bytes } = await uploadToStorage(file, "programme", "video");
@@ -487,13 +514,23 @@ export function WebsiteListingEditor({
       </Card>
 
       <Card elev="sm">
-        <div className="mb-3">
-          <div className="font-heading font-semibold text-[15px]">Notify me subscribers</div>
-          <div className="text-neutral-600 text-[12px] mt-0.5">
-            {subscribers.length === 0
-              ? "Nobody has asked to be notified yet."
-              : `${subscribers.length} ${subscribers.length === 1 ? "person" : "people"} waiting to hear when this opens.`}
+        <div className="flex items-start justify-between gap-3 mb-3">
+          <div>
+            <div className="font-heading font-semibold text-[15px]">Notify me subscribers</div>
+            <div className="text-neutral-600 text-[12px] mt-0.5">
+              {subscribers.length === 0
+                ? "Nobody has asked to be notified yet."
+                : `${subscribers.length} ${subscribers.length === 1 ? "person" : "people"} waiting to hear when this opens.`}
+            </div>
           </div>
+          {subscribers.length > 0 && (
+            <button
+              onClick={() => exportSubscribersCsv(subscribers, programme.code)}
+              className={buttonClassName("secondary", "h-[32px] px-3 text-[12px] flex-none")}
+            >
+              Export CSV
+            </button>
+          )}
         </div>
         {subscribers.length > 0 && (
           <div className="overflow-x-auto">
