@@ -48,7 +48,7 @@ import { EMAIL_CONFIG } from "@/lib/email-config";
 
 function formToObject(formData: FormData): Record<string, string> {
   const obj: Record<string, string> = {};
-  for (const [k, v] of formData.entries()) if (typeof v === "string" && v !== "") obj[k] = v;
+  for (const [k, v] of formData.entries()) if (typeof v === "string") obj[k] = v;
   return obj;
 }
 

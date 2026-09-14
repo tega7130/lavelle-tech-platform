@@ -7,13 +7,13 @@ import { z } from "zod";
 // the DocumentCategory foreign key at the DB layer (same discipline as
 // Programme.categoryId in validation/programme.ts).
 const documentMetadataSchema = z.object({
-  title: z.string().trim().min(1, "Required").max(200),
-  categoryId: z.string().min(1, "Choose a category"),
+  title: z.string({ error: "Enter a title" }).trim().min(1, "Enter a title").max(200, "Keep the title under 200 characters"),
+  categoryId: z.string({ error: "Choose a category" }).min(1, "Choose a category"),
   description: z.string().trim().max(2000).optional(),
   // The admin types naira (a human amount, e.g. "15000"); the server
   // converts to kobo — priceMinor itself is never entered directly, same
   // discipline as Programme.feeNaira/feeMinor (src/lib/validation/programme.ts).
-  priceNaira: z.coerce.number().nonnegative("Price cannot be negative").finite(),
+  priceNaira: z.coerce.number({ error: "Enter a price" }).nonnegative("Price cannot be negative").finite("Enter a valid price"),
   // Optional flat sale price (discountedPriceMinor), never a percentage — a
   // plain naira amount, same conversion discipline as priceNaira. When set
   // it becomes both what's charged and the prominent displayed price, with
@@ -48,13 +48,13 @@ export type UpdateDocumentTemplateInput = z.infer<typeof updateDocumentTemplateS
 export const createDiscountCodeSchema = z
   .object({
     code: z
-      .string()
+      .string({ error: "Enter a discount code" })
       .trim()
-      .min(3, "At least 3 characters")
-      .max(40, "Too long")
+      .min(3, "Use at least 3 characters")
+      .max(40, "Keep the code under 40 characters")
       .regex(/^[A-Za-z0-9_-]+$/, "Letters, numbers, hyphens and underscores only"),
-    type: z.enum(["PERCENT", "FIXED"]),
-    value: z.coerce.number().positive("Must be greater than 0"),
+    type: z.enum(["PERCENT", "FIXED"], { error: "Choose a discount type" }),
+    value: z.coerce.number({ error: "Enter a discount value" }).positive("Must be greater than 0"),
     expiresAt: z.string().trim().optional(),
     maxRedemptions: z.coerce.number().int().positive("Must be a whole number greater than 0").optional(),
     // Omitted or empty = applies to every document.
