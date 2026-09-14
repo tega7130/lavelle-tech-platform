@@ -58,7 +58,8 @@ export function SiteFooter() {
               <a href="mailto:candidates@learnlavelle.com" className="text-accent no-underline hover:underline">
                 candidates@learnlavelle.com
               </a>
-              <span className="text-neutral-600">+234 700 528 3553</span>
+              {/* Phone hidden until real numbers are ready — email only for now. */}
+              {/* <span className="text-neutral-600">+234 700 528 3553</span> */}
             </div>
             <div className="flex gap-[10px] mt-[18px]">
               {SOCIAL_LINKS.map(({ label, href, Icon }) => (

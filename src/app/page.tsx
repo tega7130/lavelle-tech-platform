@@ -437,8 +437,9 @@ export default async function HomePage() {
               <Reveal delay={240} className="flex flex-col gap-4 mt-8 pt-[26px] border-t border-dashed border-neutral-300">
                 {[
                   ["@", "candidates@learnlavelle.com"],
-                  ["☎", "+234 700 528 3553", "Monday to Friday, 9am – 5pm WAT"],
-                  ["W", "+234 803 552 8841"],
+                  // Phone/WhatsApp hidden until real numbers are ready — email only for now.
+                  // ["☎", "+234 700 528 3553", "Monday to Friday, 9am – 5pm WAT"],
+                  // ["W", "+234 803 552 8841"],
                 ].map(([mark, value, meta]) => (
                   <div key={value} className="flex gap-[13px] items-start">
                     <span className="w-[34px] h-[34px] flex-none rounded-[9px] bg-accent-100 text-accent-700 flex items-center justify-center text-[13px] font-semibold">{mark}</span>
