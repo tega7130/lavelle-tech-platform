@@ -76,13 +76,23 @@ export function ApplicantDashboard({ candidate }: { candidate: CurrentCandidate 
   // before the account exists), so it's not a checklist item any more —
   // checklist.email is still read below, just to drive a standalone banner
   // for the pre-OTP accounts that predate this and never verified.
+  //
+  // Google-registered candidates never went through the phone field on the
+  // registration form, so they get an extra checklist step to add one —
+  // no OTP/SMS verification, just capturing the number via the same
+  // Profile & ID form password registrants filled in at signup.
+  const needsPhone = !!candidate.googleId;
+  const phoneDone = !!candidate.phone;
+
+  const totalSteps = needsPhone ? 5 : 4;
   const finalDoneCount =
     (checklist.account ? 1 : 0) +
     (professionalDone ? 1 : 0) +
     (checklist.photo ? 1 : 0) +
-    (checklist.handbook ? 1 : 0);
-  const allDone = finalDoneCount === 4;
-  const pct = Math.round((finalDoneCount / 4) * 100);
+    (checklist.handbook ? 1 : 0) +
+    (needsPhone && phoneDone ? 1 : 0);
+  const allDone = finalDoneCount === totalSteps;
+  const pct = Math.round((finalDoneCount / totalSteps) * 100);
 
   const CHECKLIST_ITEMS = [
     { key: "account", label: "Account created", meta: "Name, email and password", done: true, action: null },
@@ -107,6 +117,17 @@ export function ApplicantDashboard({ candidate }: { candidate: CurrentCandidate 
       done: checklist.handbook,
       action: checklist.handbook ? null : { label: "Read", href: "/portal/profile", onClick: undefined },
     },
+    ...(needsPhone
+      ? [
+          {
+            key: "phone",
+            label: "Phone number",
+            meta: "Add a number so we can reach you about your application",
+            done: phoneDone,
+            action: phoneDone ? null : { label: "Add", href: "/portal/profile", onClick: undefined },
+          },
+        ]
+      : []),
   ];
 
   return (
@@ -208,7 +229,7 @@ export function ApplicantDashboard({ candidate }: { candidate: CurrentCandidate 
         <div className="rounded-md border border-divider bg-bg p-5 px-6">
           <div className="flex items-baseline justify-between gap-4">
             <h3 className="m-0">Complete your profile</h3>
-            <div className="text-xs text-neutral-600">{finalDoneCount} of 4 complete</div>
+            <div className="text-xs text-neutral-600">{finalDoneCount} of {totalSteps} complete</div>
           </div>
           <div className="mt-3 h-[7px] overflow-hidden rounded-full bg-neutral-200">
             <div className="h-full rounded-full bg-accent transition-[width] duration-300" style={{ width: `${pct}%` }} />

@@ -12,9 +12,13 @@ import { Label, Input, FieldError } from "@/components/ui/field";
 import { PasswordInput } from "@/components/ui/password-input";
 import { Checkbox } from "@/components/ui/checkbox";
 
-async function initiateGoogleOAuth() {
+async function initiateGoogleOAuth(intent: "signin" | "register") {
   try {
-    const res = await fetch("/api/auth/google/authorize", { method: "POST" });
+    const res = await fetch("/api/auth/google/authorize", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ intent }),
+    });
     const { url } = await res.json();
     window.location.href = url;
   } catch (error) {
@@ -33,6 +37,8 @@ function SignInForm() {
   const signedOut = searchParams.get("signedOut") === "1";
   const expired = searchParams.get("expired") === "1";
   const nextPath = searchParams.get("next");
+  const oauthError = searchParams.get("error");
+  const accountExists = oauthError === "account_exists";
   const [state, formAction, pending] = useActionState(signInCandidate, emptyActionState);
   const [googleLoading, setGoogleLoading] = React.useState(false);
   // Prefilled after a guest checkout ("Apply for this programme") confirms
@@ -98,6 +104,22 @@ function SignInForm() {
                 <span className="flex-none text-xs font-bold text-accent">✓</span>
                 <div className="text-xs leading-[1.55] text-accent-800 text-pretty">
                   You have been signed out. Your progress was saved.
+                </div>
+              </div>
+            )}
+
+            {accountExists && !suspended && (
+              <div className="mb-5 flex items-start gap-2.5 rounded-md border border-warning-border bg-warning-bg px-3.5 py-3">
+                <span className="flex-none text-sm font-bold text-warning-text">!</span>
+                <div className="text-xs leading-[1.55] text-warning-text text-pretty">
+                  <div className="font-heading font-semibold">This email is already registered</div>
+                  <div className="mt-1">
+                    Sign in with your password below, or{" "}
+                    <Link href="/forgot-password" className="font-medium underline">
+                      reset it
+                    </Link>{" "}
+                    if you don&rsquo;t remember it.
+                  </div>
                 </div>
               </div>
             )}
@@ -188,7 +210,7 @@ function SignInForm() {
                 type="button"
                 onClick={async () => {
                   setGoogleLoading(true);
-                  await initiateGoogleOAuth();
+                  await initiateGoogleOAuth("signin");
                 }}
                 disabled={googleLoading}
                 className="flex h-[46px] w-full items-center justify-center gap-2.5 rounded-md border border-neutral-300 bg-bg text-sm font-medium text-text hover:border-neutral-400 hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-60 transition-colors"

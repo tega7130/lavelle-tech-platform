@@ -12,6 +12,7 @@ function makeCandidate(isEnrolled: boolean): CurrentCandidate {
     email: "test@example.com",
     phoneCountryCode: "+234",
     phone: null,
+    googleId: null,
     emailVerifiedAt: null,
     accountStatus: "ACTIVE",
     isEnrolled,

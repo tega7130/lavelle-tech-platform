@@ -125,6 +125,8 @@ export interface CurrentCandidate {
   email: string;
   phoneCountryCode: string;
   phone: string | null;
+  /** Set when the account was created (or linked) via Google OAuth — used to require a phone number in the profile checklist, since Google sign-up never collects one. */
+  googleId: string | null;
   emailVerifiedAt: Date | null;
   accountStatus: CandidateAccountStatus;
   isEnrolled: boolean;
@@ -206,6 +208,7 @@ export async function resolveCandidateFromToken(token: string): Promise<CurrentC
     email: candidate.email,
     phoneCountryCode: candidate.phoneCountryCode,
     phone: candidate.phone,
+    googleId: candidate.googleId,
     emailVerifiedAt: candidate.emailVerifiedAt,
     accountStatus: candidate.accountStatus,
     isEnrolled: candidate.candidateNumber !== null,
