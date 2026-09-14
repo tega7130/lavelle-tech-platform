@@ -8,7 +8,6 @@ export interface CertificateRevokedVariables {
   certificateId: string;
   revocationReason: string;
   appealDeadlineDate: string;
-  appealInstructionsUrl: string;
   supportEmail: string;
   securityContactEmail: string;
   currentYear: number;
@@ -76,7 +75,7 @@ export function generateCertificateRevokedEmail(variables: CertificateRevokedVar
         <p>If you believe this decision is incorrect, or if you have evidence that contradicts the reason for review, you may submit an appeal.</p>
         <p><strong>Appeal Deadline:</strong> {{appealDeadlineDate}}</p>
         <p>After this date, you will not be able to submit an appeal.</p>
-        <a href="{{appealInstructionsUrl}}" class="appeal-button">Submit an Appeal</a>
+        <p>To submit an appeal, email us at <a href="mailto:{{supportEmail}}">{{supportEmail}}</a>.</p>
       </div>
 
       <div class="timeline">
@@ -137,7 +136,7 @@ If you believe this decision is incorrect or have evidence that contradicts the 
 
 Appeal Deadline: {{appealDeadlineDate}}
 
-Submit Your Appeal: {{appealInstructionsUrl}}
+To submit an appeal, email us at {{supportEmail}}.
 
 WHAT HAPPENS NEXT:
 1. You receive this notification and review the reason

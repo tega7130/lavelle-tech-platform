@@ -88,10 +88,11 @@ const templateTestData: Record<TemplateName, Record<string, any>> = {
     firstName: "John",
     certificateId: "CERT-2026-001",
     programmeName: "Advanced Legal Practice",
-    reason: "Exam integrity violation",
+    tier: "ADVANCED_PRACTITIONER",
+    revocationReason: "Exam integrity violation",
     appealDeadlineDate: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toLocaleDateString(),
-    appealUrl: "http://localhost:3000/appeals/new",
     supportEmail: EMAIL_CONFIG.supportEmail,
+    securityContactEmail: EMAIL_CONFIG.securityContactEmail,
     currentYear: 2026,
   },
   "profile-completion-reminder": {

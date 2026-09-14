@@ -547,7 +547,6 @@ export async function revokeCertificate(id: string, reason: string, staffId: str
       certificateId: updated.certificate.certificateNumber,
       revocationReason: trimmedReason,
       appealDeadlineDate: appealDeadlineDate.toLocaleDateString(),
-      appealInstructionsUrl: `${process.env.NEXTAUTH_URL}/appeals/new`,
       supportEmail: EMAIL_CONFIG.supportEmail,
       securityContactEmail: EMAIL_CONFIG.securityContactEmail,
       currentYear: new Date().getFullYear(),
