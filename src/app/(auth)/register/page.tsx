@@ -246,10 +246,10 @@ export default function RegisterPage() {
                     name="phoneCountryCode"
                     value={values.phoneCountryCode}
                     onChange={field("phoneCountryCode")}
-                    className="h-11 w-[104px] flex-none rounded-md border border-neutral-300 bg-bg px-2 text-sm text-text"
+                    className="h-11 w-[132px] sm:w-[180px] flex-none rounded-md border border-neutral-300 bg-bg px-2 text-sm text-text"
                   >
                     {PHONE_CODES.map((c) => (
-                      <option key={c.value} value={c.value}>
+                      <option key={c.label} value={c.value}>
                         {c.label}
                       </option>
                     ))}

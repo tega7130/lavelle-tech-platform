@@ -65,10 +65,10 @@ export function NotifyMeForm({
           aria-label="Country code"
           value={phoneCountryCode}
           onChange={(e) => setPhoneCountryCode(e.target.value)}
-          className="h-11 w-[104px] flex-none rounded-[9px] border border-divider bg-bg px-2 text-[13px] outline-none focus:border-accent-200"
+          className="h-11 w-[132px] sm:w-[180px] flex-none rounded-[9px] border border-divider bg-bg px-2 text-[13px] outline-none focus:border-accent-200"
         >
           {PHONE_CODES.map((c) => (
-            <option key={c.value} value={c.value}>
+            <option key={c.label} value={c.value}>
               {c.label}
             </option>
           ))}
