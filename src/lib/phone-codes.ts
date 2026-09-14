@@ -216,7 +216,13 @@ const COUNTRIES: Country[] = [
   { iso2: "YE", name: "Yemen", dialCode: "+967" },
   { iso2: "ZM", name: "Zambia", dialCode: "+260" },
   { iso2: "ZW", name: "Zimbabwe", dialCode: "+263" },
-].sort((a, b) => a.name.localeCompare(b.name));
+// Nigeria pinned first — the platform's primary market — then every
+// other country alphabetically, same as before.
+].sort((a, b) => {
+  if (a.iso2 === "NG") return -1;
+  if (b.iso2 === "NG") return 1;
+  return a.name.localeCompare(b.name);
+});
 
 export const PHONE_CODES = COUNTRIES.map((c) => ({
   value: c.dialCode,
