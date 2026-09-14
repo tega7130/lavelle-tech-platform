@@ -2303,6 +2303,15 @@ model ProgrammeNotificationSubscription {
   candidate   Candidate? @relation(fields: [candidateId], references: [id], onDelete: Cascade)
 
   email String
+  // Nullable at the DB level so existing pre-migration rows (email-only)
+  // stay valid — the "Notify me" form and its Zod schema require both on
+  // every new submission (application-level, not DB-level, required).
+  // Same phoneCountryCode/phone split as Candidate above, for the same
+  // reason — a dial code and a local number are different data, not one
+  // string to re-parse later.
+  name             String?
+  phoneCountryCode String? @default("+234") @db.VarChar(6)
+  phone            String?
 
   notifiedAt     DateTime?
   unsubscribedAt DateTime?

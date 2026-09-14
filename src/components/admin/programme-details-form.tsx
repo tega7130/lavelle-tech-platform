@@ -26,6 +26,10 @@ export interface CategoryOption {
 export interface ProgrammeDetailsFormProps {
   mode: "create" | "edit";
   programmeId?: string;
+  // "Create Future Programme" — same fields, but on success the listing
+  // is published straight to Coming Soon (see createFutureProgramme)
+  // instead of routing into the course content builder.
+  futureMode?: boolean;
   categories: CategoryOption[];
   authors?: string[];
   initialValues?: {
@@ -55,6 +59,7 @@ const TIERS = [
 export function ProgrammeDetailsForm({
   mode,
   programmeId,
+  futureMode = false,
   categories: initialCategories,
   authors: initialAuthors,
   initialValues,
@@ -69,6 +74,7 @@ export function ProgrammeDetailsForm({
   const [tier, setTier] = React.useState(initialValues?.tier ?? "SPECIALIST");
   const [errors, setErrors] = React.useState<Record<string, string>>({});
   const [prevStateErrors, setPrevStateErrors] = React.useState(state.errors);
+  const [prevStateData, setPrevStateData] = React.useState(state.data);
   const [videoMode, setVideoMode] = React.useState<"url" | "upload">(initialValues?.coverVideoAsset ? "upload" : "url");
   const [coverVideoUrl, setCoverVideoUrl] = React.useState(initialValues?.coverVideoUrl ?? "");
   const [coverVideoAsset, setCoverVideoAsset] = React.useState(initialValues?.coverVideoAsset ?? null);
@@ -91,6 +97,8 @@ export function ProgrammeDetailsForm({
   const [addingAuthor, setAddingAuthor] = React.useState(!(initialValues?.authorName) && (initialAuthors ?? []).length === 0);
   const [newAuthorName, setNewAuthorName] = React.useState("");
   const [showSaved, setShowSaved] = React.useState(false);
+  const [comingSoonMessage, setComingSoonMessage] = React.useState("");
+  const [comingSoonError, setComingSoonError] = React.useState<{ programmeId: string; message: string } | null>(null);
 
   async function handleVideoUpload(file: File) {
     setVideoError(null);
@@ -110,9 +118,22 @@ export function ProgrammeDetailsForm({
     setErrors(state.errors ?? {});
   }
 
+  // Derived from state.data during render (same pattern as the errors
+  // sync above), not inside the effect below — the effect's only job is
+  // the router.push side effect, which must stay clear of a failed
+  // Coming Soon publish (that case shows the dialog in place instead).
+  if (mode === "create" && futureMode && state.data?.comingSoonFailed && state.data !== prevStateData) {
+    setPrevStateData(state.data);
+    setComingSoonError({
+      programmeId: state.data.id as string,
+      message: typeof state.data.comingSoonError === "string" ? state.data.comingSoonError : "Could not publish as Coming Soon.",
+    });
+  }
+
   React.useEffect(() => {
-    if (mode === "create" && state.ok && state.data?.id) {
-      router.push(`/admin/programmes/${state.data.id}/content`);
+    if (mode === "create" && state.ok && state.data?.id && !state.data.comingSoonFailed) {
+      const id = state.data.id as string;
+      router.push(futureMode ? `/admin/website/${id}` : `/admin/programmes/${id}/content`);
     } else if (mode === "edit" && state.ok) {
       setShowSaved(true);
     }
@@ -356,6 +377,22 @@ export function ProgrammeDetailsForm({
         <FieldError>{errors.summary}</FieldError>
       </div>
 
+      {futureMode && (
+        <div>
+          <Label htmlFor="comingSoonMessage">Coming Soon message (optional)</Label>
+          <Input
+            id="comingSoonMessage"
+            name="comingSoonMessage"
+            placeholder="Launching soon"
+            value={comingSoonMessage}
+            onChange={(e) => setComingSoonMessage(e.target.value)}
+          />
+          <div className="mt-1.5 text-[11.5px] text-neutral-600">
+            Shown in place of the fee on the public page while it&rsquo;s Coming Soon. Defaults to a generic line if left blank.
+          </div>
+        </div>
+      )}
+
       <div>
         <Label>Author (optional)</Label>
         {!addingAuthor ? (
@@ -447,10 +484,30 @@ export function ProgrammeDetailsForm({
             </Link>
           )}
           <Button type="submit" disabled={pending}>
-            {pending ? "Saving…" : mode === "create" ? "Next: course content →" : "Save details"}
+            {pending
+              ? "Saving…"
+              : mode === "create"
+                ? futureMode
+                  ? "Create & publish as Coming Soon"
+                  : "Next: course content →"
+                : "Save details"}
           </Button>
         </div>
       </div>
+
+      <Dialog open={!!comingSoonError} onClose={() => setComingSoonError(null)} title="Programme created">
+        <p className="text-[13.5px] text-neutral-700">
+          {comingSoonError?.message} The programme itself was created fine — finish publishing it as Coming Soon from the Website
+          page.
+        </p>
+        <div className="flex justify-end">
+          {comingSoonError && (
+            <Link href={`/admin/website/${comingSoonError.programmeId}`} className={buttonClassName("primary")}>
+              Go to Website page
+            </Link>
+          )}
+        </div>
+      </Dialog>
 
       <Dialog open={showSaved} onClose={() => setShowSaved(false)} title="Saved">
         <p className="text-[13.5px] text-neutral-700">Programme details have been updated.</p>

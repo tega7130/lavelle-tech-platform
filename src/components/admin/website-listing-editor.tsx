@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { Tag } from "@/components/ui/tag";
@@ -234,6 +235,17 @@ export function WebsiteListingEditor({ listing: programme, initialTab }: { listi
                   <Label>Optional message (e.g. &ldquo;Launching soon&rdquo;)</Label>
                   <Input value={comingSoonMessage} onChange={(e) => setComingSoonMessage(e.target.value)} placeholder="Coming soon" />
                 </Field>
+              )}
+              {isComingSoon && totalLectures === 0 && (
+                <div className="flex items-center justify-between gap-3 rounded-md border border-dashed border-accent-200 bg-accent-100 px-3.5 py-2.5">
+                  <div className="text-[12px] text-accent-800 leading-[1.5]">
+                    No course content yet — build the syllabus when you&rsquo;re ready. &ldquo;Open for enrolment&rdquo; is
+                    blocked until at least one lecture exists.
+                  </div>
+                  <Link href={`/admin/programmes/${programme.id}/content`} className="flex-none text-[12.5px] font-medium text-accent whitespace-nowrap">
+                    Build course content →
+                  </Link>
+                </div>
               )}
             </div>
           )}

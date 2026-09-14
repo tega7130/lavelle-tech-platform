@@ -16,21 +16,38 @@ export class ListingNotFoundForSubscriptionError extends Error {
 }
 
 /**
- * Public, ungated — anyone on a Coming Soon card can leave an email. The
- * unique index on (listingId, email) makes a repeat submission a no-op
- * rather than a duplicate row; a candidate's own account, when signed in,
- * is linked so `My subscriptions` (future) can look them up without an
- * email match.
+ * Public, ungated — anyone on a Coming Soon card can leave their details.
+ * The unique index on (listingId, email) makes a repeat submission a
+ * no-op rather than a duplicate row (name/phone are refreshed to whatever
+ * was just submitted, in case they'd typed something different the first
+ * time); a candidate's own account, when signed in, is linked so `My
+ * subscriptions` (future) can look them up without an email match.
  */
-export async function subscribeToProgrammeNotification(listingId: string, email: string, candidateId?: string) {
+export async function subscribeToProgrammeNotification(
+  listingId: string,
+  email: string,
+  name: string,
+  phoneCountryCode: string,
+  phone: string,
+  candidateId?: string
+) {
   const listing = await prisma.programmeListing.findUnique({ where: { id: listingId }, select: { id: true } });
   if (!listing) throw new ListingNotFoundForSubscriptionError();
 
   const normalizedEmail = email.trim().toLowerCase();
+  const trimmedName = name.trim();
+  const trimmedPhone = phone.trim();
 
   try {
     await prisma.programmeNotificationSubscription.create({
-      data: { listingId, email: normalizedEmail, candidateId: candidateId ?? null },
+      data: {
+        listingId,
+        email: normalizedEmail,
+        name: trimmedName,
+        phoneCountryCode,
+        phone: trimmedPhone,
+        candidateId: candidateId ?? null,
+      },
     });
   } catch (e) {
     // Already subscribed (and not previously unsubscribed) — treat as
@@ -39,7 +56,7 @@ export async function subscribeToProgrammeNotification(listingId: string, email:
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
       await prisma.programmeNotificationSubscription.updateMany({
         where: { listingId, email: normalizedEmail },
-        data: { unsubscribedAt: null },
+        data: { unsubscribedAt: null, name: trimmedName, phoneCountryCode, phone: trimmedPhone },
       });
       return;
     }
@@ -91,7 +108,7 @@ export async function sendProgrammeGoLiveNotification(listingId: string) {
   let failed = 0;
   for (const subscriber of subscribers) {
     const result = await sendTransactionalEmailByTemplate("programme-golive-notification", subscriber.email, {
-      firstName: subscriber.candidate?.firstName ?? "there",
+      firstName: subscriber.name?.trim().split(/\s+/)[0] || subscriber.candidate?.firstName || "there",
       programmeName: listing.programme.title,
       tier,
       programmePitch,

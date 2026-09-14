@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import {
   upsertListing as upsertListingLib,
   publishListing as publishListingLib,
+  publishListingAsComingSoon as publishListingAsComingSoonLib,
   unpublishListing as unpublishListingLib,
   reorderListings as reorderListingsLib,
   markComingSoon as markComingSoonLib,
@@ -66,6 +67,17 @@ export async function reorderListingsAction(orderedProgrammeIds: string[]) {
 export async function markComingSoonAction(programmeId: string, message: string | null) {
   const staff = await requireStaffPermission(Permission.MANAGE_PROGRAMMES);
   await markComingSoonLib(programmeId, message?.trim() || null, staff.id);
+  const programme = await prisma.programme.findUnique({ where: { id: programmeId }, select: { code: true } });
+  revalidateSite(programme?.code);
+  revalidatePath("/portal/catalogue");
+  if (programme?.code) revalidatePath(`/portal/programmes/${programme.code}`);
+  revalidateAdmin(programmeId);
+}
+
+/** Used by "Create Future Programme" — publishes a brand-new programme straight to Coming Soon in one call. */
+export async function publishListingAsComingSoonAction(programmeId: string, message: string | null) {
+  const staff = await requireStaffPermission(Permission.MANAGE_PROGRAMMES);
+  await publishListingAsComingSoonLib(programmeId, message?.trim() || null, staff.id);
   const programme = await prisma.programme.findUnique({ where: { id: programmeId }, select: { code: true } });
   revalidateSite(programme?.code);
   revalidatePath("/portal/catalogue");
