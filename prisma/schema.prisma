@@ -65,8 +65,12 @@ model Candidate {
 
   phoneCountryCode String  @default("+234") @db.VarChar(6)
   phone            String? @db.VarChar(24)
+  phoneVerifiedAt  DateTime?
 
-  passwordHash String
+  passwordHash String?
+
+  googleId     String?   @unique @db.VarChar(255)
+  googleEmail  String?   @db.VarChar(255)
 
   acceptedTermsAt DateTime
   marketingOptIn  Boolean  @default(false)
@@ -82,6 +86,7 @@ model Candidate {
   updatedAt DateTime @updatedAt
 
   profile                    CandidateProfile?
+  oauthProviders             CandidateOAuthProvider[]
   emailVerificationTokens    EmailVerificationToken[]
   passwordResetOtpChallenges PasswordResetOtpChallenge[]
   notifications              Notification[]
@@ -2122,6 +2127,24 @@ model CandidateNote {
   createdAt DateTime @default(now())
 
   @@index([candidateId, createdAt])
+}
+
+model CandidateOAuthProvider {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+
+  candidateId String    @db.Uuid
+  candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  provider         String  @db.VarChar(50)
+  providerUserId   String  @db.VarChar(255)
+  providerEmail    String? @db.VarChar(255)
+
+  linkedAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([candidateId, provider])
+  @@index([candidateId])
+  @@index([provider, providerUserId])
 }
 
 enum AnnouncementState {

@@ -13,6 +13,16 @@ import { PasswordInput } from "@/components/ui/password-input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { PHONE_CODES } from "@/lib/phone-codes";
 
+async function initiateGoogleOAuth() {
+  try {
+    const res = await fetch("/api/auth/google/authorize", { method: "POST" });
+    const { url } = await res.json();
+    window.location.href = url;
+  } catch (error) {
+    console.error("Failed to initiate Google OAuth:", error);
+  }
+}
+
 const LADDER = (
   <div className="mt-9 border-t border-dashed border-white/22 pt-[26px]">
     <div className="text-[10px] tracking-[0.16em] text-white/50 uppercase">Credentialing ladder</div>
@@ -42,6 +52,7 @@ const LADDER = (
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]{2,}$/;
 
 export default function RegisterPage() {
+  const [googleLoading, setGoogleLoading] = React.useState(false);
   const [values, setValues] = React.useState({
     firstName: "",
     lastName: "",
@@ -343,9 +354,12 @@ export default function RegisterPage() {
 
               <button
                 type="button"
-                disabled
-                title="Not available yet"
-                className="flex h-[46px] w-full cursor-not-allowed items-center justify-center gap-2.5 rounded-md border border-neutral-300 bg-bg text-sm font-medium text-text opacity-60"
+                onClick={async () => {
+                  setGoogleLoading(true);
+                  await initiateGoogleOAuth();
+                }}
+                disabled={googleLoading}
+                className="flex h-[46px] w-full items-center justify-center gap-2.5 rounded-md border border-neutral-300 bg-bg text-sm font-medium text-text hover:border-neutral-400 hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-60 transition-colors"
               >
                 <svg width="17" height="17" viewBox="0 0 18 18" aria-hidden="true">
                   <path fill="#4285F4" d="M17.6 9.2c0-.6-.1-1.2-.2-1.7H9v3.3h4.8a4.1 4.1 0 0 1-1.8 2.7v2.2h2.9c1.7-1.5 2.7-3.8 2.7-6.5Z" />
@@ -353,7 +367,7 @@ export default function RegisterPage() {
                   <path fill="#FBBC05" d="M3.8 10.7a5.4 5.4 0 0 1 0-3.4V5H.8a9 9 0 0 0 0 8l3-2.3Z" />
                   <path fill="#EA4335" d="M9 3.6c1.3 0 2.5.5 3.4 1.3l2.6-2.6A9 9 0 0 0 .8 5l3 2.3C4.5 5.1 6.6 3.6 9 3.6Z" />
                 </svg>
-                <span>Continue with Google</span>
+                <span>{googleLoading ? "Redirecting…" : "Continue with Google"}</span>
               </button>
             </div>
           </form>
