@@ -1,6 +1,6 @@
 import { exchangeCodeForTokens, verifyIdToken } from '@/lib/google-oauth';
 import { prisma } from '@/lib/prisma';
-import { createSessionRecord, setSessionCookie } from '@/lib/candidate-session';
+import { createSessionRecord, setSessionCookie, setLastAuthMethodCookie } from '@/lib/candidate-session';
 import { recordAuditEvent } from '@/lib/audit';
 import { sendTransactionalEmailByTemplate } from '@/lib/send-transactional-email';
 import { getFirstName } from '@/lib/email-utils';
@@ -127,6 +127,7 @@ export async function GET(request: NextRequest) {
         // dashboard, even though their account existed.
         const sessionToken = await createSessionRecord(prisma, candidate.id, { userAgent, ipAddress: ip });
         await setSessionCookie(sessionToken, true);
+        await setLastAuthMethodCookie('google');
 
         if (isNewCandidate) {
             try {

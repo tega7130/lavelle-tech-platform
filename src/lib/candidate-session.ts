@@ -83,6 +83,26 @@ export async function setSessionCookie(token: string, remember: boolean) {
   });
 }
 
+/**
+ * A plain (non-httpOnly) cookie recording which method last signed this
+ * browser in — read client-side on the sign-in page to show a "Last
+ * used" hint next to the matching option. Deliberately NOT server/DB
+ * state: the sign-in page doesn't know who the visitor is yet, so only
+ * "what did this browser last do" can inform the pre-auth UI.
+ */
+export const LAST_AUTH_METHOD_COOKIE = "lavelle_last_auth_method";
+
+export async function setLastAuthMethodCookie(method: "password" | "google") {
+  const jar = await cookies();
+  jar.set(LAST_AUTH_METHOD_COOKIE, method, {
+    httpOnly: false,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+    maxAge: 60 * 60 * 24 * 365,
+  });
+}
+
 /** Creates the session row (outside any caller-managed transaction) and sets the cookie in one call — used by signIn. */
 export async function createCandidateSession(candidateId: string, remember: boolean) {
   const token = await createSessionRecord(prisma, candidateId, {
