@@ -2,6 +2,7 @@ import { sendTransactionalEmailByTemplate } from "@/lib/send-transactional-email
 import { type TemplateName } from "@/lib/email-templates";
 import { triggerJobImmediate } from "@/lib/scheduler";
 import { EMAIL_CONFIG } from "@/lib/email-config";
+import { prisma } from "@/lib/prisma";
 
 /**
  * Test all 18 email templates
@@ -26,8 +27,8 @@ const templateTestData: Record<TemplateName, Record<string, any>> = {
   },
   "password-reset-request": {
     firstName: "John",
-    resetPasswordUrl: "http://localhost:3000/reset-password?token=xyz",
-    expiryMinutes: 30,
+    otpCode: "123456",
+    otpExpiryMinutes: 10,
     supportEmail: EMAIL_CONFIG.supportEmail,
     currentYear: 2026,
   },
@@ -289,6 +290,18 @@ export async function POST(request: Request) {
         templates: Object.keys(templateTestData),
         count: Object.keys(templateTestData).length,
       });
+    }
+
+    if (action === "check-logs") {
+      // Diagnostic: the real SMTP send outcome per attempt — sendMail()
+      // resolving without throwing only means the relay accepted the
+      // message, not that it was delivered, so this is the one place that
+      // shows what actually happened (including any relay-side error).
+      const logs = await prisma.emailLog.findMany({
+        orderBy: { createdAt: "desc" },
+        take: 20,
+      });
+      return Response.json({ action: "check-logs", count: logs.length, logs });
     }
 
     return Response.json(
