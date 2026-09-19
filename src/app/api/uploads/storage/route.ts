@@ -12,6 +12,41 @@ const PERMISSION_BY_PURPOSE = {
   document_library: Permission.MANAGE_DOCUMENT_LIBRARY,
 } as const;
 
+const ALLOWED_MIME_TYPES: Record<string, string[]> = {
+  programme: ["video/mp4", "video/webm", "video/quicktime", "image/jpeg", "image/png", "image/webp"],
+  blog: ["image/jpeg", "image/png", "image/webp", "image/gif"],
+  certificate: ["application/pdf"],
+  document_library: ["application/pdf"],
+  finance: ["image/jpeg", "image/png", "image/webp", "application/pdf"],
+  candidate_photo: ["image/jpeg", "image/png", "image/webp"],
+};
+
+const EXTENSION_BY_MIME_TYPE: Record<string, string[]> = {
+  "video/mp4": ["mp4"],
+  "video/webm": ["webm"],
+  "video/quicktime": ["mov", "qt"],
+  "image/jpeg": ["jpg", "jpeg"],
+  "image/png": ["png"],
+  "image/webp": ["webp"],
+  "image/gif": ["gif"],
+  "application/pdf": ["pdf"],
+};
+
+function getFileExtension(filename: string): string {
+  const parts = filename.split(".");
+  return parts.length > 1 ? parts[parts.length - 1].toLowerCase() : "";
+}
+
+function isValidMimeTypeAndExtension(mimeType: string, filename: string): boolean {
+  const ext = getFileExtension(filename);
+  if (!ext) return false;
+
+  const validExtensions = EXTENSION_BY_MIME_TYPE[mimeType];
+  if (!validExtensions) return false;
+
+  return validExtensions.includes(ext);
+}
+
 /**
  * Returns a signed PUT URL for a direct browser → Spaces upload — never
  * proxies the file bytes through this app's own serverless function.
@@ -41,6 +76,23 @@ export async function POST(req: NextRequest) {
     } catch {
       return NextResponse.json({ error: "forbidden" }, { status: 403 });
     }
+  }
+
+  // Validate MIME type is allowed for this purpose
+  const allowedTypes = ALLOWED_MIME_TYPES[purpose];
+  if (!allowedTypes || !allowedTypes.includes(mimeType)) {
+    return NextResponse.json(
+      { error: "invalid_content_type", message: `${mimeType} is not allowed for this upload type` },
+      { status: 400 }
+    );
+  }
+
+  // Validate file extension matches MIME type
+  if (!isValidMimeTypeAndExtension(mimeType, originalFilename)) {
+    return NextResponse.json(
+      { error: "invalid_file_extension", message: "File extension does not match the declared MIME type" },
+      { status: 400 }
+    );
   }
 
   const safeFilename = originalFilename.replace(/[^a-zA-Z0-9._-]/g, "_");
