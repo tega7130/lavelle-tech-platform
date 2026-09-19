@@ -3,6 +3,8 @@
 import { z } from "zod";
 import { subscribeToProgrammeNotification } from "@/lib/programme-notifications";
 import { getCurrentCandidate } from "@/lib/candidate-session";
+import { getClientIp } from "@/lib/request-info";
+import { enforceRateLimit, RateLimitError } from "@/lib/rate-limit";
 import { PHONE_CODES } from "@/lib/phone-codes";
 
 // Matches validation/candidate.ts's EMAIL_RE exactly — same discipline as
@@ -45,6 +47,16 @@ export async function subscribeToComingSoonAction(
   const parsed = subscribeSchema.safeParse({ listingId, name, phoneCountryCode, phone, email });
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Check your details and try again." };
+  }
+
+  const ip = await getClientIp();
+  try {
+    await enforceRateLimit("subscribe_coming_soon", { ip, email: parsed.data.email }, { limit: 10, windowSeconds: 3600 });
+  } catch (e) {
+    if (e instanceof RateLimitError) {
+      return { ok: false, error: "Too many subscription attempts. Please try again later." };
+    }
+    throw e;
   }
 
   const candidate = await getCurrentCandidate();

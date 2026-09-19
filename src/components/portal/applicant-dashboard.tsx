@@ -63,6 +63,7 @@ export function ApplicantDashboard({ candidate }: { candidate: CurrentCandidate 
   function handleModalSaved() {
     window.localStorage.setItem(DISMISSED_KEY, "1");
     setJustCompleted(true);
+    setTrigger("closed");
   }
 
   async function handleResend() {
@@ -192,7 +193,7 @@ export function ApplicantDashboard({ candidate }: { candidate: CurrentCandidate 
         </div>
       )}
 
-      {showNudge && !allDone && (
+      {showNudge && !allDone && !professionalDone && (
         <div className="flex items-center gap-4 rounded-md border border-accent-200 bg-accent-100 px-4 py-3">
           <span className="flex h-[30px] w-[30px] flex-none items-center justify-center rounded-full border border-accent-200 bg-bg">
             <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="var(--color-accent)" strokeWidth={1.5} strokeLinecap="round">

@@ -4,8 +4,10 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { PaymentStatus } from "@/generated/prisma/client";
 import { getCurrentCandidate } from "@/lib/candidate-session";
+import { getClientIp } from "@/lib/request-info";
 import { createProviderCheckout } from "@/lib/payment-provider";
 import { getSignedAssetUrl } from "@/lib/storage";
+import { enforceRateLimit, RateLimitError } from "@/lib/rate-limit";
 import { effectivePriceMinor } from "@/lib/document-library";
 import {
   validateAndComputeDiscount,
@@ -26,6 +28,16 @@ import {
 export async function validateDiscountCodeAction(documentTemplateId: string, code: string) {
   const candidate = await getCurrentCandidate();
   if (!candidate) throw new Error("Sign in required.");
+
+  const ip = await getClientIp();
+  try {
+    await enforceRateLimit("validate_discount_code", { ip, email: candidate.email }, { limit: 10, windowSeconds: 3600 });
+  } catch (e) {
+    if (e instanceof RateLimitError) {
+      return { valid: false as const, reason: "Too many attempts. Please try again later." };
+    }
+    throw e;
+  }
 
   const document = await prisma.documentTemplate.findUnique({ where: { id: documentTemplateId } });
   if (!document || !document.isActive) {
@@ -78,6 +90,16 @@ export async function initiateDocumentPurchaseAction(
 ): Promise<{ checkoutUrl: string | null; internalReference: string | null; error?: string }> {
   const candidate = await getCurrentCandidate();
   if (!candidate) throw new Error("Sign in required.");
+
+  const ip = await getClientIp();
+  try {
+    await enforceRateLimit("initiate_document_purchase", { ip, email: candidate.email }, { limit: 5, windowSeconds: 3600 });
+  } catch (e) {
+    if (e instanceof RateLimitError) {
+      return { checkoutUrl: null, internalReference: null, error: "Too many purchase attempts. Please try again in about an hour." };
+    }
+    throw e;
+  }
 
   try {
     const document = await prisma.documentTemplate.findUnique({ where: { id: documentTemplateId } });

@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { Permission, type RequestPriority, type RequestCategory } from "@/generated/prisma/client";
 import { requireStaffPermission } from "@/lib/staff-auth";
 import { getCurrentCandidate } from "@/lib/candidate-session";
+import { getClientIp } from "@/lib/request-info";
+import { enforceRateLimit, RateLimitError } from "@/lib/rate-limit";
 import {
   respondToRequest,
   resolveRequest,
@@ -79,6 +81,17 @@ export async function getMyRequestThreadAction(requestId: string) {
 export async function submitCandidateRequestAction(input: { subject: string; category: RequestCategory; body: string }) {
   const candidate = await getCurrentCandidate();
   if (!candidate) throw new Error("Sign in required.");
+
+  const ip = await getClientIp();
+  try {
+    await enforceRateLimit("submit_support_request", { ip, email: candidate.email }, { limit: 5, windowSeconds: 86400 });
+  } catch (e) {
+    if (e instanceof RateLimitError) {
+      throw new Error("You have submitted too many support requests today. Please try again tomorrow.");
+    }
+    throw e;
+  }
+
   const request = await submitCandidateRequest(candidate.id, input);
   revalidatePath("/portal/support");
   return request;
@@ -87,6 +100,17 @@ export async function submitCandidateRequestAction(input: { subject: string; cat
 export async function submitCandidateReplyAction(requestId: string, body: string) {
   const candidate = await getCurrentCandidate();
   if (!candidate) throw new Error("Sign in required.");
+
+  const ip = await getClientIp();
+  try {
+    await enforceRateLimit("submit_support_reply", { ip, email: candidate.email }, { limit: 10, windowSeconds: 3600 });
+  } catch (e) {
+    if (e instanceof RateLimitError) {
+      throw new Error("Too many replies. Please try again in about an hour.");
+    }
+    throw e;
+  }
+
   const trimmed = body.trim();
   if (!trimmed) throw new Error("A message is required.");
   await submitCandidateReply(requestId, candidate.id, trimmed);

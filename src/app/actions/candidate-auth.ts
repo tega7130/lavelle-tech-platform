@@ -382,10 +382,10 @@ export async function requestPasswordResetOtp(
     // unchanged either way — a failed send still can't disclose whether
     // the account exists (see the doc comment on this function).
     try {
-      const resetUrl = `${process.env.NEXTAUTH_URL}/reset-password?email=${encodeURIComponent(email)}`;
       await sendTransactionalEmailByTemplate("password-reset-request", email, {
         firstName: getFirstName(candidate.firstName),
-        resetPasswordUrl: resetUrl,
+        otpCode: code,
+        otpExpiryMinutes: 10,
         supportEmail: EMAIL_CONFIG.supportEmail,
         currentYear: new Date().getFullYear(),
       });
