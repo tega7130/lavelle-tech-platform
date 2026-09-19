@@ -7,6 +7,7 @@ import { requireStaffPermission } from "@/lib/staff-auth";
 import { getCurrentCandidate } from "@/lib/candidate-session";
 import { getClientIp } from "@/lib/request-info";
 import { recordAuditEvent } from "@/lib/audit";
+import { enforceRateLimit, RateLimitError } from "@/lib/rate-limit";
 import { createProviderCheckout, generateInternalReference } from "@/lib/payment-provider";
 import { LiveEnrolmentExistsError, PaymentNotPendingError, ProgrammeNotOpenError, ProgrammeComingSoonError, assertProgrammeOpenForEnrolment } from "@/lib/payment-errors";
 import { applyOfflineRecording } from "@/lib/offline-recording";
@@ -214,6 +215,16 @@ export async function initiateGuestCheckout(_prev: FormActionState, formData: Fo
   const parsed = guestCheckoutSchema.safeParse(raw);
   if (!parsed.success) return { errors: fieldErrors(parsed.error), values: raw };
   const data = parsed.data;
+
+  const ip = await getClientIp();
+  try {
+    await enforceRateLimit("guest_checkout", { ip, email: data.email }, { limit: 5, windowSeconds: 3600 });
+  } catch (e) {
+    if (e instanceof RateLimitError) {
+      return { message: "Too many checkout attempts. Please try again in about an hour.", values: raw };
+    }
+    throw e;
+  }
 
   const emailVerified = await consumeVerifiedOtp(data.email);
   if (!emailVerified) return { message: "Please verify your email address first.", values: raw };
