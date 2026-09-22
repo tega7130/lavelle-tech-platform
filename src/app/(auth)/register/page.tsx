@@ -334,17 +334,6 @@ export default function RegisterPage() {
                   Verify your email address above to continue.
                 </div>
               )}
-              <div className="-mt-2 text-center text-[11.5px] leading-[1.5] text-neutral-500">
-                By creating an account, you accept the{" "}
-                <Link href="/terms" target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">
-                  Terms of Use
-                </Link>{" "}
-                and{" "}
-                <Link href="/privacy" target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">
-                  Privacy Policy
-                </Link>
-                .
-              </div>
 
               <div className="my-0.5 flex items-center gap-3.5">
                 <div className="flex-1 border-t border-dashed border-neutral-300" />
@@ -369,6 +358,17 @@ export default function RegisterPage() {
                 </svg>
                 <span>{googleLoading ? "Redirecting…" : "Continue with Google"}</span>
               </button>
+              <div className="-mt-1 text-center text-[11.5px] leading-[1.5] text-neutral-500">
+                By creating an account, you accept the{" "}
+                <Link href="/terms" target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">
+                  Terms of Use
+                </Link>{" "}
+                and{" "}
+                <Link href="/privacy" target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">
+                  Privacy Policy
+                </Link>
+                .
+              </div>
             </div>
           </form>
 
