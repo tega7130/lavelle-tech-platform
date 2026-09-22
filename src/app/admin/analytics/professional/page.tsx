@@ -1,8 +1,12 @@
 import { getProfessionalDetailsAnalytics } from "@/lib/professional-analytics";
 import { Card, CardKicker } from "@/components/ui/card";
+import { requireStaffSession } from "@/lib/staff-auth";
+import { Permission } from "@/generated/prisma/client";
+import { LocationCleanupPanel } from "@/components/admin/location-cleanup-panel";
 
 export default async function ProfessionalDetailsAnalyticsPage() {
-  const data = await getProfessionalDetailsAnalytics();
+  const [data, user] = await Promise.all([getProfessionalDetailsAnalytics(), requireStaffSession()]);
+  const canEdit = user.permissions.includes(Permission.EDIT_CANDIDATE_DETAILS);
 
   return (
     <div className="max-w-[1000px]">
@@ -101,6 +105,19 @@ export default async function ProfessionalDetailsAnalyticsPage() {
           )}
         </div>
       </div>
+
+      {canEdit && (
+        <div className="mt-[var(--space-6)] pt-[var(--space-6)] border-t border-dashed border-neutral-300">
+          <div className="font-heading font-semibold text-[14px] mb-1">Data cleanup</div>
+          <p className="text-neutral-600 text-[12.5px] mb-3 max-w-[68ch]">
+            Historical place-of-practice entries were free text, so the same state can appear under several
+            spellings (&ldquo;Lagos&rdquo;, &ldquo;LAGOS&rdquo;, &ldquo;Lagos State, Nigeria&rdquo;). This merges
+            confidently-recognized variants into the standard form the new dropdown writes — anything ambiguous is
+            left untouched.
+          </p>
+          <LocationCleanupPanel />
+        </div>
+      )}
     </div>
   );
 }
