@@ -18,16 +18,29 @@ export interface NamedCount {
   count: number;
 }
 
+export interface LawyerSplit {
+  lawyers: number;
+  nonLawyers: number;
+  lawyerPercent: number;
+  nonLawyerPercent: number;
+}
+
 export interface ProfessionalDetailsAnalytics {
   totalCandidates: number;
   profilesWithDetails: number;
   completionRate: number | null;
+  lawyerSplit: LawyerSplit;
   byProfessionalStatus: Distribution[];
   byExperienceBand: Distribution[];
   topInstitutions: NamedCount[];
   topOrganisations: NamedCount[];
+  topLocations: NamedCount[];
   yearOfCallByDecade: NamedCount[];
 }
+
+// PRACTISING_LAWYER and INHOUSE_COUNSEL are both called to the Bar; every
+// other status (graduate, student, regulated non-lawyer, other) isn't.
+const LAWYER_STATUSES: ProfessionalStatus[] = ["PRACTISING_LAWYER", "INHOUSE_COUNSEL"];
 
 function pct(count: number, total: number): number {
   return total > 0 ? Math.round((count / total) * 1000) / 10 : 0;
@@ -49,39 +62,54 @@ function decadeOf(year: number): string {
 export async function getProfessionalDetailsAnalytics(): Promise<ProfessionalDetailsAnalytics> {
   await requireStaffPermission(Permission.VIEW_CANDIDATES);
 
-  const [totalCandidates, profilesWithDetails, statusGroups, bandGroups, institutionRows, organisationRows, yearOfCallRows] =
-    await Promise.all([
-      prisma.candidate.count(),
-      prisma.candidateProfile.count({ where: { professionalStatus: { not: null } } }),
-      prisma.candidateProfile.groupBy({
-        by: ["professionalStatus"],
-        where: { professionalStatus: { not: null } },
-        _count: true,
-      }),
-      prisma.candidateProfile.groupBy({
-        by: ["experienceBand"],
-        where: { experienceBand: { not: null } },
-        _count: true,
-      }),
-      prisma.candidateProfile.groupBy({
-        by: ["institution"],
-        where: { institution: { not: null } },
-        _count: true,
-        orderBy: { _count: { institution: "desc" } },
-        take: TOP_N,
-      }),
-      prisma.candidateProfile.groupBy({
-        by: ["organisation"],
-        where: { organisation: { not: null } },
-        _count: true,
-        orderBy: { _count: { organisation: "desc" } },
-        take: TOP_N,
-      }),
-      prisma.candidateProfile.findMany({
-        where: { yearOfCall: { not: null } },
-        select: { yearOfCall: true },
-      }),
-    ]);
+  const [
+    totalCandidates,
+    profilesWithDetails,
+    statusGroups,
+    bandGroups,
+    institutionRows,
+    organisationRows,
+    locationRows,
+    yearOfCallRows,
+  ] = await Promise.all([
+    prisma.candidate.count(),
+    prisma.candidateProfile.count({ where: { professionalStatus: { not: null } } }),
+    prisma.candidateProfile.groupBy({
+      by: ["professionalStatus"],
+      where: { professionalStatus: { not: null } },
+      _count: true,
+    }),
+    prisma.candidateProfile.groupBy({
+      by: ["experienceBand"],
+      where: { experienceBand: { not: null } },
+      _count: true,
+    }),
+    prisma.candidateProfile.groupBy({
+      by: ["institution"],
+      where: { institution: { not: null } },
+      _count: true,
+      orderBy: { _count: { institution: "desc" } },
+      take: TOP_N,
+    }),
+    prisma.candidateProfile.groupBy({
+      by: ["organisation"],
+      where: { organisation: { not: null } },
+      _count: true,
+      orderBy: { _count: { organisation: "desc" } },
+      take: TOP_N,
+    }),
+    prisma.candidateProfile.groupBy({
+      by: ["placeOfPractice"],
+      where: { placeOfPractice: { not: null } },
+      _count: true,
+      orderBy: { _count: { placeOfPractice: "desc" } },
+      take: TOP_N,
+    }),
+    prisma.candidateProfile.findMany({
+      where: { yearOfCall: { not: null } },
+      select: { yearOfCall: true },
+    }),
+  ]);
 
   const statusTotal = statusGroups.reduce((sum, g) => sum + g._count, 0);
   const byProfessionalStatus: Distribution[] = statusGroups
@@ -92,6 +120,17 @@ export async function getProfessionalDetailsAnalytics(): Promise<ProfessionalDet
       percent: pct(g._count, statusTotal),
     }))
     .sort((a, b) => b.count - a.count);
+
+  const lawyerCount = statusGroups
+    .filter((g) => LAWYER_STATUSES.includes(g.professionalStatus as ProfessionalStatus))
+    .reduce((sum, g) => sum + g._count, 0);
+  const nonLawyerCount = statusTotal - lawyerCount;
+  const lawyerSplit: LawyerSplit = {
+    lawyers: lawyerCount,
+    nonLawyers: nonLawyerCount,
+    lawyerPercent: pct(lawyerCount, statusTotal),
+    nonLawyerPercent: pct(nonLawyerCount, statusTotal),
+  };
 
   const bandTotal = bandGroups.reduce((sum, g) => sum + g._count, 0);
   // Fixed rank order (not count-sorted) — these are ordered bands, so the
@@ -108,6 +147,7 @@ export async function getProfessionalDetailsAnalytics(): Promise<ProfessionalDet
 
   const topInstitutions: NamedCount[] = institutionRows.map((r) => ({ name: r.institution!, count: r._count }));
   const topOrganisations: NamedCount[] = organisationRows.map((r) => ({ name: r.organisation!, count: r._count }));
+  const topLocations: NamedCount[] = locationRows.map((r) => ({ name: r.placeOfPractice!, count: r._count }));
 
   const decadeCounts = new Map<string, number>();
   for (const row of yearOfCallRows) {
@@ -122,10 +162,12 @@ export async function getProfessionalDetailsAnalytics(): Promise<ProfessionalDet
     totalCandidates,
     profilesWithDetails,
     completionRate: totalCandidates > 0 ? pct(profilesWithDetails, totalCandidates) : null,
+    lawyerSplit,
     byProfessionalStatus,
     byExperienceBand,
     topInstitutions,
     topOrganisations,
+    topLocations,
     yearOfCallByDecade,
   };
 }

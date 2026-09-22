@@ -9,8 +9,8 @@ export default async function ProfessionalDetailsAnalyticsPage() {
       <div className="text-[11px] tracking-[0.08em] uppercase text-neutral-500">Analytics</div>
       <h1 className="font-heading text-2xl mt-0.5 mb-1">Professional details</h1>
       <p className="text-neutral-600 text-[13px] mb-[var(--space-6)] max-w-[68ch]">
-        Aggregated from the professional-background step of the candidate profile — status, experience, and the
-        institutions and organisations candidates report.
+        Aggregated from the professional-background step of the candidate profile — lawyer vs. non-lawyer split,
+        years since call to the Bar, location, and the institutions and organisations candidates report.
       </p>
 
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-[var(--space-6)]">
@@ -20,6 +20,26 @@ export default async function ProfessionalDetailsAnalyticsPage() {
           label="Completion rate"
           value={data.completionRate != null ? `${data.completionRate}%` : "—"}
         />
+      </div>
+
+      <div className="mb-[var(--space-6)]">
+        <div className="font-heading font-semibold text-[14px] mb-3">Lawyers vs. non-lawyers</div>
+        <div className="grid grid-cols-2 gap-3">
+          <Card elev="sm">
+            <CardKicker>Lawyers</CardKicker>
+            <div className="font-heading text-2xl mt-1 tabular-nums">{data.lawyerSplit.lawyers}</div>
+            <div className="text-[12px] text-neutral-500 mt-0.5">
+              {data.lawyerSplit.lawyerPercent}% &middot; practising or in-house counsel
+            </div>
+          </Card>
+          <Card elev="sm">
+            <CardKicker>Non-lawyers</CardKicker>
+            <div className="font-heading text-2xl mt-1 tabular-nums">{data.lawyerSplit.nonLawyers}</div>
+            <div className="text-[12px] text-neutral-500 mt-0.5">
+              {data.lawyerSplit.nonLawyerPercent}% &middot; graduates, students, regulated non-lawyers, other
+            </div>
+          </Card>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-[var(--space-6)]">
@@ -44,6 +64,26 @@ export default async function ProfessionalDetailsAnalyticsPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-[var(--space-6)]">
         <div>
+          <div className="font-heading font-semibold text-[14px] mb-3">Top locations (place of practice)</div>
+          {data.topLocations.length === 0 ? (
+            <EmptyState />
+          ) : (
+            <NamedCountList items={data.topLocations} />
+          )}
+        </div>
+
+        <div>
+          <div className="font-heading font-semibold text-[14px] mb-3">Year of call, by decade</div>
+          {data.yearOfCallByDecade.length === 0 ? (
+            <EmptyState />
+          ) : (
+            <NamedCountList items={data.yearOfCallByDecade} />
+          )}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div>
           <div className="font-heading font-semibold text-[14px] mb-3">Top institutions (graduates &amp; students)</div>
           {data.topInstitutions.length === 0 ? (
             <EmptyState />
@@ -60,15 +100,6 @@ export default async function ProfessionalDetailsAnalyticsPage() {
             <NamedCountList items={data.topOrganisations} />
           )}
         </div>
-      </div>
-
-      <div>
-        <div className="font-heading font-semibold text-[14px] mb-3">Year of call, by decade</div>
-        {data.yearOfCallByDecade.length === 0 ? (
-          <EmptyState />
-        ) : (
-          <NamedCountList items={data.yearOfCallByDecade} />
-        )}
       </div>
     </div>
   );
