@@ -151,7 +151,7 @@ export function ApplicantDashboard({ candidate }: { candidate: CurrentCandidate 
             </div>
             <h1 className="mt-1 mb-0">{candidate.firstName} {candidate.lastName}</h1>
             <p className="mt-2 max-w-[56ch] text-sm text-neutral-600 text-pretty">
-              Your registration is on file. Choose a programme and complete payment to begin — your place is held
+              Your registration is on file. Choose a programme and complete payment to begin. Your place is held
               until the acceptance window closes.
             </p>
           </div>
