@@ -32,7 +32,6 @@ export const registerSchema = z
       .refine((v) => !v || v.replace(/\D/g, "").length >= 7, "Enter a valid phone number"),
     password: z.string().min(8, "Use at least 8 characters"),
     confirmPassword: z.string(),
-    terms: checkboxBoolean.refine((v) => v === true, "You must accept the Terms of Use to continue"),
     marketingOptIn: checkboxBoolean,
   })
   .superRefine((data, ctx) => {

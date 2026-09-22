@@ -65,7 +65,6 @@ export default function RegisterPage() {
     phone: "",
     password: "",
     confirmPassword: "",
-    terms: false,
     marketingOptIn: true,
   });
   const [errors, setErrors] = React.useState<Record<string, string>>({});
@@ -132,7 +131,7 @@ export default function RegisterPage() {
     };
   }
 
-  function check(key: "terms" | "marketingOptIn") {
+  function check(key: "marketingOptIn") {
     return (e: React.ChangeEvent<HTMLInputElement>) => {
       setValues((v) => ({ ...v, [key]: e.target.checked }));
       setErrors((errs) => {
@@ -311,20 +310,6 @@ export default function RegisterPage() {
 
               <div className="mt-1 flex flex-col gap-2.5">
                 <label className="flex items-start gap-2.5 text-[13px] leading-[1.5] text-neutral-700">
-                  <Checkbox name="terms" checked={values.terms} onChange={check("terms")} className="mt-0.5" />
-                  <span>
-                    I accept the{" "}
-                    <Link href="/terms" target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">
-                      Terms of Use
-                    </Link>{" "}
-                    and{" "}
-                    <Link href="/privacy" target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">
-                      Privacy Policy
-                    </Link>
-                  </span>
-                </label>
-                <FieldError>{errors.terms}</FieldError>
-                <label className="flex items-start gap-2.5 text-[13px] leading-[1.5] text-neutral-700">
                   <Checkbox
                     name="marketingOptIn"
                     checked={values.marketingOptIn}
@@ -349,6 +334,17 @@ export default function RegisterPage() {
                   Verify your email address above to continue.
                 </div>
               )}
+              <div className="-mt-2 text-center text-[11.5px] leading-[1.5] text-neutral-500">
+                By creating an account, you accept the{" "}
+                <Link href="/terms" target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">
+                  Terms of Use
+                </Link>{" "}
+                and{" "}
+                <Link href="/privacy" target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">
+                  Privacy Policy
+                </Link>
+                .
+              </div>
 
               <div className="my-0.5 flex items-center gap-3.5">
                 <div className="flex-1 border-t border-dashed border-neutral-300" />
