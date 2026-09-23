@@ -103,15 +103,43 @@ export function QuizPlayer({
               );
             })}
           </div>
-          {expanded && (
-            <div className="border border-divider rounded-md p-3 text-[13px]">
-              <div className="flex items-center gap-2">
-                <Tag variant={expanded.isCorrect ? "success" : "danger"}>{expanded.isCorrect ? "Correct" : "Incorrect"}</Tag>
-                <span className="text-neutral-500 text-xs">Question {expandedIndex + 1}</span>
-              </div>
-              <p className="text-neutral-600 mt-1.5 mb-0">{expanded.explanation || "No explanation provided."}</p>
-            </div>
-          )}
+          {expanded &&
+            (() => {
+              // Looked up from the original attempt (still in state, never
+              // refetched) — the submit result only carries option IDs,
+              // never text, since grading must never trust the client's
+              // own copy of what a question's options say.
+              const q = attempt?.questions.find((qq) => qq.id === expanded.questionId);
+              const selectedText = expanded.selectedOptionId
+                ? q?.options.find((o) => o.id === expanded.selectedOptionId)?.text
+                : null;
+              const correctText = q?.options.find((o) => o.id === expanded.correctOptionId)?.text;
+              return (
+                <div className="border border-divider rounded-md p-3 text-[13px]">
+                  <div className="flex items-center gap-2">
+                    <Tag variant={expanded.isCorrect ? "success" : "danger"}>
+                      {expanded.isCorrect ? "Correct" : "Incorrect"}
+                    </Tag>
+                    <span className="text-neutral-500 text-xs">Question {expandedIndex + 1}</span>
+                  </div>
+                  <div className="mt-2 flex flex-col gap-1">
+                    <div>
+                      <span className="text-neutral-500">Your answer: </span>
+                      <span className={expanded.isCorrect ? "text-[#15803d] font-medium" : "text-[#b42318] font-medium"}>
+                        {selectedText ?? "No answer given"}
+                      </span>
+                    </div>
+                    {!expanded.isCorrect && (
+                      <div>
+                        <span className="text-neutral-500">Correct answer: </span>
+                        <span className="text-[#15803d] font-medium">{correctText}</span>
+                      </div>
+                    )}
+                  </div>
+                  <p className="text-neutral-600 mt-2 mb-0">{expanded.explanation || "No explanation provided."}</p>
+                </div>
+              );
+            })()}
         </div>
       </Card>
     );
