@@ -46,6 +46,7 @@ import type { FormActionState } from "@/lib/action-state";
 import { sendTransactionalEmailByTemplate } from "@/lib/send-transactional-email";
 import { getFirstName } from "@/lib/email-utils";
 import { EMAIL_CONFIG } from "@/lib/email-config";
+import { verifyRecaptcha } from "@/lib/recaptcha";
 
 function formToObject(formData: FormData): Record<string, string> {
   const obj: Record<string, string> = {};
@@ -71,6 +72,10 @@ export async function requestRegistrationOtp(
   } catch (e) {
     if (e instanceof RateLimitError) return { values: raw, message: e.message };
     throw e;
+  }
+
+  if (!(await verifyRecaptcha(raw.recaptchaToken, "register_otp"))) {
+    return { values: raw, message: "Something went wrong. Please refresh and try again." };
   }
 
   const parsed = requestOtpSchema.safeParse(raw);
@@ -160,6 +165,10 @@ export async function registerCandidate(
   } catch (e) {
     if (e instanceof RateLimitError) return { values: raw, message: e.message };
     throw e;
+  }
+
+  if (!(await verifyRecaptcha(raw.recaptchaToken, "register"))) {
+    return { values: raw, message: "Something went wrong. Please refresh and try again." };
   }
 
   const parsed = registerSchema.safeParse(raw);
@@ -264,6 +273,10 @@ export async function signInCandidate(
     throw e;
   }
 
+  if (!(await verifyRecaptcha(raw.recaptchaToken, "login"))) {
+    return { values: raw, message: "Something went wrong. Please refresh and try again." };
+  }
+
   const parsed = signInSchema.safeParse(raw);
   if (!parsed.success) return { errors: fieldErrors(parsed.error), values: raw };
   const data = parsed.data;
@@ -364,6 +377,11 @@ export async function requestPasswordResetOtp(
   } catch {
     // Same silent, generic outcome as any other case — a lockout must not
     // reveal whether the address exists either.
+    return { ok: true, data: { otpSent: true } };
+  }
+
+  if (!(await verifyRecaptcha(raw.recaptchaToken, "forgot_password"))) {
+    // Same silent outcome as the rate-limit branch above, for the same reason.
     return { ok: true, data: { otpSent: true } };
   }
 

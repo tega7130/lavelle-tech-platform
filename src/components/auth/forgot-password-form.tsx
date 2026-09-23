@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Label, Input } from "@/components/ui/field";
 import { PasswordStrengthMeter } from "@/components/auth/password-strength";
 import { staffPasswordMeetsRules } from "@/lib/validation/staff";
+import { useRecaptchaToken } from "@/lib/use-recaptcha";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const OTP_RE = /^\d{6}$/;
@@ -24,13 +25,14 @@ export function ForgotPasswordForm() {
   const [errorMsg, setErrorMsg] = React.useState("");
   const [showPassword, setShowPassword] = React.useState(false);
   const [showPasswordConfirm, setShowPasswordConfirm] = React.useState(false);
+  const recaptchaToken = useRecaptchaToken("staff_forgot_password");
 
   async function handleEmailSubmit(e: React.FormEvent) {
     e.preventDefault();
     setIsLoading(true);
     setErrorMsg("");
     try {
-      await requestStaffPasswordReset(email.trim());
+      await requestStaffPasswordReset(email.trim(), recaptchaToken);
       setView("otp-sent");
     } catch (err) {
       setErrorMsg("Failed to send OTP. Please try again.");
@@ -66,7 +68,7 @@ export function ForgotPasswordForm() {
     setIsLoading(true);
     setErrorMsg("");
     try {
-      await requestStaffPasswordReset(email.trim());
+      await requestStaffPasswordReset(email.trim(), recaptchaToken);
       setOtpCode("");
       setErrorMsg("");
     } catch (err) {

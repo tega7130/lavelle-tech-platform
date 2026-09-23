@@ -9,6 +9,7 @@ import { AuthSplitScreen } from "@/components/auth/auth-split-screen";
 import { Button } from "@/components/ui/button";
 import { Label, Input, FieldError } from "@/components/ui/field";
 import { PasswordInput } from "@/components/ui/password-input";
+import { useRecaptchaToken } from "@/lib/use-recaptcha";
 
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]{2,}$/;
 
@@ -28,6 +29,7 @@ export default function ForgotPasswordPage() {
   );
   const [verifyState, verifyAction, verifyPending] = useActionState(verifyPasswordResetOtp, emptyActionState);
   const [resetState, resetAction, resetPending] = useActionState(resetPasswordWithOtp, emptyActionState);
+  const recaptchaToken = useRecaptchaToken("forgot_password");
 
   // Adjust local state during render when a new server result comes in —
   // same pattern (and rationale) as the register page.
@@ -51,6 +53,7 @@ export default function ForgotPasswordPage() {
     e?.preventDefault();
     const fd = new FormData();
     fd.set("email", email);
+    fd.set("recaptchaToken", recaptchaToken);
     React.startTransition(() => requestAction(fd));
   }
 
