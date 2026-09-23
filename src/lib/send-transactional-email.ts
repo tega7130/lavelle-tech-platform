@@ -1,5 +1,6 @@
 import { sendEmail } from './email-service';
 import { getEmailTemplate, type TemplateName } from './email-templates';
+import { renderTemplate } from './email-utils';
 
 export async function sendTransactionalEmailByTemplate(
   templateName: TemplateName,
@@ -12,7 +13,10 @@ export async function sendTransactionalEmailByTemplate(
 
     return sendEmail(templateName, {
       to: recipient,
-      subject,
+      // Template functions return the subject as a raw {{var}} string —
+      // only html/text were ever rendered before this, so any subject
+      // referencing a variable (several templates do) shipped literally.
+      subject: renderTemplate(subject, templateVariables),
       html,
       text,
     });

@@ -65,8 +65,12 @@ model Candidate {
 
   phoneCountryCode String  @default("+234") @db.VarChar(6)
   phone            String? @db.VarChar(24)
+  phoneVerifiedAt  DateTime?
 
-  passwordHash String
+  passwordHash String?
+
+  googleId     String?   @unique @db.VarChar(255)
+  googleEmail  String?   @db.VarChar(255)
 
   acceptedTermsAt DateTime
   marketingOptIn  Boolean  @default(false)
@@ -82,6 +86,7 @@ model Candidate {
   updatedAt DateTime @updatedAt
 
   profile                    CandidateProfile?
+  oauthProviders             CandidateOAuthProvider[]
   emailVerificationTokens    EmailVerificationToken[]
   passwordResetOtpChallenges PasswordResetOtpChallenge[]
   notifications              Notification[]
@@ -97,9 +102,9 @@ model Candidate {
   announcementDeliveries     AnnouncementDelivery[]
   reviews                    Review[]
   uploadedMediaAssets        MediaAsset[]
-  videoUploads               VideoUpload[]
   documentFavorites          DocumentFavorite[]
   documentPurchases          DocumentPurchase[]
+  programmeNotificationSubscriptions ProgrammeNotificationSubscription[]
 
   @@index([accountStatus])
 }
@@ -2124,6 +2129,24 @@ model CandidateNote {
   @@index([candidateId, createdAt])
 }
 
+model CandidateOAuthProvider {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+
+  candidateId String    @db.Uuid
+  candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  provider         String  @db.VarChar(50)
+  providerUserId   String  @db.VarChar(255)
+  providerEmail    String? @db.VarChar(255)
+
+  linkedAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([candidateId, provider])
+  @@index([candidateId])
+  @@index([provider, providerUserId])
+}
+
 enum AnnouncementState {
   DRAFT
   SCHEDULED
@@ -2282,10 +2305,45 @@ model ProgrammeListing {
   publishedByStaff   Staff?    @relation("ListingPublishedBy", fields: [publishedByStaffId], references: [id])
   unpublishedAt      DateTime?
 
+  isComingSoon       Boolean   @default(false)
+  comingSoonMessage  String?
+
+  notificationSubscriptions ProgrammeNotificationSubscription[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([isPublished, orderIndex])
+}
+
+model ProgrammeNotificationSubscription {
+  id String @id @default(uuid())
+
+  listingId String
+  listing   ProgrammeListing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  candidateId String?    @db.Uuid
+  candidate   Candidate? @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  email String
+  // Nullable at the DB level so existing pre-migration rows (email-only)
+  // stay valid — the "Notify me" form and its Zod schema require both on
+  // every new submission (application-level, not DB-level, required).
+  // Same phoneCountryCode/phone split as Candidate above, for the same
+  // reason — a dial code and a local number are different data, not one
+  // string to re-parse later.
+  name             String?
+  phoneCountryCode String? @default("+234") @db.VarChar(6)
+  phone            String?
+
+  notifiedAt     DateTime?
+  unsubscribedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([listingId, email])
+  @@index([listingId, notifiedAt])
 }
 
 // Slice 11 Part D: three states, not two — a DECLINED review and one
@@ -2674,23 +2732,5 @@ model EmailLog {
 
   @@index([template, createdAt(sort: Desc)])
   @@index([recipient, createdAt(sort: Desc)])
-  @@index([status, createdAt(sort: Desc)])
-}
-
-model VideoUpload {
-  id String @id @default(uuid())
-
-  candidateId String    @db.Uuid
-  candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
-
-  cloudinaryId String @unique
-  url          String
-  fileSize     Int
-  status       String @default("COMPLETED") // COMPLETED, PROCESSING, FAILED
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([candidateId, createdAt(sort: Desc)])
   @@index([status, createdAt(sort: Desc)])
 }

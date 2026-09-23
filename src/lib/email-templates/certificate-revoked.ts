@@ -8,7 +8,6 @@ export interface CertificateRevokedVariables {
   certificateId: string;
   revocationReason: string;
   appealDeadlineDate: string;
-  appealInstructionsUrl: string;
   supportEmail: string;
   securityContactEmail: string;
   currentYear: number;
@@ -76,7 +75,7 @@ export function generateCertificateRevokedEmail(variables: CertificateRevokedVar
         <p>If you believe this decision is incorrect, or if you have evidence that contradicts the reason for review, you may submit an appeal.</p>
         <p><strong>Appeal Deadline:</strong> {{appealDeadlineDate}}</p>
         <p>After this date, you will not be able to submit an appeal.</p>
-        <a href="{{appealInstructionsUrl}}" class="appeal-button">Submit an Appeal</a>
+        <p>To submit an appeal, email us at <a href="mailto:{{supportEmail}}">{{supportEmail}}</a>.</p>
       </div>
 
       <div class="timeline">
@@ -102,7 +101,6 @@ export function generateCertificateRevokedEmail(variables: CertificateRevokedVar
       <div class="support-links">
         <strong>Need Help?</strong>
         <ul style="margin: 10px 0; padding-left: 20px;">
-          <li>Learn more about the appeal process and submit evidence: <a href="{{appealInstructionsUrl}}">Appeal Instructions</a></li>
           <li>Questions about your certificate status: <a href="mailto:{{supportEmail}}">{{supportEmail}}</a></li>
           <li>Concerns about the fairness of this decision: <a href="mailto:{{securityContactEmail}}">{{securityContactEmail}}</a></li>
         </ul>
@@ -138,7 +136,7 @@ If you believe this decision is incorrect or have evidence that contradicts the 
 
 Appeal Deadline: {{appealDeadlineDate}}
 
-Submit Your Appeal: {{appealInstructionsUrl}}
+To submit an appeal, email us at {{supportEmail}}.
 
 WHAT HAPPENS NEXT:
 1. You receive this notification and review the reason
@@ -148,7 +146,6 @@ WHAT HAPPENS NEXT:
 IMPORTANT: Do not use this certificate for any professional or educational purposes until the review is complete.
 
 NEED HELP?
-- Appeal Process & Submit Evidence: {{appealInstructionsUrl}}
 - Questions About Your Certificate: {{supportEmail}}
 - Concerns About This Decision: {{securityContactEmail}}
 

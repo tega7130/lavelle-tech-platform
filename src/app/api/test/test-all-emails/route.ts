@@ -2,6 +2,7 @@ import { sendTransactionalEmailByTemplate } from "@/lib/send-transactional-email
 import { type TemplateName } from "@/lib/email-templates";
 import { triggerJobImmediate } from "@/lib/scheduler";
 import { EMAIL_CONFIG } from "@/lib/email-config";
+import { prisma } from "@/lib/prisma";
 
 /**
  * Test all 18 email templates
@@ -26,8 +27,8 @@ const templateTestData: Record<TemplateName, Record<string, any>> = {
   },
   "password-reset-request": {
     firstName: "John",
-    resetPasswordUrl: "http://localhost:3000/reset-password?token=xyz",
-    expiryMinutes: 30,
+    otpCode: "123456",
+    otpExpiryMinutes: 10,
     supportEmail: EMAIL_CONFIG.supportEmail,
     currentYear: 2026,
   },
@@ -65,11 +66,12 @@ const templateTestData: Record<TemplateName, Record<string, any>> = {
     programmeName: "Advanced Legal Practice",
     tier: "ADVANCED_PRACTITIONER",
     examDate: new Date().toLocaleDateString(),
-    grade: "A",
-    score: 85,
-    status: "PASSED",
-    resultsUrl: "http://localhost:3000/portal/results/123",
-    markingTurnaroundDays: 10,
+    marksObtained: 85,
+    marksTotal: 100,
+    percentage: 85,
+    grade: "Distinction",
+    outcome: "PASS",
+    resultsPortalUrl: "http://localhost:3000/portal/exams/123/results",
     supportEmail: EMAIL_CONFIG.supportEmail,
     currentYear: 2026,
   },
@@ -87,10 +89,11 @@ const templateTestData: Record<TemplateName, Record<string, any>> = {
     firstName: "John",
     certificateId: "CERT-2026-001",
     programmeName: "Advanced Legal Practice",
-    reason: "Exam integrity violation",
+    tier: "ADVANCED_PRACTITIONER",
+    revocationReason: "Exam integrity violation",
     appealDeadlineDate: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toLocaleDateString(),
-    appealUrl: "http://localhost:3000/appeals/new",
     supportEmail: EMAIL_CONFIG.supportEmail,
+    securityContactEmail: EMAIL_CONFIG.securityContactEmail,
     currentYear: 2026,
   },
   "profile-completion-reminder": {
@@ -185,6 +188,16 @@ const templateTestData: Record<TemplateName, Record<string, any>> = {
     supportEmail: EMAIL_CONFIG.supportEmail,
     currentYear: 2026,
   },
+  "programme-golive-notification": {
+    firstName: "John",
+    programmeName: "Energy Transactions",
+    tier: "Specialist",
+    programmePitch: "Master the regulatory framework and commercial structures of upstream energy deals.",
+    weeklyCommitment: "5-7 hours",
+    programmeFee: "₦450,000",
+    programmeUrl: "http://localhost:3000/programmes/ELR-201",
+    currentYear: 2026,
+  },
 };
 
 export async function POST(request: Request) {
@@ -277,6 +290,18 @@ export async function POST(request: Request) {
         templates: Object.keys(templateTestData),
         count: Object.keys(templateTestData).length,
       });
+    }
+
+    if (action === "check-logs") {
+      // Diagnostic: the real SMTP send outcome per attempt — sendMail()
+      // resolving without throwing only means the relay accepted the
+      // message, not that it was delivered, so this is the one place that
+      // shows what actually happened (including any relay-side error).
+      const logs = await prisma.emailLog.findMany({
+        orderBy: { createdAt: "desc" },
+        take: 20,
+      });
+      return Response.json({ action: "check-logs", count: logs.length, logs });
     }
 
     return Response.json(

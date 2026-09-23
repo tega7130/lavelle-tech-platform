@@ -105,11 +105,8 @@ export function generateExamScheduledEmail(variables: ExamScheduledVariables) {
       <div class="prep-checklist">
         <h3>📚 Preparation Checklist</h3>
         <div class="prep-item">☐ Review all course materials and lecture notes</div>
-        <div class="prep-item">☐ Complete practice questions and mock exams</div>
-        <div class="prep-item">☐ Understand the exam format and rules</div>
         <div class="prep-item">☐ Plan your study schedule</div>
         <div class="prep-item">☐ Register for the exam (before the deadline)</div>
-        <div class="prep-item">☐ Ensure you have necessary identification for exam day</div>
       </div>
 
       <p>If you have any questions about the exam or registration, please contact us at <strong>{{supportEmail}}</strong>.</p>
@@ -152,11 +149,8 @@ View Exam Rules: {{examRulesUrl}}
 
 PREPARATION CHECKLIST
 ☐ Review all course materials and lecture notes
-☐ Complete practice questions and mock exams
-☐ Understand the exam format and rules
 ☐ Plan your study schedule
 ☐ Register for the exam (before the deadline)
-☐ Ensure you have necessary identification for exam day
 
 Questions? Contact {{supportEmail}}.
 

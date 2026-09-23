@@ -26,6 +26,7 @@ import {
   destroyCandidateSession,
   revokeAllSessions,
   getCurrentCandidate,
+  setLastAuthMethodCookie,
 } from "@/lib/candidate-session";
 import {
   createVerificationTokenRecord,
@@ -48,7 +49,7 @@ import { EMAIL_CONFIG } from "@/lib/email-config";
 
 function formToObject(formData: FormData): Record<string, string> {
   const obj: Record<string, string> = {};
-  for (const [k, v] of formData.entries()) if (typeof v === "string" && v !== "") obj[k] = v;
+  for (const [k, v] of formData.entries()) if (typeof v === "string") obj[k] = v;
   return obj;
 }
 
@@ -214,6 +215,7 @@ export async function registerCandidate(
       });
 
       await setSessionCookie(result.sessionToken, true);
+      await setLastAuthMethodCookie("password");
 
       await sendTransactionalEmailByTemplate(
         'account-welcome',
@@ -269,7 +271,7 @@ export async function signInCandidate(
   const candidate = await prisma.candidate.findUnique({ where: { email: data.email.toLowerCase() } });
   const invalid: FormActionState = { values: raw, message: "Incorrect email or password." };
   if (!candidate) return invalid;
-  if (!(await verifyPassword(data.password, candidate.passwordHash))) return invalid;
+  if (!candidate.passwordHash || !(await verifyPassword(data.password, candidate.passwordHash))) return invalid;
 
   if (candidate.accountStatus === "SUSPENDED") {
     return {
@@ -284,6 +286,7 @@ export async function signInCandidate(
 
   await prisma.candidate.update({ where: { id: candidate.id }, data: { lastLoginAt: new Date() } });
   await createCandidateSession(candidate.id, data.remember);
+  await setLastAuthMethodCookie("password");
   // README H3 rule 16: expiry must return the candidate to where they
   // were, not a bare dashboard — `next` only ever came from proxy.ts's
   // own redirect (a same-origin /portal path), never taken at face value
@@ -379,10 +382,10 @@ export async function requestPasswordResetOtp(
     // unchanged either way — a failed send still can't disclose whether
     // the account exists (see the doc comment on this function).
     try {
-      const resetUrl = `${process.env.NEXTAUTH_URL}/reset-password?email=${encodeURIComponent(email)}`;
       await sendTransactionalEmailByTemplate("password-reset-request", email, {
         firstName: getFirstName(candidate.firstName),
-        resetPasswordUrl: resetUrl,
+        otpCode: code,
+        otpExpiryMinutes: 10,
         supportEmail: EMAIL_CONFIG.supportEmail,
         currentYear: new Date().getFullYear(),
       });

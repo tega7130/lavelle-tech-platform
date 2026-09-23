@@ -4,6 +4,7 @@ import { getDashboardSummary } from "@/lib/dashboard-analytics";
 const QUICK_LINKS = [
   { href: "/admin/analytics/cohorts", label: "Monthly cohorts", description: "Enrolments by month, broken down per programme" },
   { href: "/admin/analytics/funnel", label: "Candidate funnel", description: "Registered → verified → paid → enrolled → completed → certified" },
+  { href: "/admin/analytics/professional", label: "Professional details", description: "Status, experience, institutions and organisations across all candidates" },
   { href: "/admin/staff/performance", label: "Staff performance", description: "Marking turnaround, invigilation, support, publishing" },
   { href: "/admin/certificates", label: "Certificates", description: "Issued, revoked, band breakdown, verification checks" },
 ];

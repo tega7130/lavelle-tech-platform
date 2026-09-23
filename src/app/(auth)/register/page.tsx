@@ -11,14 +11,21 @@ import { Dialog } from "@/components/ui/dialog";
 import { Label, Input, FieldError } from "@/components/ui/field";
 import { PasswordInput } from "@/components/ui/password-input";
 import { Checkbox } from "@/components/ui/checkbox";
+import { PHONE_CODES } from "@/lib/phone-codes";
 
-const PHONE_CODES = [
-  { value: "+234", label: "🇳🇬 +234" },
-  { value: "+233", label: "🇬🇭 +233" },
-  { value: "+254", label: "🇰🇪 +254" },
-  { value: "+44", label: "🇬🇧 +44" },
-  { value: "+1", label: "🇺🇸 +1" },
-];
+async function initiateGoogleOAuth() {
+  try {
+    const res = await fetch("/api/auth/google/authorize", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ intent: "register" }),
+    });
+    const { url } = await res.json();
+    window.location.href = url;
+  } catch (error) {
+    console.error("Failed to initiate Google OAuth:", error);
+  }
+}
 
 const LADDER = (
   <div className="mt-9 border-t border-dashed border-white/22 pt-[26px]">
@@ -49,6 +56,7 @@ const LADDER = (
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]{2,}$/;
 
 export default function RegisterPage() {
+  const [googleLoading, setGoogleLoading] = React.useState(false);
   const [values, setValues] = React.useState({
     firstName: "",
     lastName: "",
@@ -57,7 +65,6 @@ export default function RegisterPage() {
     phone: "",
     password: "",
     confirmPassword: "",
-    terms: false,
     marketingOptIn: true,
   });
   const [errors, setErrors] = React.useState<Record<string, string>>({});
@@ -124,7 +131,7 @@ export default function RegisterPage() {
     };
   }
 
-  function check(key: "terms" | "marketingOptIn") {
+  function check(key: "marketingOptIn") {
     return (e: React.ChangeEvent<HTMLInputElement>) => {
       setValues((v) => ({ ...v, [key]: e.target.checked }));
       setErrors((errs) => {
@@ -253,10 +260,10 @@ export default function RegisterPage() {
                     name="phoneCountryCode"
                     value={values.phoneCountryCode}
                     onChange={field("phoneCountryCode")}
-                    className="h-11 w-[104px] flex-none rounded-md border border-neutral-300 bg-bg px-2 text-sm text-text"
+                    className="h-11 w-[132px] sm:w-[180px] flex-none rounded-md border border-neutral-300 bg-bg px-2 text-sm text-text"
                   >
                     {PHONE_CODES.map((c) => (
-                      <option key={c.value} value={c.value}>
+                      <option key={c.label} value={c.value}>
                         {c.label}
                       </option>
                     ))}
@@ -303,13 +310,6 @@ export default function RegisterPage() {
 
               <div className="mt-1 flex flex-col gap-2.5">
                 <label className="flex items-start gap-2.5 text-[13px] leading-[1.5] text-neutral-700">
-                  <Checkbox name="terms" checked={values.terms} onChange={check("terms")} className="mt-0.5" />
-                  <span>
-                    I accept the <a href="#">Terms of Use</a> and <a href="#">Privacy Policy</a>
-                  </span>
-                </label>
-                <FieldError>{errors.terms}</FieldError>
-                <label className="flex items-start gap-2.5 text-[13px] leading-[1.5] text-neutral-700">
                   <Checkbox
                     name="marketingOptIn"
                     checked={values.marketingOptIn}
@@ -343,9 +343,12 @@ export default function RegisterPage() {
 
               <button
                 type="button"
-                disabled
-                title="Not available yet"
-                className="flex h-[46px] w-full cursor-not-allowed items-center justify-center gap-2.5 rounded-md border border-neutral-300 bg-bg text-sm font-medium text-text opacity-60"
+                onClick={async () => {
+                  setGoogleLoading(true);
+                  await initiateGoogleOAuth();
+                }}
+                disabled={googleLoading}
+                className="flex h-[46px] w-full items-center justify-center gap-2.5 rounded-md border border-neutral-300 bg-bg text-sm font-medium text-text hover:border-neutral-400 hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-60 transition-colors"
               >
                 <svg width="17" height="17" viewBox="0 0 18 18" aria-hidden="true">
                   <path fill="#4285F4" d="M17.6 9.2c0-.6-.1-1.2-.2-1.7H9v3.3h4.8a4.1 4.1 0 0 1-1.8 2.7v2.2h2.9c1.7-1.5 2.7-3.8 2.7-6.5Z" />
@@ -353,8 +356,19 @@ export default function RegisterPage() {
                   <path fill="#FBBC05" d="M3.8 10.7a5.4 5.4 0 0 1 0-3.4V5H.8a9 9 0 0 0 0 8l3-2.3Z" />
                   <path fill="#EA4335" d="M9 3.6c1.3 0 2.5.5 3.4 1.3l2.6-2.6A9 9 0 0 0 .8 5l3 2.3C4.5 5.1 6.6 3.6 9 3.6Z" />
                 </svg>
-                <span>Continue with Google</span>
+                <span>{googleLoading ? "Redirecting…" : "Continue with Google"}</span>
               </button>
+              <div className="-mt-1 text-center text-[11.5px] leading-[1.5] text-neutral-500">
+                By creating an account, you accept the{" "}
+                <Link href="/terms" target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">
+                  Terms of Use
+                </Link>{" "}
+                and{" "}
+                <Link href="/privacy" target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">
+                  Privacy Policy
+                </Link>
+                .
+              </div>
             </div>
           </form>
 

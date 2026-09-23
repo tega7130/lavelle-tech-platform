@@ -61,7 +61,12 @@ export function LecturePlayer({ enrolmentId, data }: { enrolmentId: string; data
   const { lecture, module: mod, steps, quiz, quizAttempt, resumePosition, nextLectureId, isLastLectureInProgramme, modules } = data;
 
   const firstIncomplete = steps.findIndex((s) => !data.stepsCompleted.includes(s));
-  const [stepIndex, setStepIndex] = React.useState(firstIncomplete === -1 ? steps.length - 1 : firstIncomplete);
+  // A fully-completed lecture (firstIncomplete === -1) reopens at the start
+  // (index 0, "content") rather than the last step — revisiting a finished
+  // lecture should replay from the top, not jump straight to the quiz.
+  // stepIndex is purely initial UI position; it never touches `completed`
+  // or any persisted progress, so this can't un-complete anything.
+  const [stepIndex, setStepIndex] = React.useState(firstIncomplete === -1 ? 0 : firstIncomplete);
   const [completed, setCompleted] = React.useState<Set<string>>(new Set(data.stepsCompleted));
   const activeStep = steps[stepIndex]!;
   // Mobile-only drawer for the module/lecture rail — desktop keeps it as a
@@ -330,7 +335,7 @@ export function LecturePlayer({ enrolmentId, data }: { enrolmentId: string; data
   }
 
   return (
-    <div className="min-h-screen bg-bg grid grid-cols-1 md:grid-cols-[300px_1fr]">
+    <div className="min-h-dvh bg-bg grid grid-cols-1 md:grid-cols-[300px_1fr]">
       {/* Dark lecture rail — permanent column on desktop, drawer on mobile */}
       <aside className="hidden md:flex text-white flex-col" style={{ background: "#0b1322" }}>
         {renderRailContent()}

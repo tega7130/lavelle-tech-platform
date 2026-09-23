@@ -3,6 +3,21 @@ import { prisma } from "@/lib/prisma";
 import { getSignedAssetUrl } from "@/lib/storage";
 
 /**
+ * A broken hero image (bad storage credentials, a deleted asset) must
+ * degrade to "no image" for that one post, never take down the whole
+ * /blog index or /blog/[slug] for every visitor.
+ */
+async function safeHeroImageUrl(storageKey: string | undefined): Promise<string | null> {
+  if (!storageKey) return null;
+  try {
+    return await getSignedAssetUrl(storageKey);
+  } catch (error) {
+    console.error(`Failed to build hero image URL for asset ${storageKey}:`, error);
+    return null;
+  }
+}
+
+/**
  * Not staff-gated — called from both the public marketing site (/blog)
  * and the signed-in candidate portal (/portal/blog), which read the same
  * published rows since a post has no candidate-specific or payment-gated
@@ -14,15 +29,17 @@ export async function getPublishedBlogPosts() {
     orderBy: { publishedAt: "desc" },
     include: { heroAsset: { select: { storageKey: true } } },
   });
-  return rows.map((p) => ({
-    slug: p.slug,
-    title: p.title,
-    excerpt: p.excerpt,
-    tags: (p.tags as string[] | null) ?? [],
-    authorName: p.authorName,
-    publishedAt: p.publishedAt!,
-    heroImageUrl: p.heroAsset ? getSignedAssetUrl(p.heroAsset.storageKey, "image") : null,
-  }));
+  return Promise.all(
+    rows.map(async (p) => ({
+      slug: p.slug,
+      title: p.title,
+      excerpt: p.excerpt,
+      tags: (p.tags as string[] | null) ?? [],
+      authorName: p.authorName,
+      publishedAt: p.publishedAt!,
+      heroImageUrl: await safeHeroImageUrl(p.heroAsset?.storageKey),
+    }))
+  );
 }
 
 /** Returns null if the post doesn't exist or isn't published — same shape as getListingDetail's not-published-returns-null rule. */
@@ -41,6 +58,6 @@ export async function getPublishedBlogPost(slug: string) {
     tags: (post.tags as string[] | null) ?? [],
     authorName: post.authorName,
     publishedAt: post.publishedAt!,
-    heroImageUrl: post.heroAsset ? getSignedAssetUrl(post.heroAsset.storageKey, "image") : null,
+    heroImageUrl: await safeHeroImageUrl(post.heroAsset?.storageKey),
   };
 }

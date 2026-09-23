@@ -1,5 +1,11 @@
 import Link from "next/link";
 import { LogoMark } from "@/components/ui/logo-mark";
+import { InstagramIcon, LinkedinIcon } from "@/components/icons";
+
+const SOCIAL_LINKS = [
+  { label: "Instagram", href: "https://www.instagram.com/lavelleinstitute", Icon: InstagramIcon },
+  { label: "LinkedIn", href: "https://www.linkedin.com/company/join-lavelle/", Icon: LinkedinIcon },
+] as const;
 
 const FOOTER_COLS = [
   {
@@ -27,7 +33,7 @@ const FOOTER_COLS = [
       { label: "Create an account", href: "/register" },
       { label: "Sign in", href: "/sign-in" },
       { label: "Verify a credential", href: "/verify" },
-      { label: "Contact a representative", href: "mailto:candidates@lavelle.ng" },
+      { label: "Contact a representative", href: "mailto:candidates@learnlavelle.com" },
     ],
   },
 ];
@@ -49,10 +55,25 @@ export function SiteFooter() {
               Structured specialization and examined credentialing for the Nigerian legal market. Lagos, Nigeria.
             </p>
             <div className="flex flex-col gap-[5px] mt-[18px] text-[12.5px]">
-              <a href="mailto:candidates@lavelle.ng" className="text-accent no-underline hover:underline">
-                candidates@lavelle.ng
+              <a href="mailto:candidates@learnlavelle.com" className="text-accent no-underline hover:underline">
+                candidates@learnlavelle.com
               </a>
-              <span className="text-neutral-600">+234 700 528 3553</span>
+              {/* Phone hidden until real numbers are ready — email only for now. */}
+              {/* <span className="text-neutral-600">+234 700 528 3553</span> */}
+            </div>
+            <div className="flex gap-[10px] mt-[18px]">
+              {SOCIAL_LINKS.map(({ label, href, Icon }) => (
+                <a
+                  key={label}
+                  href={href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={label}
+                  className="w-8 h-8 rounded-full border border-neutral-300 text-neutral-600 flex items-center justify-center hover:border-accent hover:text-accent transition-colors"
+                >
+                  <Icon width={15} height={15} />
+                </a>
+              ))}
             </div>
           </div>
 
@@ -75,12 +96,12 @@ export function SiteFooter() {
         <div className="flex justify-between gap-6 mt-11 pt-[22px] border-t border-dashed border-neutral-300 flex-wrap text-[11.5px] text-neutral-700">
           <span>&copy; 2026 Lavelle Institute. All rights reserved.</span>
           <div className="flex gap-[22px]">
-            <a href="#" className="text-neutral-700 no-underline hover:text-accent">
+            <Link href="/terms" className="text-neutral-700 no-underline hover:text-accent">
               Terms of Use
-            </a>
-            <a href="#" className="text-neutral-700 no-underline hover:text-accent">
+            </Link>
+            <Link href="/privacy" className="text-neutral-700 no-underline hover:text-accent">
               Privacy Policy
-            </a>
+            </Link>
             <Link href="/verify" className="text-neutral-700 no-underline hover:text-accent">
               Verify a credential
             </Link>

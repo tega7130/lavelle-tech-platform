@@ -40,23 +40,23 @@ export function ContactForm({ listings }: { listings: { code: string; title: str
 
       <Reveal delay={120} threshold={0.05} className="grid grid-cols-1 sm:grid-cols-2 gap-[13px] mt-[22px]">
         <div>
-          <label className="lv-lab block text-[12px] font-medium text-neutral-700 mb-[6px]">Full name</label>
-          <input name="name" required className={FIELD} placeholder="Adaeze Okonkwo" />
+          <label htmlFor="cf-name" className="lv-lab block text-[12px] font-medium text-neutral-700 mb-[6px]">Full name</label>
+          <input id="cf-name" name="name" required className={FIELD} placeholder="Adaeze Okonkwo" />
         </div>
         <div>
-          <label className="lv-lab block text-[12px] font-medium text-neutral-700 mb-[6px]">Email address</label>
-          <input name="email" type="email" required className={FIELD} placeholder="you@firm.com" />
+          <label htmlFor="cf-email" className="lv-lab block text-[12px] font-medium text-neutral-700 mb-[6px]">Email address</label>
+          <input id="cf-email" name="email" type="email" required className={FIELD} placeholder="you@firm.com" />
         </div>
       </Reveal>
 
       <Reveal delay={170} threshold={0.05} className="grid grid-cols-1 sm:grid-cols-2 gap-[13px] mt-[14px]">
         <div>
-          <label className="lv-lab block text-[12px] font-medium text-neutral-700 mb-[6px]">Phone</label>
-          <input name="phone" required className={FIELD} placeholder="+234 803 552 8841" />
+          <label htmlFor="cf-phone" className="lv-lab block text-[12px] font-medium text-neutral-700 mb-[6px]">Phone</label>
+          <input id="cf-phone" name="phone" required className={FIELD} placeholder="+234 803 552 8841" />
         </div>
         <div>
-          <label className="lv-lab block text-[12px] font-medium text-neutral-700 mb-[6px]">Years in practice</label>
-          <select name="yearsInPractice" defaultValue="3–5 years" className={FIELD}>
+          <label htmlFor="cf-years" className="lv-lab block text-[12px] font-medium text-neutral-700 mb-[6px]">Years in practice</label>
+          <select id="cf-years" name="yearsInPractice" defaultValue="3–5 years" className={FIELD}>
             {YEARS_OPTIONS.map((y) => (
               <option key={y} value={y}>
                 {y}
@@ -67,8 +67,8 @@ export function ContactForm({ listings }: { listings: { code: string; title: str
       </Reveal>
 
       <Reveal delay={220} threshold={0.05} className="mt-[14px]">
-        <label className="lv-lab block text-[12px] font-medium text-neutral-700 mb-[6px]">Programme of interest</label>
-        <select name="programmeOfInterestCode" defaultValue="" className={FIELD}>
+        <label htmlFor="cf-programme" className="lv-lab block text-[12px] font-medium text-neutral-700 mb-[6px]">Programme of interest</label>
+        <select id="cf-programme" name="programmeOfInterestCode" defaultValue="" className={FIELD}>
           <option value="">Not sure yet, please advise</option>
           {listings.map((l) => (
             <option key={l.code} value={l.code}>
@@ -79,8 +79,9 @@ export function ContactForm({ listings }: { listings: { code: string; title: str
       </Reveal>
 
       <Reveal delay={270} threshold={0.05} className="mt-[14px]">
-        <label className="lv-lab block text-[12px] font-medium text-neutral-700 mb-[6px]">What would you like to know?</label>
+        <label htmlFor="cf-message" className="lv-lab block text-[12px] font-medium text-neutral-700 mb-[6px]">What would you like to know?</label>
         <textarea
+          id="cf-message"
           name="message"
           required
           rows={4}

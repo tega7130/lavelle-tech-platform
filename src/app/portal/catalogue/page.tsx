@@ -57,14 +57,18 @@ export default async function CataloguePage({
               </CardMeta>
               <div className="border-t border-dashed border-neutral-300 my-2" />
               <div className="flex items-center justify-between">
-                <span className="font-heading text-[15px]">{formatNaira(p.feeMinor)}</span>
+                {p.isComingSoon ? (
+                  <Tag variant="warning">Coming soon</Tag>
+                ) : (
+                  <span className="font-heading text-[15px]">{formatNaira(p.feeMinor)}</span>
+                )}
                 {p.viewerEnrolled ? (
                   <Link href={`/portal/catalogue/${p.code}`} className={buttonClassName("secondary", "text-xs px-3 py-1.5 h-auto")}>
                     Enrolled
                   </Link>
                 ) : (
                   <Link href={`/portal/catalogue/${p.code}`} className={buttonClassName("primary", "text-xs px-3 py-1.5 h-auto")}>
-                    View programme
+                    {p.isComingSoon ? "View details" : "View programme"}
                   </Link>
                 )}
               </div>

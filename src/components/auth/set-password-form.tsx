@@ -40,7 +40,7 @@ export function SetPasswordForm({ token, preview }: { token: string; preview: In
         panelClassName="lv-gradient-dark"
         logoSubtitle="Administration"
         topRight={null}
-        footer={<span>Not expecting this? Contact registrar@lavelle.ng</span>}
+        footer={<span>Not expecting this? Contact registrar@learnlavelle.com</span>}
         formChildren={
           <div className="rounded-xl border border-divider bg-bg p-9 text-center shadow-md">
             <div className="mx-auto flex h-[54px] w-[54px] items-center justify-center rounded-full border-[1.5px] border-accent-2-300 bg-accent-2-100">
@@ -71,7 +71,7 @@ export function SetPasswordForm({ token, preview }: { token: string; preview: In
         panelClassName="lv-gradient-dark"
         logoSubtitle="Administration"
         topRight={null}
-        footer={<span>Not expecting this? Contact registrar@lavelle.ng</span>}
+        footer={<span>Not expecting this? Contact registrar@learnlavelle.com</span>}
         formChildren={
           <div className="rounded-xl border border-divider bg-bg p-9 text-center shadow-md">
             <div className="mx-auto flex h-[52px] w-[52px] items-center justify-center rounded-full border border-warning-border bg-warning-bg text-[22px] font-bold text-warning-text">
@@ -83,7 +83,7 @@ export function SetPasswordForm({ token, preview }: { token: string; preview: In
               been lost. Ask a super administrator to resend your invitation.
             </p>
             <div className="mt-6 text-[11.5px] text-neutral-500">
-              Or email <a href="mailto:registrar@lavelle.ng">registrar@lavelle.ng</a>
+              Or email <a href="mailto:registrar@learnlavelle.com">registrar@learnlavelle.com</a>
             </div>
           </div>
         }
@@ -106,7 +106,7 @@ export function SetPasswordForm({ token, preview }: { token: string; preview: In
           </Link>
         </>
       }
-      footer={<span>Not expecting this? Contact registrar@lavelle.ng</span>}
+      footer={<span>Not expecting this? Contact registrar@learnlavelle.com</span>}
       formChildren={
         <div className="rounded-xl border border-divider bg-bg p-8 pb-7 shadow-md">
           <h2 className="text-[22px] font-semibold tracking-[-0.01em]">Set your password</h2>

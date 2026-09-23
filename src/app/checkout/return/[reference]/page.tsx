@@ -23,7 +23,7 @@ export default async function GuestCheckoutReturnPage({
   const payment = await getGuestCheckoutStatus(reference, token);
 
   return (
-    <div className="min-h-screen bg-surface flex items-center justify-center p-[var(--space-6)]">
+    <div className="min-h-dvh bg-surface flex items-center justify-center p-[var(--space-6)]">
       <div className="w-full max-w-[520px]">
         <Card elev="md" className="p-[var(--space-6)]">
           <GuestCheckoutStatus reference={reference} token={token} initial={payment} />

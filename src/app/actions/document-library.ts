@@ -126,8 +126,8 @@ export async function setComplementaryTemplatesAction(documentTemplateId: string
   return result;
 }
 
-/** A fresh signed download URL for the underlying file — Cloudinary raw assets, same signed/expiring discipline as every other MediaAsset (storage.ts rule 10). */
+/** A fresh signed download URL for the underlying file — same signed/expiring discipline as every other MediaAsset (storage.ts rule 10). */
 export async function getDocumentFileUrlAction(storageKey: string) {
   await requireStaffPermission(Permission.MANAGE_DOCUMENT_LIBRARY);
-  return getSignedAssetUrl(storageKey, "raw");
+  return getSignedAssetUrl(storageKey);
 }

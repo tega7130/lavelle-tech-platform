@@ -12,7 +12,7 @@ function ageHoursSincePending(status: string, initiatedAt: Date): number | null 
 export default async function FinancePage() {
   const [payments, stalePending, kpis] = await Promise.all([listLedger(), countStalePendingPayments(), getFinanceKpis()]);
 
-  const rows: LedgerRow[] = payments.map((p) => {
+  const rows: LedgerRow[] = await Promise.all(payments.map(async (p) => {
     const ageHours = ageHoursSincePending(p.status, p.initiatedAt);
     return {
       id: p.id,
@@ -27,10 +27,10 @@ export default async function FinancePage() {
       amountMinor: p.amountMinor,
       status: p.status,
       ageHours,
-      receiptUrl: p.receiptAsset ? getSignedAssetUrl(p.receiptAsset.storageKey, "raw") : null,
+      receiptUrl: p.receiptAsset ? await getSignedAssetUrl(p.receiptAsset.storageKey) : null,
       confirmedByName: p.confirmedByStaff?.name ?? null,
     };
-  });
+  }));
 
   const KPIS = [
     { label: "Collected · this month", value: formatNaira(kpis.collectedMinor), meta: `${kpis.collectedCount} transactions` },

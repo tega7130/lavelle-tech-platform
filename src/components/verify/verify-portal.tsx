@@ -48,7 +48,7 @@ export function VerifyPortal({ initialNumber }: { initialNumber: string }) {
   }, []);
 
   return (
-    <div className="min-h-screen flex flex-col bg-bg">
+    <div className="min-h-dvh flex flex-col bg-bg">
       <header className="flex items-center justify-between gap-4 px-8 py-4 border-b border-divider">
         <div className="flex items-center gap-2.5">
           <LogoMark size={32} />
@@ -72,8 +72,9 @@ export function VerifyPortal({ initialNumber }: { initialNumber: string }) {
           </div>
 
           <Card elev="md" className="p-6 mt-6">
-            <Label>Certificate ID</Label>
+            <Label htmlFor="certificate-id">Certificate ID</Label>
             <Input
+              id="certificate-id"
               placeholder="LVL-CERT-YYYY-NNNNN"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
@@ -110,7 +111,7 @@ function ResultCard({ result }: { result: VerifyResult }) {
         </div>
         <p className="text-neutral-700 text-[13.5px] mt-3">
           We could not find a certificate with that ID. Check the ID for transcription errors, or contact the registrar at{" "}
-          <a href="mailto:registrar@lavelle.ng">registrar@lavelle.ng</a> if you believe a credential is being misrepresented.
+          <a href="mailto:registrar@learnlavelle.com">registrar@learnlavelle.com</a> if you believe a credential is being misrepresented.
         </p>
       </Card>
     );
@@ -161,7 +162,7 @@ function ResultCard({ result }: { result: VerifyResult }) {
           </div>
         )}
         <div className="text-neutral-500 text-[11.5px] mt-4">
-          Register as of today. Queries about a revocation should be directed to <a href="mailto:registrar@lavelle.ng">registrar@lavelle.ng</a>.
+          Register as of today. Queries about a revocation should be directed to <a href="mailto:registrar@learnlavelle.com">registrar@learnlavelle.com</a>.
         </div>
       </Card>
     );

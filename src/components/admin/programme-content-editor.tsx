@@ -24,7 +24,7 @@ import {
 } from "@/app/actions/programme-content";
 import { setProgrammeStatus } from "@/app/actions/programme";
 import { finaliseUpload } from "@/app/actions/uploads";
-import { uploadToCloudinary } from "@/lib/cloudinary-upload";
+import { uploadToStorage, probeMediaDuration } from "@/lib/storage-upload";
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import { formatNaira, statusLabel } from "@/lib/format";
 
@@ -161,7 +161,11 @@ function ContentStatusSelect({
 }
 
 async function uploadFile(file: File, kind: "audio" | "video" | "image" | "document") {
-  const { storageKey, bytes, durationSeconds } = await uploadToCloudinary(file, "programme", kind);
+  // Duration no longer comes free from the upload response (Spaces doesn't
+  // probe media the way Cloudinary's upload API used to) — read it from
+  // the browser's own media metadata before uploading instead.
+  const durationSeconds = kind === "audio" || kind === "video" ? await probeMediaDuration(file) : null;
+  const { storageKey, bytes } = await uploadToStorage(file, "programme", kind);
   return finaliseUpload({ storageKey, kind, mimeType: file.type, originalFilename: file.name, bytes, durationSeconds });
 }
 

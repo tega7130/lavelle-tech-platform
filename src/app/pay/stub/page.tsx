@@ -24,7 +24,7 @@ export default async function PaymentStubPage({
   const amountMinor = Number(sp.amount ?? 0);
 
   return (
-    <div className="min-h-screen bg-surface flex items-center justify-center p-[var(--space-6)]">
+    <div className="min-h-dvh bg-surface flex items-center justify-center p-[var(--space-6)]">
       <Card elev="lg" className="w-full max-w-[420px] p-[var(--space-6)] gap-[var(--space-4)]">
         <div className="flex items-center gap-2">
           <LogoMark size={32} />

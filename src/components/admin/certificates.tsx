@@ -25,7 +25,7 @@ import {
   type ManualIssueFormInput,
 } from "@/app/actions/certificates";
 import { finaliseUpload } from "@/app/actions/uploads";
-import { uploadToCloudinary } from "@/lib/cloudinary-upload";
+import { uploadToStorage } from "@/lib/storage-upload";
 import type { listCertificates, listCertificateTemplates, listWithheldCandidates } from "@/lib/certificate-reads";
 
 type Certificates = Awaited<ReturnType<typeof listCertificates>>;
@@ -47,7 +47,7 @@ function fmtDate(d: Date | string) {
 }
 
 async function uploadArtwork(file: File) {
-  const { storageKey, bytes } = await uploadToCloudinary(file, "certificate");
+  const { storageKey, bytes } = await uploadToStorage(file, "certificate");
   return finaliseUpload({ storageKey, kind: "image", mimeType: file.type, originalFilename: file.name, bytes, durationSeconds: null, purpose: "certificate" });
 }
 

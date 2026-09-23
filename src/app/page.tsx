@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import type { Metadata } from "next";
 import { SiteHeroHeader } from "@/components/site/site-header";
 import { SiteFooter } from "@/components/site/site-footer";
 import { ContactForm } from "@/components/site/contact-form";
@@ -8,7 +9,26 @@ import { Reveal, AnimatedNumber, CTA_HOVER } from "@/components/site/motion";
 import { TierCard } from "@/components/site/tier-card";
 import { buttonClassName } from "@/components/ui/button";
 import { cn } from "@/lib/cn";
-import { getPublishedListings, getPublishedFaqs } from "@/lib/website-reads";
+import { getPublishedListings } from "@/lib/website-reads";
+import { SITE_URL, SITE_HOST } from "@/lib/site-url";
+
+const PAGE_TITLE = "Lavelle Institute — Professional Legal Specialization for Nigeria";
+const PAGE_DESCRIPTION =
+  "Structured specialization and examined credentialing for the Nigerian legal market. Foundation, Specialist and Advanced Practitioner programmes with publicly verifiable certification.";
+
+export const metadata: Metadata = {
+  title: PAGE_TITLE,
+  description: PAGE_DESCRIPTION,
+  alternates: { canonical: SITE_URL },
+  openGraph: {
+    title: PAGE_TITLE,
+    description: PAGE_DESCRIPTION,
+    url: SITE_URL,
+    siteName: "Lavelle Institute",
+    type: "website",
+  },
+  twitter: { card: "summary_large_image" },
+};
 
 const TIERS = [
   {
@@ -51,8 +71,39 @@ const HERO_STATS = [
   { value: 11, suffix: "", label: "Specializations across three tiers" },
 ] as const;
 
+// Hardcoded rather than DB-driven (FaqEntry/getPublishedFaqs) — content
+// changes rarely enough that editing it here beats depending on every
+// environment's database being seeded with real answers.
+const FAQS = [
+  {
+    id: "pay-to-register",
+    question: "Do I need to pay to register?",
+    answer: "No. Registration is free. You can register and explore every programme in full, then pay only for the specialisation you choose to begin. The certifying examination fee is charged separately, and only when you register for a sitting.",
+  },
+  {
+    id: "programme-time",
+    question: "How much time does a programme take?",
+    answer: "Twelve weeks at six to eight hours a week, delivered online. Lectures are recorded with narration so you set your own pace, but drafting exercises carry submission deadlines and the examination sits in a fixed window.",
+  },
+  {
+    id: "verify-credential",
+    question: "Can an employer or client verify my credential?",
+    answer: "Yes, and without contacting us. Every certificate carries an identifier checkable on our public verification portal, which returns the holder, programme, tier, grade and issue date, and clearly shows a credential that has been revoked or superseded.",
+  },
+  {
+    id: "not-yet-called",
+    question: "I am not yet called to the Bar. Can I enrol?",
+    answer: "Yes. Law graduates and students may take Foundation programmes, and non-lawyers working in regulated industries are welcome on the compliance pathways. Your professional status is recorded so your credential reflects your standing accurately.",
+  },
+  {
+    id: "complete-before-exam",
+    question: "Do I need to complete a programme before sitting an examination?",
+    answer: "At Foundation and Specialist level, no. You may register for an examination directly. At Advanced Practitioner level a completed programme at the tier below is a prerequisite. Candidates who complete the programme carry a Lavelle pathway credential, which records both the study and the examination.",
+  },
+] as const;
+
 export default async function HomePage() {
-  const [listings, faqs] = await Promise.all([getPublishedListings(), getPublishedFaqs()]);
+  const listings = await getPublishedListings();
 
   return (
     <div id="top" className="bg-bg">
@@ -79,7 +130,7 @@ export default async function HomePage() {
               </Reveal>
 
               <Reveal delay={270} threshold={0}>
-                <div className="flex gap-[13px] mt-[34px] flex-wrap">
+                <div className="flex flex-col items-center sm:flex-row sm:items-stretch gap-[13px] mt-[34px] flex-wrap">
                   <Link href="/programmes" className={cn(buttonClassName("primary"), "h-[50px] px-6 rounded-[9px] text-[14.5px]", CTA_HOVER)}>
                     Start your specialisation
                   </Link>
@@ -92,6 +143,7 @@ export default async function HomePage() {
                 </div>
               </Reveal>
 
+              {/* HERO STATS — commented out until we have real figures to report
               <div className="flex gap-10 mt-[52px] pt-[30px] border-t border-dashed border-white/20 flex-wrap">
                 {HERO_STATS.map((s, i) => (
                   <Reveal key={s.label} delay={360 + i * 100} threshold={0}>
@@ -102,6 +154,7 @@ export default async function HomePage() {
                   </Reveal>
                 ))}
               </div>
+              */}
             </div>
 
             <Reveal variant="scale" delay={220} threshold={0} className="hidden lg:block relative">
@@ -126,14 +179,14 @@ export default async function HomePage() {
                   LVL-CERT-2026-01188 · Specialist, Energy Law &amp; Regulation · issued 4 Aug 2026
                 </div>
                 <div className="h-px border-t border-dashed border-neutral-300 my-[11px]" />
-                <div className="text-[10px] text-neutral-500">Checkable by any employer at lavelle.africa/verify</div>
+                <div className="text-[10px] text-neutral-700">Checkable by any employer at {SITE_HOST}/verify</div>
               </div>
             </Reveal>
           </div>
         </div>
       </div>
 
-      {/* TRUST STRIP */}
+      {/* TRUST STRIP — commented out until we have real firm partnerships to list
       <div className="border-b border-divider bg-neutral-100">
         <div className="mx-auto max-w-[1200px] px-5 sm:px-6 md:px-8 lg:px-10 py-[26px] flex items-center justify-between gap-9 flex-wrap">
           <div className="text-[11px] tracking-[0.18em] uppercase font-semibold text-neutral-700">Candidates practise at</div>
@@ -146,6 +199,7 @@ export default async function HomePage() {
           </div>
         </div>
       </div>
+      */}
 
       {/* THE LADDER */}
       <div id="ladder" className="py-[104px]">
@@ -347,22 +401,20 @@ export default async function HomePage() {
             </div>
 
             <div className="flex flex-col gap-[10px]">
-              {faqs.map((q, i) => (
-                <Reveal key={q.id} delay={Math.min(i, 5) * 80} threshold={0.05}>
-                  <details className="group border border-divider rounded-xl bg-bg overflow-hidden open:border-accent-200 open:bg-accent-100" open={i === 0}>
-                    <summary className="flex items-start gap-4 px-[22px] py-5 cursor-pointer list-none">
-                      <span className="flex-1 min-w-0 font-heading font-semibold text-[15px] leading-[1.45]">{q.question}</span>
-                      <span className="w-6 h-6 flex-none rounded-[7px] border border-neutral-300 flex items-center justify-center text-neutral-700 transition group-open:rotate-180">
-                        <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M4.5 6.5 8 10l3.5-3.5" />
-                        </svg>
-                      </span>
-                    </summary>
-                    <div className="px-[22px] sm:pr-[60px] pb-[22px]">
-                      <p className="text-[13.5px] leading-[1.72] text-neutral-700 m-0">{q.answer}</p>
-                    </div>
-                  </details>
-                </Reveal>
+              {FAQS.map((q, i) => (
+                <details key={q.id} className="group border border-divider rounded-xl bg-bg overflow-hidden open:border-accent-200 open:bg-accent-100" open={i === 0}>
+                  <summary className="flex items-start gap-4 px-[22px] py-5 cursor-pointer list-none">
+                    <span className="flex-1 min-w-0 font-heading font-semibold text-[15px] leading-[1.45]">{q.question}</span>
+                    <span className="w-6 h-6 flex-none rounded-[7px] border border-neutral-300 flex items-center justify-center text-neutral-700 transition group-open:rotate-180">
+                      <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M4.5 6.5 8 10l3.5-3.5" />
+                      </svg>
+                    </span>
+                  </summary>
+                  <div className="px-[22px] sm:pr-[60px] pb-[22px]">
+                    <p className="text-[13.5px] leading-[1.72] text-neutral-700 m-0">{q.answer}</p>
+                  </div>
+                </details>
               ))}
             </div>
           </div>
@@ -384,9 +436,10 @@ export default async function HomePage() {
               </Reveal>
               <Reveal delay={240} className="flex flex-col gap-4 mt-8 pt-[26px] border-t border-dashed border-neutral-300">
                 {[
-                  ["@", "candidates@lavelle.ng"],
-                  ["☎", "+234 700 528 3553", "Monday to Friday, 9am – 5pm WAT"],
-                  ["W", "+234 803 552 8841"],
+                  ["@", "candidates@learnlavelle.com"],
+                  // Phone/WhatsApp hidden until real numbers are ready — email only for now.
+                  // ["☎", "+234 700 528 3553", "Monday to Friday, 9am – 5pm WAT"],
+                  // ["W", "+234 803 552 8841"],
                 ].map(([mark, value, meta]) => (
                   <div key={value} className="flex gap-[13px] items-start">
                     <span className="w-[34px] h-[34px] flex-none rounded-[9px] bg-accent-100 text-accent-700 flex items-center justify-center text-[13px] font-semibold">{mark}</span>

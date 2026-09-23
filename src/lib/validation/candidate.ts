@@ -32,7 +32,6 @@ export const registerSchema = z
       .refine((v) => !v || v.replace(/\D/g, "").length >= 7, "Enter a valid phone number"),
     password: z.string().min(8, "Use at least 8 characters"),
     confirmPassword: z.string(),
-    terms: checkboxBoolean.refine((v) => v === true, "You must accept the Terms of Use to continue"),
     marketingOptIn: checkboxBoolean,
   })
   .superRefine((data, ctx) => {
@@ -60,7 +59,6 @@ export const guestCheckoutSchema = z
     email: z.string().trim().min(1, EMAIL_MESSAGE).regex(EMAIL_RE, EMAIL_MESSAGE),
     password: z.string().min(8, "Use at least 8 characters"),
     confirmPassword: z.string(),
-    terms: checkboxBoolean.refine((v) => v === true, "You must accept the Terms of Use to continue"),
     marketingOptIn: checkboxBoolean,
     programmeId: z.string().trim().min(1),
   })

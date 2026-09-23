@@ -4,9 +4,9 @@
 // rows in the DocumentCategory table (see createDocumentCategory /
 // listDocumentCategories), the same pattern as ProgrammeCategory.
 
-// PDF and DOCX only, per spec — keyed by the MIME type Cloudinary reports
-// back at upload time (never trusted from the client's <input accept>
-// alone; see finaliseUpload's purpose === "document_library" branch).
+// PDF and DOCX only, per spec — keyed by the browser-reported MIME type
+// at upload time (never trusted from the client's <input accept> alone;
+// see finaliseUpload's purpose === "document_library" branch).
 export const ACCEPTED_DOCUMENT_MIME_TYPES: Record<string, string> = {
   "application/pdf": "PDF",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "DOCX",

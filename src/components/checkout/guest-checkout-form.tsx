@@ -29,7 +29,6 @@ export function GuestCheckoutForm({
     email: "",
     password: "",
     confirmPassword: "",
-    terms: false,
     marketingOptIn: true,
   });
   const [errors, setErrors] = React.useState<Record<string, string>>({});
@@ -96,7 +95,7 @@ export function GuestCheckoutForm({
     };
   }
 
-  function check(key: "terms" | "marketingOptIn") {
+  function check(key: "marketingOptIn") {
     return (e: React.ChangeEvent<HTMLInputElement>) => {
       setValues((v) => ({ ...v, [key]: e.target.checked }));
       setErrors((errs) => {
@@ -243,13 +242,6 @@ export function GuestCheckoutForm({
 
           <div className="mt-1 flex flex-col gap-2.5">
             <label className="flex items-start gap-2.5 text-[13px] leading-[1.5] text-neutral-700">
-              <Checkbox name="terms" checked={values.terms} onChange={check("terms")} className="mt-0.5" />
-              <span>
-                I accept the <a href="#">Terms of Use</a> and <a href="#">Privacy Policy</a>
-              </span>
-            </label>
-            <FieldError>{errors.terms}</FieldError>
-            <label className="flex items-start gap-2.5 text-[13px] leading-[1.5] text-neutral-700">
               <Checkbox name="marketingOptIn" checked={values.marketingOptIn} onChange={check("marketingOptIn")} className="mt-0.5" />
               <span>
                 Send me programme and intake updates <span className="text-neutral-500">(optional)</span>
@@ -265,6 +257,17 @@ export function GuestCheckoutForm({
               Verify your email address above to continue.
             </div>
           )}
+          <div className="-mt-2 text-center text-[11.5px] leading-[1.5] text-neutral-500">
+            By creating an account, you accept the{" "}
+            <Link href="/terms" target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">
+              Terms of Use
+            </Link>{" "}
+            and{" "}
+            <Link href="/privacy" target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">
+              Privacy Policy
+            </Link>
+            .
+          </div>
         </div>
       </form>
 

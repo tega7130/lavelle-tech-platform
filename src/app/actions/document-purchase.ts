@@ -4,8 +4,10 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { PaymentStatus } from "@/generated/prisma/client";
 import { getCurrentCandidate } from "@/lib/candidate-session";
+import { getClientIp } from "@/lib/request-info";
 import { createProviderCheckout } from "@/lib/payment-provider";
 import { getSignedAssetUrl } from "@/lib/storage";
+import { enforceRateLimit, RateLimitError } from "@/lib/rate-limit";
 import { effectivePriceMinor } from "@/lib/document-library";
 import {
   validateAndComputeDiscount,
@@ -26,6 +28,16 @@ import {
 export async function validateDiscountCodeAction(documentTemplateId: string, code: string) {
   const candidate = await getCurrentCandidate();
   if (!candidate) throw new Error("Sign in required.");
+
+  const ip = await getClientIp();
+  try {
+    await enforceRateLimit("validate_discount_code", { ip, email: candidate.email }, { limit: 10, windowSeconds: 3600 });
+  } catch (e) {
+    if (e instanceof RateLimitError) {
+      return { valid: false as const, reason: "Too many attempts. Please try again later." };
+    }
+    throw e;
+  }
 
   const document = await prisma.documentTemplate.findUnique({ where: { id: documentTemplateId } });
   if (!document || !document.isActive) {
@@ -79,6 +91,16 @@ export async function initiateDocumentPurchaseAction(
   const candidate = await getCurrentCandidate();
   if (!candidate) throw new Error("Sign in required.");
 
+  const ip = await getClientIp();
+  try {
+    await enforceRateLimit("initiate_document_purchase", { ip, email: candidate.email }, { limit: 5, windowSeconds: 3600 });
+  } catch (e) {
+    if (e instanceof RateLimitError) {
+      return { checkoutUrl: null, internalReference: null, error: "Too many purchase attempts. Please try again in about an hour." };
+    }
+    throw e;
+  }
+
   try {
     const document = await prisma.documentTemplate.findUnique({ where: { id: documentTemplateId } });
     if (!document || !document.isActive) throw new DocumentUnavailableError();
@@ -126,7 +148,7 @@ export async function initiateDocumentPurchaseAction(
 
 /**
  * Download and View Online share this one ownership-checked lookup —
- * the only difference is the Cloudinary `attachment` flag. Ownership is
+ * the only difference is the storage `attachment` flag. Ownership is
  * re-checked here every time, straight from the DB (never trusted from
  * anything the client sends), and only ever true when purchasedAt is set
  * (rule 16/20/23) — a candidate can never reach another candidate's file
@@ -143,5 +165,5 @@ export async function getDocumentFileAccessAction(documentTemplateId: string, mo
   if (!owns) throw new Error("You have not purchased this document template.");
 
   const document = await prisma.documentTemplate.findUniqueOrThrow({ where: { id: documentTemplateId } });
-  return getSignedAssetUrl(document.storageKey, "raw", 300, mode === "download");
+  return getSignedAssetUrl(document.storageKey, 300, mode === "download");
 }

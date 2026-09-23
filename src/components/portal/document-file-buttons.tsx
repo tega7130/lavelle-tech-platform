@@ -11,7 +11,7 @@ interface DocumentFileButtonProps {
   className?: string;
 }
 
-/** Opens the signed file URL in a new tab — never an embedded in-page preview (spec rule 24). Cloudinary's `attachment` flag (set server-side for mode "download") is what makes the browser save rather than render it. */
+/** Opens the signed file URL in a new tab — never an embedded in-page preview (spec rule 24). The storage layer's `attachment` disposition (set server-side for mode "download") is what makes the browser save rather than render it. */
 function useOpenDocument(documentTemplateId: string, mode: "download" | "view") {
   const { showToast } = useToast();
   const [pending, startTransition] = React.useTransition();

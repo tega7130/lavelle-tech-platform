@@ -49,6 +49,15 @@ export default async function CandidateRecordTabPage({ params }: { params: Promi
           paymentCount={overview.paymentCount}
           certificateCount={overview.certificateCount}
           openRequestCount={overview.openRequestCount}
+          professionalStatus={overview.candidate.profile?.professionalStatus ?? null}
+          yearOfCall={overview.candidate.profile?.yearOfCall ?? null}
+          scnNumber={overview.candidate.profile?.scnNumber ?? null}
+          institution={overview.candidate.profile?.institution ?? null}
+          graduationYear={overview.candidate.profile?.graduationYear ?? null}
+          organisation={overview.candidate.profile?.organisation ?? null}
+          roleTitle={overview.candidate.profile?.roleTitle ?? null}
+          experienceBand={overview.candidate.profile?.experienceBand ?? null}
+          placeOfPractice={overview.candidate.profile?.placeOfPractice ?? null}
         />
       );
     }
@@ -67,10 +76,12 @@ export default async function CandidateRecordTabPage({ params }: { params: Promi
         getCandidateOverview(id).then((o) => o.candidate),
       ]);
       if (!candidate) notFound();
-      const paymentsWithReceipt = payments.map((p) => ({
-        ...p,
-        receiptUrl: p.receiptAsset ? getSignedAssetUrl(p.receiptAsset.storageKey, "raw") : null,
-      }));
+      const paymentsWithReceipt = await Promise.all(
+        payments.map(async (p) => ({
+          ...p,
+          receiptUrl: p.receiptAsset ? await getSignedAssetUrl(p.receiptAsset.storageKey) : null,
+        }))
+      );
       return (
         <CandidatePaymentsTab
           candidateId={id}

@@ -2,7 +2,8 @@ import { renderTemplate } from '../email-utils';
 
 export interface PasswordResetRequestVariables {
   firstName: string;
-  resetPasswordUrl: string;
+  otpCode: string;
+  otpExpiryMinutes: number;
   supportEmail: string;
   currentYear: number;
 }
@@ -22,22 +23,23 @@ export function generatePasswordResetRequestEmail(variables: PasswordResetReques
                 <table cellpadding="0" cellspacing="0" width="100%" style="max-width: 600px; background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
                     <tr>
                         <td style="padding: 40px 30px; background-color: #ffffff; text-align: center; border-bottom: 3px solid #1668e3;">
-                            <img src="${process.env.NEXTAUTH_URL}/Images/lavelle-logo.png" alt="Lavelle Institute of Legal Studies" width="140" style="display: block; border: 0; outline: none; text-decoration: none; width: 140px; max-width: 140px; height: auto; margin: 0 auto;" />
+                            <img src="${process.env.NEXTAUTH_URL}/images/lavelle-logo.png" alt="Lavelle Institute of Legal Studies" width="140" style="display: block; border: 0; outline: none; text-decoration: none; width: 140px; max-width: 140px; height: auto; margin: 0 auto;" />
                         </td>
                     </tr>
                     <tr>
                         <td style="padding: 40px 30px;">
                             <p style="margin: 0 0 20px 0; color: #1a1a1a; font-size: 16px; line-height: 1.6;">Hi {{firstName}},</p>
-                            <p style="margin: 0 0 20px 0; color: #4a4a4a; font-size: 15px; line-height: 1.6;">We received a request to reset the password for your Lavelle account. If this wasn't you, you can safely ignore this email — your password hasn't changed.</p>
-                            <p style="margin: 0 0 20px 0; color: #4a4a4a; font-size: 15px; line-height: 1.6;">To reset your password, click the link below:</p>
-                            <table cellpadding="0" cellspacing="0" style="margin: 0 0 30px 0;">
+                            <p style="margin: 0 0 30px 0; color: #4a4a4a; font-size: 15px; line-height: 1.6;">We received a request to reset the password for your Lavelle account. If this wasn't you, you can safely ignore this email — your password hasn't changed.</p>
+                            <table cellpadding="0" cellspacing="0" width="100%" style="margin: 0 0 30px 0; background-color: #f0f4f8; border-radius: 6px; border: 1px solid #e5e5e5;">
                                 <tr>
-                                    <td style="background-color: #1668e3; border-radius: 4px; padding: 0;">
-                                        <a href="{{resetPasswordUrl}}" style="display: inline-block; padding: 14px 32px; color: #ffffff; text-decoration: none; font-size: 15px; font-weight: 600; border-radius: 4px; background-color: #1668e3;">Reset Password</a>
+                                    <td style="padding: 20px; text-align: center;">
+                                        <p style="margin: 0 0 10px 0; color: #666666; font-size: 13px; line-height: 1.4; text-transform: uppercase; letter-spacing: 1px;">Your password reset code</p>
+                                        <p style="margin: 0; color: #1668e3; font-size: 32px; font-weight: 700; letter-spacing: 4px; font-family: 'Courier New', monospace;">{{otpCode}}</p>
                                     </td>
                                 </tr>
                             </table>
-                            <p style="margin: 0 0 20px 0; color: #4a4a4a; font-size: 14px; line-height: 1.6;">This link expires in 1 hour. After resetting, you'll be able to sign in with your new password right away.</p>
+                            <p style="margin: 0 0 20px 0; color: #4a4a4a; font-size: 14px; line-height: 1.6;">Enter this code on the password reset page to continue, then choose a new password.</p>
+                            <p style="margin: 0 0 20px 0; color: #4a4a4a; font-size: 14px; line-height: 1.6;">This code expires in {{otpExpiryMinutes}} minutes. After resetting, you'll be signed out of any other devices and can sign in with your new password right away.</p>
                             <p style="margin: 0 0 20px 0; color: #4a4a4a; font-size: 14px; line-height: 1.6;">For security reasons, we never share passwords via email. If you have any concerns about your account, contact us at <a href="mailto:{{supportEmail}}" style="color: #1668e3; text-decoration: none;">{{supportEmail}}</a>.</p>
                         </td>
                     </tr>
@@ -61,11 +63,13 @@ export function generatePasswordResetRequestEmail(variables: PasswordResetReques
 
 We received a request to reset the password for your Lavelle account. If this wasn't you, you can safely ignore this email — your password hasn't changed.
 
-To reset your password, click the link below:
+Your password reset code:
 
-{{resetPasswordUrl}}
+{{otpCode}}
 
-This link expires in 1 hour. After resetting, you'll be able to sign in with your new password right away.
+Enter this code on the password reset page to continue, then choose a new password.
+
+This code expires in {{otpExpiryMinutes}} minutes. After resetting, you'll be signed out of any other devices and can sign in with your new password right away.
 
 For security reasons, we never share passwords via email. If you have any concerns about your account, contact us at {{supportEmail}}.
 

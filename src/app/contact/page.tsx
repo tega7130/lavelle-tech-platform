@@ -1,7 +1,27 @@
+import type { Metadata } from "next";
 import { SiteCompactHeader } from "@/components/site/site-header";
 import { SiteFooter } from "@/components/site/site-footer";
 import { ContactForm } from "@/components/site/contact-form";
 import { getPublishedListings } from "@/lib/website-reads";
+import { SITE_URL } from "@/lib/site-url";
+
+const PAGE_TITLE = "Contact Us | Lavelle Institute";
+const PAGE_DESCRIPTION =
+  "Not sure which specialization tier fits your practice? Tell us where you are and get a straight recommendation from a Lavelle Institute representative.";
+
+export const metadata: Metadata = {
+  title: PAGE_TITLE,
+  description: PAGE_DESCRIPTION,
+  alternates: { canonical: `${SITE_URL}/contact` },
+  openGraph: {
+    title: PAGE_TITLE,
+    description: PAGE_DESCRIPTION,
+    url: `${SITE_URL}/contact`,
+    siteName: "Lavelle Institute",
+    type: "website",
+  },
+  twitter: { card: "summary_large_image" },
+};
 
 export default async function ContactPage() {
   const listings = await getPublishedListings();

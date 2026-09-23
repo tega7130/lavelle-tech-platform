@@ -7,8 +7,8 @@ import * as Sentry from "@sentry/nextjs";
 Sentry.init({
   dsn: "https://3d817f3a683e2ba6de6d18359717edef@o4511933774233600.ingest.us.sentry.io/4511933781966848",
 
-  // Add optional integrations for additional features
-  integrations: [Sentry.replayIntegration()],
+  // Session Replay is added lazily below, not here — see comment.
+  integrations: [],
 
   // Define how likely traces are sampled. Adjust this value in production, or use tracesSampler for greater control.
   tracesSampleRate: 1,
@@ -30,5 +30,21 @@ Sentry.init({
     // httpBodies: [],
   },
 });
+
+// Session Replay's rrweb-based DOM observer starts watching (and in some
+// setups, touching) the document as soon as it's added. Wired up
+// synchronously here at module-eval time, that races React's first
+// hydration commit and was observed intermittently throwing "Hydration
+// failed because the server rendered HTML didn't match the client" on
+// every platform. Deferring the integration until the window has finished
+// loading — well after hydration commits — keeps error/trace capture live
+// from first paint while letting Replay start observing only once the
+// DOM it's watching is no longer in flux. This is Sentry's own documented
+// pattern for lazy-loading Replay.
+if (typeof window !== "undefined") {
+  window.addEventListener("load", () => {
+    Sentry.addIntegration(Sentry.replayIntegration());
+  });
+}
 
 export const onRouterTransitionStart = Sentry.captureRouterTransitionStart;

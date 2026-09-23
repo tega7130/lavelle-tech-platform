@@ -1,19 +1,12 @@
 "use server";
 
 import { z } from "zod";
-import { v2 as cloudinary } from "cloudinary";
 import { prisma } from "@/lib/prisma";
 import { Permission } from "@/generated/prisma/client";
 import { requireStaffPermission } from "@/lib/staff-auth";
 import { getCurrentCandidate } from "@/lib/candidate-session";
 import { recordAuditEvent } from "@/lib/audit";
 import { isAcceptedDocumentMimeType, ACCEPTED_DOCUMENT_MIME_TYPES, MAX_DOCUMENT_BYTES } from "@/lib/document-library";
-
-cloudinary.config({
-  cloud_name: process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
-});
 
 const finaliseUploadSchema = z.object({
   storageKey: z.string().min(1),
@@ -38,9 +31,7 @@ export async function finaliseUpload(input: unknown) {
   const staff = await requireStaffPermission(PERMISSION_BY_PURPOSE[data.purpose]);
 
   // Server-side file-type and size validation — never trust the client's
-  // <input accept> or the file extension alone. mimeType here is what
-  // Cloudinary itself reported back at upload time (cloudinary-upload.ts),
-  // not a value the browser sent unchecked.
+  // <input accept> or the file extension alone.
   if (data.purpose === "document_library") {
     if (!isAcceptedDocumentMimeType(data.mimeType)) {
       throw new Error(`Unsupported file type. Accepted types: ${Object.values(ACCEPTED_DOCUMENT_MIME_TYPES).join(", ")}.`);

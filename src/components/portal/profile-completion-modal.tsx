@@ -5,6 +5,7 @@ import Link from "next/link";
 import { updateProfile } from "@/app/actions/candidate-auth";
 import { emptyActionState } from "@/lib/action-state";
 import { Button, buttonClassName } from "@/components/ui/button";
+import { PRACTICE_LOCATION_OPTIONS, OUTSIDE_NIGERIA } from "@/lib/nigeria-locations";
 
 const STATUSES: { id: string; value: string; label: string; meta: string }[] = [
   { id: "practising", value: "PRACTISING_LAWYER", label: "Practising Lawyer", meta: "In private practice or at a firm, called to the Nigerian Bar" },
@@ -107,7 +108,8 @@ export function ProfileCompletionModal({
   const [f1, setF1] = React.useState("");
   const [f2, setF2] = React.useState("");
   const [band, setBand] = React.useState<string | null>(null);
-  const [place, setPlace] = React.useState("");
+  const [locationOption, setLocationOption] = React.useState("");
+  const [outsideLocation, setOutsideLocation] = React.useState("");
   const [saving, setSaving] = React.useState(false);
   const [saveError, setSaveError] = React.useState<string | null>(null);
 
@@ -124,7 +126,8 @@ export function ProfileCompletionModal({
       setF1("");
       setF2("");
       setBand(null);
-      setPlace("");
+      setLocationOption("");
+      setOutsideLocation("");
       setSaveError(null);
     }
   }
@@ -148,6 +151,7 @@ export function ProfileCompletionModal({
     if (f1) fd.set(copy.f1Key, f1);
     if (f2 && copy.f2Key) fd.set(copy.f2Key, f2);
     if (band) fd.set("experienceBand", BANDS.find((b) => b.id === band)!.value);
+    const place = locationOption === OUTSIDE_NIGERIA ? outsideLocation.trim() : locationOption;
     if (place) fd.set("placeOfPractice", place);
     fd.set("complete", "true");
     const result = await updateProfile(emptyActionState, fd);
@@ -321,12 +325,28 @@ export function ProfileCompletionModal({
                       <label className="mb-1.5 block text-xs font-medium text-neutral-700">
                         State or country of practice
                       </label>
-                      <input
-                        placeholder="Lagos State, Nigeria"
-                        value={place}
-                        onChange={(e) => setPlace(e.target.value)}
+                      <select
+                        value={locationOption}
+                        onChange={(e) => setLocationOption(e.target.value)}
                         className="h-11 w-full rounded-md border border-neutral-300 bg-bg px-3 text-sm"
-                      />
+                      >
+                        <option value="" disabled>
+                          Select a state
+                        </option>
+                        {PRACTICE_LOCATION_OPTIONS.map((o) => (
+                          <option key={o.value} value={o.value}>
+                            {o.label}
+                          </option>
+                        ))}
+                      </select>
+                      {locationOption === OUTSIDE_NIGERIA && (
+                        <input
+                          placeholder="e.g. London, United Kingdom"
+                          value={outsideLocation}
+                          onChange={(e) => setOutsideLocation(e.target.value)}
+                          className="mt-2 h-11 w-full rounded-md border border-neutral-300 bg-bg px-3 text-sm"
+                        />
+                      )}
                     </div>
                   </div>
                 </>

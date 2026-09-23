@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { Tag } from "@/components/ui/tag";
@@ -9,11 +10,19 @@ import { Textarea, Field, Label, Input } from "@/components/ui/field";
 import { Dialog } from "@/components/ui/dialog";
 import { cn } from "@/lib/cn";
 import { formatNaira, tierLabel } from "@/lib/format";
-import { upsertListingAction, publishListingAction, unpublishListingAction } from "@/app/actions/website-admin";
+import {
+  upsertListingAction,
+  publishListingAction,
+  unpublishListingAction,
+  markComingSoonAction,
+  unmarkComingSoonAction,
+} from "@/app/actions/website-admin";
 import { finaliseUpload } from "@/app/actions/uploads";
-import type { getListingForEditor } from "@/lib/website-admin";
+import { uploadToStorage, probeMediaDuration } from "@/lib/storage-upload";
+import type { getListingForEditor, listComingSoonSubscribers } from "@/lib/website-admin";
 
 type ListingData = Awaited<ReturnType<typeof getListingForEditor>>;
+type Subscriber = Awaited<ReturnType<typeof listComingSoonSubscribers>>[number];
 type TabKey = "content" | "pricing" | "inherited";
 
 const TABS: { key: TabKey; label: string }[] = [
@@ -22,23 +31,48 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: "inherited", label: "Inherited" },
 ];
 
-async function uploadVideo(file: File) {
-  const formData = new FormData();
-  formData.append("file", file);
-  formData.append("purpose", "programme");
-  const res = await fetch("/api/uploads/cloudinary", {
-    method: "POST",
-    body: formData,
-  });
-  if (!res.ok) {
-    const error = await res.json();
-    throw new Error(error.error || "Upload failed.");
-  }
-  const { asset } = await res.json();
-  return asset;
+// Same pattern as programme-enrolments-table.tsx's exportCsv.
+function csvEscape(value: string): string {
+  return /[",\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
 }
 
-export function WebsiteListingEditor({ listing: programme, initialTab }: { listing: ListingData; initialTab: TabKey }) {
+function exportSubscribersCsv(subscribers: Subscriber[], programmeCode: string) {
+  const header = ["Name", "Email", "Phone", "Subscribed"];
+  const lines = subscribers.map((s) =>
+    [
+      s.name ?? "",
+      s.email,
+      s.phone ? `${s.phoneCountryCode ?? ""} ${s.phone}` : "",
+      new Date(s.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }),
+    ]
+      .map(csvEscape)
+      .join(",")
+  );
+  const csv = [header.join(","), ...lines].join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${programmeCode}-notify-me-subscribers.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+async function uploadVideo(file: File) {
+  const durationSeconds = await probeMediaDuration(file);
+  const { storageKey, bytes } = await uploadToStorage(file, "programme", "video");
+  return finaliseUpload({ storageKey, kind: "video", mimeType: file.type, originalFilename: file.name, bytes, durationSeconds });
+}
+
+export function WebsiteListingEditor({
+  listing: programme,
+  initialTab,
+  subscribers,
+}: {
+  listing: ListingData;
+  initialTab: TabKey;
+  subscribers: Subscriber[];
+}) {
   const router = useRouter();
   const pathname = usePathname();
   const existing = programme.listing;
@@ -59,9 +93,20 @@ export function WebsiteListingEditor({ listing: programme, initialTab }: { listi
   const [notice, setNotice] = React.useState<string | null>(null);
   const [unpublishing, setUnpublishing] = React.useState(false);
   const [reason, setReason] = React.useState("");
+  const [comingSoonMessage, setComingSoonMessage] = React.useState(existing?.comingSoonMessage ?? "");
+  const [comingSoonBusy, setComingSoonBusy] = React.useState(false);
+  const [subscriberPage, setSubscriberPage] = React.useState(0);
 
   const isPublished = existing?.isPublished ?? false;
+  const isComingSoon = existing?.isComingSoon ?? false;
   const totalLectures = programme.modules.reduce((sum, m) => sum + m.lectures.length, 0);
+
+  const SUBSCRIBERS_PAGE_SIZE = 10;
+  const subscriberPageCount = Math.max(1, Math.ceil(subscribers.length / SUBSCRIBERS_PAGE_SIZE));
+  const pagedSubscribers = subscribers.slice(
+    subscriberPage * SUBSCRIBERS_PAGE_SIZE,
+    subscriberPage * SUBSCRIBERS_PAGE_SIZE + SUBSCRIBERS_PAGE_SIZE
+  );
 
   // Shallow URL sync only — the tab itself is local state, switched
   // instantly with no server round-trip, so an in-progress edit on one
@@ -141,6 +186,25 @@ export function WebsiteListingEditor({ listing: programme, initialTab }: { listi
     }
   }
 
+  async function toggleComingSoon() {
+    setComingSoonBusy(true);
+    setError(null);
+    try {
+      if (isComingSoon) {
+        await unmarkComingSoonAction(programme.id);
+        setNotice("This programme is now open for enrolment. Subscribers who asked to be notified have been emailed.");
+      } else {
+        await markComingSoonAction(programme.id, comingSoonMessage.trim() || null);
+        setNotice("Marked Coming Soon. Visitors see the listing with no price and can leave their email to be notified.");
+      }
+      router.refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not update Coming Soon.");
+    } finally {
+      setComingSoonBusy(false);
+    }
+  }
+
   // Status note: an error always wins, then a just-saved confirmation,
   // then a steady-state description of what the current publish state
   // means for a visitor — visible regardless of which tab is open, same
@@ -192,6 +256,43 @@ export function WebsiteListingEditor({ listing: programme, initialTab }: { listi
             <span className="flex-none font-bold">{statusNote.tone === "error" ? "!" : statusNote.tone === "success" ? "✓" : "i"}</span>
             <div className="text-wrap-pretty">{statusNote.text}</div>
           </div>
+
+          {isPublished && (
+            <div className="flex flex-col gap-3 px-4 py-3 rounded-md mt-3 border border-divider bg-neutral-100">
+              <div className="flex items-center justify-between gap-4 flex-wrap">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-[13px]">Coming Soon</span>
+                    {isComingSoon && <Tag variant="warning">Active</Tag>}
+                  </div>
+                  <div className="text-neutral-600 text-[11.5px] leading-[1.5] mt-1 max-w-[52ch]">
+                    Visible on the website and candidate portal catalogues with no price and no enrol button. Visitors can leave
+                    their email to be notified the moment you turn this off.
+                  </div>
+                </div>
+                <Button variant={isComingSoon ? "secondary" : "primary"} className="h-9 text-[12.5px]" disabled={comingSoonBusy} onClick={toggleComingSoon}>
+                  {isComingSoon ? "Open for enrolment" : "Mark Coming Soon"}
+                </Button>
+              </div>
+              {!isComingSoon && (
+                <Field>
+                  <Label>Optional message (e.g. &ldquo;Launching soon&rdquo;)</Label>
+                  <Input value={comingSoonMessage} onChange={(e) => setComingSoonMessage(e.target.value)} placeholder="Coming soon" />
+                </Field>
+              )}
+              {isComingSoon && totalLectures === 0 && (
+                <div className="flex items-center justify-between gap-3 rounded-md border border-dashed border-accent-200 bg-accent-100 px-3.5 py-2.5">
+                  <div className="text-[12px] text-accent-800 leading-[1.5]">
+                    No course content yet — build the syllabus when you&rsquo;re ready. &ldquo;Open for enrolment&rdquo; is
+                    blocked until at least one lecture exists.
+                  </div>
+                  <Link href={`/admin/programmes/${programme.id}/content`} className="flex-none text-[12.5px] font-medium text-accent whitespace-nowrap">
+                    Build course content →
+                  </Link>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="flex gap-1 border-b border-divider mt-4">
@@ -410,6 +511,80 @@ export function WebsiteListingEditor({ listing: programme, initialTab }: { listi
             Save
           </Button>
         </div>
+      </Card>
+
+      <Card elev="sm">
+        <div className="flex items-start justify-between gap-3 mb-3">
+          <div>
+            <div className="font-heading font-semibold text-[15px]">Notify me subscribers</div>
+            <div className="text-neutral-600 text-[12px] mt-0.5">
+              {subscribers.length === 0
+                ? "Nobody has asked to be notified yet."
+                : `${subscribers.length} ${subscribers.length === 1 ? "person" : "people"} waiting to hear when this opens.`}
+            </div>
+          </div>
+          {subscribers.length > 0 && (
+            <button
+              onClick={() => exportSubscribersCsv(subscribers, programme.code)}
+              className={buttonClassName("secondary", "h-[32px] px-3 text-[12px] flex-none")}
+            >
+              Export CSV
+            </button>
+          )}
+        </div>
+        {subscribers.length > 0 && (
+          <div className="overflow-x-auto">
+            <table className="w-full text-[13px] border-collapse">
+              <thead>
+                <tr className="text-left text-neutral-500 text-[11px] uppercase tracking-[0.06em]">
+                  <th className="pb-2 pr-4 font-medium">Name</th>
+                  <th className="pb-2 pr-4 font-medium">Email</th>
+                  <th className="pb-2 pr-4 font-medium">Phone</th>
+                  <th className="pb-2 font-medium">Subscribed</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pagedSubscribers.map((s) => (
+                  <tr key={s.id} className="border-t border-divider">
+                    <td className="py-2 pr-4 whitespace-nowrap">{s.name || "—"}</td>
+                    <td className="py-2 pr-4">{s.email}</td>
+                    <td className="py-2 pr-4 tabular-nums whitespace-nowrap">
+                      {s.phone ? `${s.phoneCountryCode ?? ""} ${s.phone}` : "—"}
+                    </td>
+                    <td className="py-2 text-neutral-600 whitespace-nowrap">
+                      {new Date(s.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {subscribers.length > SUBSCRIBERS_PAGE_SIZE && (
+          <div className="flex items-center justify-between gap-3 mt-3 pt-3 border-t border-dashed border-neutral-300">
+            <div className="text-[11.5px] text-neutral-600">
+              Page {subscriberPage + 1} of {subscriberPageCount}
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="secondary"
+                className="h-8 px-3 text-[12px]"
+                disabled={subscriberPage === 0}
+                onClick={() => setSubscriberPage((p) => Math.max(0, p - 1))}
+              >
+                Previous
+              </Button>
+              <Button
+                variant="secondary"
+                className="h-8 px-3 text-[12px]"
+                disabled={subscriberPage >= subscriberPageCount - 1}
+                onClick={() => setSubscriberPage((p) => Math.min(subscriberPageCount - 1, p + 1))}
+              >
+                Next
+              </Button>
+            </div>
+          </div>
+        )}
       </Card>
 
       {unpublishing && (
