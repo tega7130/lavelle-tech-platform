@@ -6,6 +6,7 @@ import { getCurrentCandidate } from "@/lib/candidate-session";
 import { getClientIp } from "@/lib/request-info";
 import { enforceRateLimit, RateLimitError } from "@/lib/rate-limit";
 import { PHONE_CODES } from "@/lib/phone-codes";
+import { verifyRecaptcha } from "@/lib/recaptcha";
 
 // Matches validation/candidate.ts's EMAIL_RE exactly — same discipline as
 // that file's own comment: a plain zod .email() is stricter/looser in
@@ -42,7 +43,8 @@ export async function subscribeToComingSoonAction(
   name: string,
   phoneCountryCode: string,
   phone: string,
-  email: string
+  email: string,
+  recaptchaToken?: string
 ): Promise<SubscribeToComingSoonState> {
   const parsed = subscribeSchema.safeParse({ listingId, name, phoneCountryCode, phone, email });
   if (!parsed.success) {
@@ -57,6 +59,10 @@ export async function subscribeToComingSoonAction(
       return { ok: false, error: "Too many subscription attempts. Please try again later." };
     }
     throw e;
+  }
+
+  if (!(await verifyRecaptcha(recaptchaToken, "notify_me"))) {
+    return { ok: false, error: "Something went wrong. Please refresh and try again." };
   }
 
   const candidate = await getCurrentCandidate();

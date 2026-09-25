@@ -7,6 +7,8 @@ import { resendVerification } from "@/app/actions/candidate-auth";
 import type { CurrentCandidate } from "@/lib/candidate-session";
 import { buttonClassName } from "@/components/ui/button";
 import { ProfileCompletionModal, type ProfileModalTrigger } from "@/components/portal/profile-completion-modal";
+import { ProductTour } from "@/components/portal/product-tour";
+import { ONBOARDING_TOUR_STEPS } from "@/lib/portal-tours";
 
 const REGISTRATION_STEPS = [
   { label: "Registration completed", meta: "Provisional applicant number issued", done: true },
@@ -33,6 +35,7 @@ export function ApplicantDashboard({ candidate }: { candidate: CurrentCandidate 
   const [justCompleted, setJustCompleted] = React.useState(false);
   const [showNudge, setShowNudge] = React.useState(false);
   const [resendMessage, setResendMessage] = React.useState<string | null>(null);
+  const [tourActive, setTourActive] = React.useState(false);
 
   React.useEffect(() => {
     // A genuine one-time read from an external system (localStorage isn't
@@ -64,6 +67,18 @@ export function ApplicantDashboard({ candidate }: { candidate: CurrentCandidate 
     window.localStorage.setItem(DISMISSED_KEY, "1");
     setJustCompleted(true);
     setTrigger("closed");
+  }
+
+  // Handed off from the welcome screen's "Tell us about yourself" button
+  // (profile-completion-modal.tsx's openForm) — the tour runs with the
+  // modal closed, then reopens it directly at the form stage on finish.
+  function handleRequestTour() {
+    setTourActive(true);
+  }
+
+  function handleTourFinish() {
+    setTourActive(false);
+    setTrigger("form");
   }
 
   async function handleResend() {
@@ -323,7 +338,9 @@ export function ApplicantDashboard({ candidate }: { candidate: CurrentCandidate 
         trigger={trigger}
         onClose={handleModalClose}
         onSaved={handleModalSaved}
+        onRequestTour={handleRequestTour}
       />
+      <ProductTour steps={ONBOARDING_TOUR_STEPS} active={tourActive} onFinish={handleTourFinish} />
     </div>
   );
 }

@@ -8,6 +8,7 @@ import type { CurrentCandidate } from "@/lib/candidate-session";
 import type { getDashboardSummary } from "@/lib/dashboard-reads";
 import type { getCandidateCohortStatus } from "@/lib/profile-reads";
 import { ProfileCompletionPrompt } from "@/components/portal/profile-completion-prompt";
+import { UnlockedFeaturesTour } from "@/components/portal/unlocked-features-tour";
 
 type Summary = Awaited<ReturnType<typeof getDashboardSummary>>;
 type CohortStatus = Awaited<ReturnType<typeof getCandidateCohortStatus>>;
@@ -57,6 +58,7 @@ export function EnrolledDashboard({
       </div>
 
       <ProfileCompletionPrompt candidate={candidate} />
+      <UnlockedFeaturesTour />
 
       {upcomingExam && (
         <Card elev="md" stripe="blue" className="p-[var(--space-5)]">

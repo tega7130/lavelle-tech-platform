@@ -17,6 +17,7 @@ import { getPaymentStatus, getGuestCheckoutStatus } from "@/lib/catalogue-reads"
 import { p2002Target } from "@/lib/prisma-errors";
 import { hashPassword } from "@/lib/password";
 import { consumeVerifiedOtp } from "@/lib/email-otp";
+import { verifyRecaptcha } from "@/lib/recaptcha";
 import crypto from "node:crypto";
 import type { FormActionState } from "@/lib/action-state";
 
@@ -224,6 +225,10 @@ export async function initiateGuestCheckout(_prev: FormActionState, formData: Fo
       return { message: "Too many checkout attempts. Please try again in about an hour.", values: raw };
     }
     throw e;
+  }
+
+  if (!(await verifyRecaptcha(raw.recaptchaToken, "guest_checkout"))) {
+    return { message: "Something went wrong. Please refresh and try again.", values: raw };
   }
 
   const emailVerified = await consumeVerifiedOtp(data.email);

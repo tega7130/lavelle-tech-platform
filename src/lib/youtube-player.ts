@@ -13,6 +13,10 @@ export interface YouTubePlayer {
 }
 
 interface YouTubePlayerOptions {
+  // start: seconds into the video to begin playback at — the resume-
+  // position seek for a YouTube embed, set once at construction rather
+  // than via a seekTo() call after onReady (both work; this is simpler).
+  playerVars?: { start?: number };
   events?: {
     onReady?: (event: { target: YouTubePlayer }) => void;
     onStateChange?: (event: { data: number; target: YouTubePlayer }) => void;

@@ -12,6 +12,7 @@ import { Label, Input, FieldError } from "@/components/ui/field";
 import { PasswordInput } from "@/components/ui/password-input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { PHONE_CODES } from "@/lib/phone-codes";
+import { useRecaptchaToken } from "@/lib/use-recaptcha";
 
 async function initiateGoogleOAuth() {
   try {
@@ -82,6 +83,8 @@ export default function RegisterPage() {
     emptyActionState
   );
   const [registerState, registerAction, registerPending] = useActionState(registerCandidate, emptyActionState);
+  const otpRecaptchaToken = useRecaptchaToken("register_otp");
+  const registerRecaptchaToken = useRecaptchaToken("register");
 
   // Adjust local state during render when a new server result comes in,
   // rather than in an effect — a single render pass, not a cascading extra
@@ -146,6 +149,7 @@ export default function RegisterPage() {
   function sendCode() {
     const fd = new FormData();
     fd.set("email", values.email);
+    fd.set("recaptchaToken", otpRecaptchaToken);
     React.startTransition(() => otpRequestAction(fd));
   }
 
@@ -169,6 +173,7 @@ export default function RegisterPage() {
       formChildren={
         <>
           <form action={registerAction} className="rounded-xl border border-divider bg-bg p-[34px_34px_30px] shadow-md">
+            <input type="hidden" name="recaptchaToken" value={registerRecaptchaToken} />
             <h2 className="text-[23px] font-semibold tracking-[-0.01em]">Create your candidate account</h2>
             <p className="mt-2.5 text-[13.5px] leading-[1.6] text-neutral-600 text-pretty">
               Registration takes a minute and commits you to nothing. You will receive a provisional applicant

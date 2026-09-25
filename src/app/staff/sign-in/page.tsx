@@ -10,6 +10,7 @@ import { AuthSplitScreen } from "@/components/auth/auth-split-screen";
 import { Button } from "@/components/ui/button";
 import { Label, Input, FieldError } from "@/components/ui/field";
 import { PasswordInput } from "@/components/ui/password-input";
+import { useRecaptchaToken } from "@/lib/use-recaptcha";
 
 // Mirrors STAFF_LOGIN_OTP_EXPIRY_MINUTES in src/lib/staff-login-otp.ts
 // (a server-only module this client component can't import) — same
@@ -23,6 +24,8 @@ function SignInForm() {
   const nextPath = searchParams.get("next");
   const [state, formAction, pending] = useActionState(staffSignIn, emptyActionState);
   const [values, setValues] = React.useState({ email: "", password: "" });
+  const loginRecaptchaToken = useRecaptchaToken("staff_login");
+  const otpRecaptchaToken = useRecaptchaToken("staff_login_otp");
   const [errors, setErrors] = React.useState<Record<string, string>>({});
   const [prevStateErrors, setPrevStateErrors] = React.useState(state.errors);
   if (state.errors !== prevStateErrors) {
@@ -42,7 +45,7 @@ function SignInForm() {
   async function sendOtpCode() {
     setOtpSendBusy(true);
     try {
-      await requestStaffLoginOtp(otpEmail);
+      await requestStaffLoginOtp(otpEmail, otpRecaptchaToken);
       setOtpStep("code");
     } finally {
       setOtpSendBusy(false);
@@ -138,6 +141,7 @@ function SignInForm() {
 
               <form action={formAction} className="flex flex-col gap-4">
                 <input type="hidden" name="next" value={nextPath ?? ""} />
+                <input type="hidden" name="recaptchaToken" value={loginRecaptchaToken} />
                 <div>
                   <Label htmlFor="email">Staff email address</Label>
                   <Input

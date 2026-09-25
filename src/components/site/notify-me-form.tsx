@@ -5,6 +5,7 @@ import { buttonClassName } from "@/components/ui/button";
 import { cn } from "@/lib/cn";
 import { subscribeToComingSoonAction } from "@/app/actions/programme-notifications";
 import { PHONE_CODES } from "@/lib/phone-codes";
+import { useRecaptchaToken } from "@/lib/use-recaptcha";
 
 export function NotifyMeForm({
   listingId,
@@ -26,12 +27,13 @@ export function NotifyMeForm({
   const [busy, setBusy] = React.useState(false);
   const [state, setState] = React.useState<"idle" | "done" | "error">("idle");
   const [error, setError] = React.useState<string | null>(null);
+  const recaptchaToken = useRecaptchaToken("notify_me");
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
     setError(null);
-    const result = await subscribeToComingSoonAction(listingId, name, phoneCountryCode, phone, email);
+    const result = await subscribeToComingSoonAction(listingId, name, phoneCountryCode, phone, email, recaptchaToken);
     setBusy(false);
     if (result?.ok) {
       setState("done");

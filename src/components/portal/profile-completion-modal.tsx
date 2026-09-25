@@ -96,11 +96,14 @@ export function ProfileCompletionModal({
   trigger,
   onClose,
   onSaved,
+  onRequestTour,
 }: {
   firstName: string;
   trigger: ProfileModalTrigger;
   onClose: () => void;
   onSaved: () => void;
+  /** When set, "Tell us about yourself" hands off to the caller (the product tour) instead of opening the form directly — the caller re-opens this modal at the "form" stage once the tour finishes. */
+  onRequestTour?: () => void;
 }) {
   const [stage, setStage] = React.useState<Stage>(trigger);
   const [step, setStep] = React.useState(1);
@@ -133,6 +136,11 @@ export function ProfileCompletionModal({
   }
 
   function openForm() {
+    if (onRequestTour) {
+      setStage("closed");
+      onRequestTour();
+      return;
+    }
     setStep(1);
     setStage("form");
   }
