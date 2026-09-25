@@ -14,14 +14,23 @@ export interface TourStop {
 const TOOLTIP_WIDTH = 300;
 const GAP = 12;
 
+/** candidate-shell.tsx listens for this to open/close the mobile nav drawer for the duration of a tour — see the dispatch effect below for why. */
+export const TOUR_NAV_EVENT = "lavelle:tour-nav";
+
 /**
  * A lightweight, dependency-free spotlight/tooltip walkthrough — no
  * library, matching the rest of this codebase's hand-built components.
- * Targets desktop primarily: the sidebar nav it points at (data-tour
- * attributes in candidate-shell.tsx) is CSS-hidden below the md
- * breakpoint, so a target with a zero-size rect there falls back to a
- * centered, spotlight-less tooltip rather than drawing a broken cutout
- * around nothing.
+ *
+ * The nav it points at renders twice — once in the always-in-DOM desktop
+ * sidebar (CSS-hidden below the md breakpoint via "hidden md:flex", not
+ * unmounted), once in the mobile drawer (only mounted while open) — both
+ * copies carry the same data-tour attribute (candidate-shell.tsx). measure()
+ * below picks whichever copy actually has a non-zero size instead of just
+ * the first DOM match, and the TOUR_NAV_EVENT dispatch on activation tells
+ * CandidateShell to open its drawer so there's a visible mobile copy to
+ * find at all — without that, a mobile candidate would only ever see the
+ * hidden desktop copy (zero size) and get the spotlight-less fallback for
+ * every step, not just ones the drawer doesn't cover.
  */
 export function ProductTour({
   steps,
@@ -42,20 +51,44 @@ export function ProductTour({
     if (active) setIndex(0);
   }, [active]);
 
+  // Tells CandidateShell to open (and, on cleanup, close) its mobile nav
+  // drawer for the duration of the tour — harmless on desktop, where the
+  // drawer itself renders "flex md:hidden" regardless of open state.
+  React.useEffect(() => {
+    window.dispatchEvent(new CustomEvent<boolean>(TOUR_NAV_EVENT, { detail: active }));
+    if (!active) return;
+    return () => {
+      window.dispatchEvent(new CustomEvent<boolean>(TOUR_NAV_EVENT, { detail: false }));
+    };
+  }, [active]);
+
   const step = active ? steps[index] : undefined;
 
   React.useEffect(() => {
     if (!step) return;
 
     function measure() {
-      const el = document.querySelector(step!.target);
-      const r = el ? el.getBoundingClientRect() : null;
-      setRect(r && r.width > 0 && r.height > 0 ? r : null);
+      // Prefer the first VISIBLE match — the desktop sidebar copy is
+      // always in the DOM (just CSS-hidden on mobile), so a plain
+      // querySelector would always find that one first and report a
+      // zero-size rect on mobile even once the drawer copy is open.
+      const candidates = document.querySelectorAll<HTMLElement>(step!.target);
+      let found: DOMRect | null = null;
+      for (const el of candidates) {
+        const r = el.getBoundingClientRect();
+        if (r.width > 0 && r.height > 0) {
+          found = r;
+          break;
+        }
+      }
+      setRect(found);
     }
 
     measure();
     // A beat after mount — covers a target that renders just after this
-    // effect runs, without needing a MutationObserver for a 7/4-step tour.
+    // effect runs (the drawer opening in response to the event above is
+    // its own async re-render), without needing a MutationObserver for a
+    // 7/4-step tour.
     const retry = setTimeout(measure, 150);
     window.addEventListener("resize", measure);
     window.addEventListener("scroll", measure, true);
@@ -78,12 +111,15 @@ export function ProductTour({
     setIndex((i) => Math.max(0, i - 1));
   }
 
-  let tooltipStyle: React.CSSProperties = { position: "fixed", zIndex: 101, width: TOOLTIP_WIDTH };
+  // Clamped to the viewport width minus gaps — a narrow phone (< 324px)
+  // would otherwise overflow a fixed 300px tooltip off-screen.
+  const tooltipWidth = Math.min(TOOLTIP_WIDTH, window.innerWidth - GAP * 2);
+  let tooltipStyle: React.CSSProperties = { position: "fixed", zIndex: 101, width: tooltipWidth };
   if (rect) {
     const spaceBelow = window.innerHeight - rect.bottom;
     const top =
       spaceBelow > 200 ? rect.bottom + GAP : Math.max(GAP, rect.top - 200);
-    const left = Math.min(Math.max(GAP, rect.left), window.innerWidth - TOOLTIP_WIDTH - GAP);
+    const left = Math.min(Math.max(GAP, rect.left), window.innerWidth - tooltipWidth - GAP);
     tooltipStyle = { ...tooltipStyle, top, left };
   } else {
     tooltipStyle = { ...tooltipStyle, top: "50%", left: "50%", transform: "translate(-50%, -50%)" };

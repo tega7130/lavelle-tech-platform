@@ -33,6 +33,7 @@ import {
 import { LogoMark } from "@/components/ui/logo-mark";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
+import { TOUR_NAV_EVENT } from "@/components/portal/product-tour";
 
 export interface CandidateShellNavItem {
   key: string;
@@ -145,6 +146,19 @@ export function CandidateShell({
   React.useEffect(() => {
     setNavOpen(false);
   }, [pathname]);
+
+  // The onboarding/unlocked-features product tours (product-tour.tsx) fire
+  // this to open the drawer for the duration of a tour on mobile, where the
+  // nav otherwise only exists behind the hamburger — and to close it again
+  // once the tour finishes or is skipped. A harmless no-op on desktop,
+  // where the drawer itself renders "flex md:hidden" regardless of navOpen.
+  React.useEffect(() => {
+    function onTourNav(e: Event) {
+      setNavOpen(!!(e as CustomEvent<boolean>).detail);
+    }
+    window.addEventListener(TOUR_NAV_EVENT, onTourNav);
+    return () => window.removeEventListener(TOUR_NAV_EVENT, onTourNav);
+  }, []);
 
   React.useEffect(() => {
     if (!inboxOpen) return;
