@@ -16,7 +16,7 @@ const ALLOWED_MIME_TYPES: Record<string, string[]> = {
   programme: ["video/mp4", "video/webm", "video/quicktime", "image/jpeg", "image/png", "image/webp"],
   blog: ["image/jpeg", "image/png", "image/webp", "image/gif"],
   certificate: ["application/pdf"],
-  document_library: ["application/pdf"],
+  document_library: ["application/pdf", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/vnd.ms-word.document.macroEnabled.12"],
   finance: ["image/jpeg", "image/png", "image/webp", "application/pdf"],
   candidate_photo: ["image/jpeg", "image/png", "image/webp"],
 };
@@ -30,6 +30,9 @@ const EXTENSION_BY_MIME_TYPE: Record<string, string[]> = {
   "image/webp": ["webp"],
   "image/gif": ["gif"],
   "application/pdf": ["pdf"],
+  "application/msword": ["doc"],
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ["docx"],
+  "application/vnd.ms-word.document.macroEnabled.12": ["docm"],
 };
 
 function getFileExtension(filename: string): string {

@@ -77,6 +77,7 @@ export function LecturePlayer({ enrolmentId, data }: { enrolmentId: string; data
   const [slideIndex, setSlideIndex] = React.useState(resumePosition.slideIndex);
   const [mediaBuffering, setMediaBuffering] = React.useState(lecture.mediaKind === "VIDEO");
   const videoRef = React.useRef<HTMLVideoElement>(null);
+  const hasSeekedToResumeRef = React.useRef(false);
   const narrationRef = React.useRef<HTMLAudioElement>(null);
   const [narrationPlayed, setNarrationPlayed] = React.useState(false);
 
@@ -141,6 +142,7 @@ export function LecturePlayer({ enrolmentId, data }: { enrolmentId: string; data
     loadYouTubeIframeApi().then((YT) => {
       if (destroyed) return;
       player = new YT.Player(youtubePlayerElementId, {
+        playerVars: resumePosition.mediaPositionSeconds > 0 ? { start: resumePosition.mediaPositionSeconds } : undefined,
         events: {
           onStateChange: (event) => {
             if (pollInterval) {
@@ -460,6 +462,14 @@ export function LecturePlayer({ enrolmentId, data }: { enrolmentId: string; data
                       onLoadedMetadata={(e) => {
                         const d = e.currentTarget.duration;
                         if (Number.isFinite(d) && d > 0) positionRef.current.mediaDurationSeconds = Math.floor(d);
+                        // Resume where the candidate left off — once per
+                        // load, and only if there's meaningfully somewhere
+                        // to resume to (a fresh lecture starts at 0 same as
+                        // always).
+                        if (!hasSeekedToResumeRef.current && resumePosition.mediaPositionSeconds > 0) {
+                          hasSeekedToResumeRef.current = true;
+                          e.currentTarget.currentTime = resumePosition.mediaPositionSeconds;
+                        }
                       }}
                       onEnded={() => markStepComplete("content")}
                     />

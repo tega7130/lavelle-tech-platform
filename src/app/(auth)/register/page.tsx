@@ -12,6 +12,7 @@ import { Label, Input, FieldError } from "@/components/ui/field";
 import { PasswordInput } from "@/components/ui/password-input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { PHONE_CODES } from "@/lib/phone-codes";
+import { useRecaptchaToken } from "@/lib/use-recaptcha";
 
 async function initiateGoogleOAuth() {
   try {
@@ -65,7 +66,6 @@ export default function RegisterPage() {
     phone: "",
     password: "",
     confirmPassword: "",
-    terms: false,
     marketingOptIn: true,
   });
   const [errors, setErrors] = React.useState<Record<string, string>>({});
@@ -83,6 +83,8 @@ export default function RegisterPage() {
     emptyActionState
   );
   const [registerState, registerAction, registerPending] = useActionState(registerCandidate, emptyActionState);
+  const otpRecaptchaToken = useRecaptchaToken("register_otp");
+  const registerRecaptchaToken = useRecaptchaToken("register");
 
   // Adjust local state during render when a new server result comes in,
   // rather than in an effect — a single render pass, not a cascading extra
@@ -132,7 +134,7 @@ export default function RegisterPage() {
     };
   }
 
-  function check(key: "terms" | "marketingOptIn") {
+  function check(key: "marketingOptIn") {
     return (e: React.ChangeEvent<HTMLInputElement>) => {
       setValues((v) => ({ ...v, [key]: e.target.checked }));
       setErrors((errs) => {
@@ -147,6 +149,7 @@ export default function RegisterPage() {
   function sendCode() {
     const fd = new FormData();
     fd.set("email", values.email);
+    fd.set("recaptchaToken", otpRecaptchaToken);
     React.startTransition(() => otpRequestAction(fd));
   }
 
@@ -170,6 +173,7 @@ export default function RegisterPage() {
       formChildren={
         <>
           <form action={registerAction} className="rounded-xl border border-divider bg-bg p-[34px_34px_30px] shadow-md">
+            <input type="hidden" name="recaptchaToken" value={registerRecaptchaToken} />
             <h2 className="text-[23px] font-semibold tracking-[-0.01em]">Create your candidate account</h2>
             <p className="mt-2.5 text-[13.5px] leading-[1.6] text-neutral-600 text-pretty">
               Registration takes a minute and commits you to nothing. You will receive a provisional applicant
@@ -311,20 +315,6 @@ export default function RegisterPage() {
 
               <div className="mt-1 flex flex-col gap-2.5">
                 <label className="flex items-start gap-2.5 text-[13px] leading-[1.5] text-neutral-700">
-                  <Checkbox name="terms" checked={values.terms} onChange={check("terms")} className="mt-0.5" />
-                  <span>
-                    I accept the{" "}
-                    <Link href="/terms" target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">
-                      Terms of Use
-                    </Link>{" "}
-                    and{" "}
-                    <Link href="/privacy" target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">
-                      Privacy Policy
-                    </Link>
-                  </span>
-                </label>
-                <FieldError>{errors.terms}</FieldError>
-                <label className="flex items-start gap-2.5 text-[13px] leading-[1.5] text-neutral-700">
                   <Checkbox
                     name="marketingOptIn"
                     checked={values.marketingOptIn}
@@ -373,6 +363,17 @@ export default function RegisterPage() {
                 </svg>
                 <span>{googleLoading ? "Redirecting…" : "Continue with Google"}</span>
               </button>
+              <div className="-mt-1 text-center text-[11.5px] leading-[1.5] text-neutral-500">
+                By creating an account, you accept the{" "}
+                <Link href="/terms" target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">
+                  Terms of Use
+                </Link>{" "}
+                and{" "}
+                <Link href="/privacy" target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">
+                  Privacy Policy
+                </Link>
+                .
+              </div>
             </div>
           </form>
 

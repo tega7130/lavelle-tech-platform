@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Label, Input, FieldError } from "@/components/ui/field";
 import { PasswordInput } from "@/components/ui/password-input";
 import { Checkbox } from "@/components/ui/checkbox";
+import { useRecaptchaToken } from "@/lib/use-recaptcha";
 
 function readCookie(name: string): string | null {
   if (typeof document === "undefined") return null;
@@ -52,6 +53,7 @@ function SignInForm() {
   const accountExists = oauthError === "account_exists";
   const [state, formAction, pending] = useActionState(signInCandidate, emptyActionState);
   const [googleLoading, setGoogleLoading] = React.useState(false);
+  const recaptchaToken = useRecaptchaToken("login");
   // Read once on mount — a plain, non-httpOnly cookie this browser's last
   // successful sign-in wrote, purely to hint which option to reach for
   // again. Not available during SSR, so this can't be computed during
@@ -104,6 +106,7 @@ function SignInForm() {
         <>
           <form action={formAction} className="rounded-xl border border-divider bg-bg p-8 pb-7 shadow-md">
             <input type="hidden" name="next" value={nextPath ?? ""} />
+            <input type="hidden" name="recaptchaToken" value={recaptchaToken} />
 
             {expired && !suspended && (
               <div className="mb-5 flex items-start gap-2.5 rounded-md border border-warning-border bg-warning-bg px-3.5 py-3">

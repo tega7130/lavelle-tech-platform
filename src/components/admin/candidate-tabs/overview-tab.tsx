@@ -7,6 +7,7 @@ import { Card, CardKicker } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input, Field, Label } from "@/components/ui/field";
 import { updateCandidateDetailsAction } from "@/app/actions/candidate-admin";
+import { professionalStatusLabel, experienceBandLabel } from "@/lib/format";
 
 export function CandidateOverviewTab({
   candidateId,
@@ -22,6 +23,15 @@ export function CandidateOverviewTab({
   paymentCount,
   certificateCount,
   openRequestCount,
+  professionalStatus,
+  yearOfCall,
+  scnNumber,
+  institution,
+  graduationYear,
+  organisation,
+  roleTitle,
+  experienceBand,
+  placeOfPractice,
 }: {
   candidateId: string;
   applicantNumber: string;
@@ -36,6 +46,15 @@ export function CandidateOverviewTab({
   paymentCount: number;
   certificateCount: number;
   openRequestCount: number;
+  professionalStatus: string | null;
+  yearOfCall: number | null;
+  scnNumber: string | null;
+  institution: string | null;
+  graduationYear: number | null;
+  organisation: string | null;
+  roleTitle: string | null;
+  experienceBand: string | null;
+  placeOfPractice: string | null;
 }) {
   const router = useRouter();
   const [editing, setEditing] = React.useState(false);
@@ -110,6 +129,68 @@ export function CandidateOverviewTab({
               </div>
             </div>
           </div>
+        )}
+      </Card>
+
+      <Card elev="sm">
+        <CardKicker>Professional details</CardKicker>
+        {professionalStatus ? (
+          <div className="grid grid-cols-2 gap-3 mt-2 text-[13px]">
+            <div>
+              <div className="text-neutral-500 text-xs">Status</div>
+              <div>{professionalStatusLabel(professionalStatus)}</div>
+            </div>
+            {yearOfCall != null && (
+              <div>
+                <div className="text-neutral-500 text-xs">Year of call</div>
+                <div className="tabular-nums">{yearOfCall}</div>
+              </div>
+            )}
+            {scnNumber && (
+              <div>
+                <div className="text-neutral-500 text-xs">SCN number</div>
+                <div>{scnNumber}</div>
+              </div>
+            )}
+            {institution && (
+              <div>
+                <div className="text-neutral-500 text-xs">Institution</div>
+                <div>{institution}</div>
+              </div>
+            )}
+            {graduationYear != null && (
+              <div>
+                <div className="text-neutral-500 text-xs">Graduation year</div>
+                <div className="tabular-nums">{graduationYear}</div>
+              </div>
+            )}
+            {organisation && (
+              <div>
+                <div className="text-neutral-500 text-xs">Organisation</div>
+                <div>{organisation}</div>
+              </div>
+            )}
+            {roleTitle && (
+              <div>
+                <div className="text-neutral-500 text-xs">Role</div>
+                <div>{roleTitle}</div>
+              </div>
+            )}
+            {experienceBand && (
+              <div>
+                <div className="text-neutral-500 text-xs">Experience</div>
+                <div>{experienceBandLabel(experienceBand)}</div>
+              </div>
+            )}
+            {placeOfPractice && (
+              <div>
+                <div className="text-neutral-500 text-xs">Place of practice</div>
+                <div>{placeOfPractice}</div>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="text-neutral-400 text-[13px] mt-2">Not provided yet</div>
         )}
       </Card>
 

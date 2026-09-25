@@ -7,6 +7,7 @@ import { getClientIp } from "@/lib/request-info";
 import { suspendCandidate, reactivateCandidate, updateCandidateDetails } from "@/lib/candidate-status";
 import { listUpcomingIntakes, transferCandidateIntake } from "@/lib/intake-transfer";
 import { getCandidateQuickView } from "@/lib/candidate-quickview-reads";
+import { previewLocationCleanup, applyLocationCleanup } from "@/lib/location-cleanup";
 
 export async function updateCandidateDetailsAction(
   candidateId: string,
@@ -52,5 +53,15 @@ export async function transferCandidateIntakeAction(enrolmentId: string, newInta
   const ip = await getClientIp();
   const result = await transferCandidateIntake(enrolmentId, newIntakeId, staff.id, ip);
   revalidatePath("/admin/candidates");
+  return result;
+}
+
+export async function previewLocationCleanupAction() {
+  return previewLocationCleanup();
+}
+
+export async function applyLocationCleanupAction() {
+  const result = await applyLocationCleanup();
+  revalidatePath("/admin/analytics/professional");
   return result;
 }

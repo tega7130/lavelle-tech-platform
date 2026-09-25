@@ -3,6 +3,7 @@
 import { z } from "zod";
 import { getClientIp } from "@/lib/request-info";
 import { submitEnquiryCore } from "@/lib/enquiry";
+import { verifyRecaptcha } from "@/lib/recaptcha";
 
 const enquirySchema = z.object({
   name: z.string().trim().min(1, { error: "Enter your full name." }),
@@ -30,6 +31,10 @@ export async function submitEnquiry(_prev: SubmitEnquiryState, formData: FormDat
     // Honeypot tripped — pretend success so the bot doesn't learn to
     // leave this field blank, but write nothing.
     return { ok: true, reference: "LVL-ENQ-0000" };
+  }
+
+  if (!(await verifyRecaptcha(String(raw.recaptchaToken ?? ""), "contact"))) {
+    return { ok: false, error: "Something went wrong. Please refresh and try again." };
   }
 
   const ip = await getClientIp();

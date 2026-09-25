@@ -8,6 +8,7 @@ import { requireStaffPermission } from "@/lib/staff-auth";
 import * as core from "@/lib/staff-auth-actions";
 import { staffSignInSchema, staffSetPasswordSchema, fieldErrors } from "@/lib/validation/staff";
 import type { FormActionState } from "@/lib/action-state";
+import { verifyRecaptcha } from "@/lib/recaptcha";
 
 function formToObject(formData: FormData): Record<string, string> {
   const obj: Record<string, string> = {};
@@ -19,6 +20,10 @@ export async function staffSignIn(_prev: FormActionState, formData: FormData): P
   const raw = formToObject(formData);
   const parsed = staffSignInSchema.safeParse(raw);
   if (!parsed.success) return { errors: fieldErrors(parsed.error), values: raw };
+
+  if (!(await verifyRecaptcha(raw.recaptchaToken, "staff_login"))) {
+    return { values: raw, message: "Something went wrong. Please refresh and try again." };
+  }
 
   const ip = await getClientIp();
   const userAgent = await getUserAgent();
@@ -34,7 +39,8 @@ export async function staffSignIn(_prev: FormActionState, formData: FormData): P
 }
 
 /** Silent by design (same rule as requestStaffPasswordReset) — the caller never learns whether the address matched a real account. */
-export async function requestStaffLoginOtp(email: string): Promise<void> {
+export async function requestStaffLoginOtp(email: string, recaptchaToken?: string): Promise<void> {
+  if (!(await verifyRecaptcha(recaptchaToken, "staff_login_otp"))) return;
   const ip = await getClientIp();
   await core.requestStaffLoginOtpCore(email.trim().toLowerCase(), ip);
 }
@@ -114,7 +120,8 @@ export async function resendStaffInvitation(staffId: string): Promise<{ emailSen
   return core.resendStaffInvitationCore(staffId, actor.id);
 }
 
-export async function requestStaffPasswordReset(email: string): Promise<void> {
+export async function requestStaffPasswordReset(email: string, recaptchaToken?: string): Promise<void> {
+  if (!(await verifyRecaptcha(recaptchaToken, "staff_forgot_password"))) return;
   const ip = await getClientIp();
   await core.requestStaffPasswordResetCore(email.trim().toLowerCase(), ip);
 }

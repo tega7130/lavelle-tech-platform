@@ -6,6 +6,7 @@ import { submitEnquiry, type SubmitEnquiryState } from "@/app/actions/website";
 import { buttonClassName } from "@/components/ui/button";
 import { Reveal, CTA_HOVER } from "@/components/site/motion";
 import { cn } from "@/lib/cn";
+import { useRecaptchaToken } from "@/lib/use-recaptcha";
 
 const YEARS_OPTIONS = ["Not yet called", "0–2 years", "3–5 years", "6–10 years", "10+ years"];
 
@@ -15,6 +16,7 @@ const FIELD_AREA = "lv-in w-full px-3 py-[11px] rounded-[9px] border border-neut
 
 export function ContactForm({ listings }: { listings: { code: string; title: string }[] }) {
   const [state, formAction, pending] = useActionState<SubmitEnquiryState, FormData>(submitEnquiry, null);
+  const recaptchaToken = useRecaptchaToken("contact");
 
   if (state?.ok) {
     return (
@@ -35,6 +37,7 @@ export function ContactForm({ listings }: { listings: { code: string; title: str
 
   return (
     <form action={formAction}>
+      <input type="hidden" name="recaptchaToken" value={recaptchaToken} />
       <Reveal threshold={0.05}><h3 className="font-heading font-semibold text-[19px]">Contact a representative</h3></Reveal>
       <Reveal delay={60} threshold={0.05}><div className="text-[12.5px] text-neutral-700 mt-[5px]">We reply within one working day.</div></Reveal>
 
