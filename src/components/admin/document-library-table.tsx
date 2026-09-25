@@ -13,11 +13,15 @@ import { ACCEPTED_DOCUMENT_MIME_TYPES } from "@/lib/document-library";
 import { DocumentCategoryPicker, type DocumentCategoryOption } from "@/components/admin/document-category-picker";
 import {
   updateDocumentTemplateAction,
+  replaceDocumentFileAction,
   setDocumentTemplateActiveAction,
   deleteDocumentTemplateAction,
   getDocumentFileUrlAction,
   setComplementaryTemplatesAction,
 } from "@/app/actions/document-library";
+import { uploadToStorage } from "@/lib/storage-upload";
+import { finaliseUpload } from "@/app/actions/uploads";
+import { ACCEPTED_DOCUMENT_EXTENSIONS, MAX_DOCUMENT_BYTES, isAcceptedDocumentMimeType } from "@/lib/document-library";
 import type { listDocumentTemplates } from "@/lib/document-library-reads";
 
 type DocumentRow = Awaited<ReturnType<typeof listDocumentTemplates>>[number];
@@ -53,6 +57,9 @@ function EditDocumentDialog({
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [fileUrlLoading, setFileUrlLoading] = React.useState(false);
+  const [newFile, setNewFile] = React.useState<{ storageKey: string; fileType: string; fileName: string; fileBytes: number } | null>(null);
+  const [fileUploading, setFileUploading] = React.useState(false);
+  const [fileError, setFileError] = React.useState<string | null>(null);
 
   const otherDocuments = allDocuments.filter((d) => d.id !== document.id);
 
@@ -67,6 +74,36 @@ function EditDocumentDialog({
       window.open(url, "_blank", "noopener,noreferrer");
     } finally {
       setFileUrlLoading(false);
+    }
+  }
+
+  async function handleFileSelect(selected: File) {
+    setFileError(null);
+    if (!isAcceptedDocumentMimeType(selected.type)) {
+      setFileError(`Unsupported file type. Accepted types: ${ACCEPTED_DOCUMENT_EXTENSIONS.join(", ")}.`);
+      return;
+    }
+    if (selected.size > MAX_DOCUMENT_BYTES) {
+      setFileError(`File is too large (max ${Math.round(MAX_DOCUMENT_BYTES / (1024 * 1024))}MB).`);
+      return;
+    }
+    setFileUploading(true);
+    try {
+      const uploaded = await uploadToStorage(selected, "document_library");
+      const asset = await finaliseUpload({
+        storageKey: uploaded.storageKey,
+        kind: "document",
+        mimeType: selected.type,
+        originalFilename: selected.name,
+        bytes: uploaded.bytes,
+        durationSeconds: null,
+        purpose: "document_library",
+      });
+      setNewFile({ storageKey: asset.storageKey, fileType: asset.mimeType, fileName: asset.originalFilename, fileBytes: asset.bytes });
+    } catch (e) {
+      setFileError(e instanceof Error ? e.message : "Upload failed.");
+    } finally {
+      setFileUploading(false);
     }
   }
 
@@ -86,6 +123,9 @@ function EditDocumentDialog({
     }
     setBusy(true);
     try {
+      if (newFile) {
+        await replaceDocumentFileAction(document.id, newFile);
+      }
       await updateDocumentTemplateAction(document.id, {
         title,
         categoryId,
@@ -108,18 +148,71 @@ function EditDocumentDialog({
       <div className="flex flex-col gap-3">
         <Field>
           <Label>Document file</Label>
-          <div className="flex items-center justify-between gap-3 rounded-md border border-neutral-300 px-3 py-2.5">
-            <div className="min-w-0 text-[12.5px] text-neutral-700">
-              <div className="truncate">{document.fileName}</div>
-              <div className="text-neutral-500 text-[11px] mt-0.5">
-                {ACCEPTED_DOCUMENT_MIME_TYPES[document.fileType] ?? document.fileType} · {formatBytes(document.fileBytes)}
+          {newFile ? (
+            <div className="flex flex-col gap-2">
+              <div className="rounded-md border border-green-300 bg-green-50 px-3 py-2.5">
+                <div className="text-[12.5px] font-medium text-green-900">New file selected:</div>
+                <div className="text-[12.5px] text-green-800 mt-1">
+                  <div className="truncate">{newFile.fileName}</div>
+                  <div className="text-[11px] mt-0.5">
+                    {ACCEPTED_DOCUMENT_MIME_TYPES[newFile.fileType] ?? newFile.fileType} · {formatBytes(newFile.fileBytes)}
+                  </div>
+                </div>
               </div>
+              <div className="flex items-center justify-between gap-3 rounded-md border border-neutral-300 px-3 py-2.5">
+                <div className="min-w-0 text-[12.5px] text-neutral-600">
+                  <div className="text-[11px] text-neutral-500">Current file:</div>
+                  <div className="truncate">{document.fileName}</div>
+                  <div className="text-neutral-500 text-[11px] mt-0.5">
+                    {ACCEPTED_DOCUMENT_MIME_TYPES[document.fileType] ?? document.fileType} · {formatBytes(document.fileBytes)}
+                  </div>
+                </div>
+                <Button variant="secondary" className="h-8 flex-none text-[12px]" disabled={fileUrlLoading} onClick={viewFile}>
+                  {fileUrlLoading ? "Opening…" : "View"}
+                </Button>
+              </div>
+              <Button variant="secondary" className="text-[12px]" onClick={() => setNewFile(null)}>
+                Cancel replacement
+              </Button>
             </div>
-            <Button variant="secondary" className="h-8 flex-none text-[12px]" disabled={fileUrlLoading} onClick={viewFile}>
-              {fileUrlLoading ? "Opening…" : "View file"}
-            </Button>
-          </div>
-          <div className="text-neutral-500 text-[11.5px] mt-1">To replace the file itself, delete this document and upload a new one.</div>
+          ) : (
+            <>
+              <div className="flex items-center justify-between gap-3 rounded-md border border-neutral-300 px-3 py-2.5">
+                <div className="min-w-0 text-[12.5px] text-neutral-700">
+                  <div className="truncate">{document.fileName}</div>
+                  <div className="text-neutral-500 text-[11px] mt-0.5">
+                    {ACCEPTED_DOCUMENT_MIME_TYPES[document.fileType] ?? document.fileType} · {formatBytes(document.fileBytes)}
+                  </div>
+                </div>
+                <div className="flex gap-1.5 flex-none">
+                  <Button variant="secondary" className="h-8 text-[12px]" disabled={fileUrlLoading} onClick={viewFile}>
+                    {fileUrlLoading ? "Opening…" : "View file"}
+                  </Button>
+                  <label className="h-8">
+                    <input
+                      type="file"
+                      accept={ACCEPTED_DOCUMENT_EXTENSIONS.join(",")}
+                      disabled={fileUploading}
+                      onChange={(e) => {
+                        const selected = e.target.files?.[0];
+                        if (selected) void handleFileSelect(selected);
+                        e.target.value = "";
+                      }}
+                      className="hidden"
+                    />
+                    <button
+                      type="button"
+                      disabled={fileUploading}
+                      className="h-8 px-3 text-[12px] rounded border border-neutral-300 bg-white text-neutral-700 hover:bg-neutral-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {fileUploading ? "Uploading…" : "Replace"}
+                    </button>
+                  </label>
+                </div>
+              </div>
+              {fileError && <div className="text-[11.5px] text-[#912019] mt-1">{fileError}</div>}
+            </>
+          )}
         </Field>
 
         <Field>
