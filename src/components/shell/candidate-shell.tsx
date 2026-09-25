@@ -203,6 +203,7 @@ export function CandidateShell({
                 key={item.key}
                 href={item.href}
                 onClick={onLinkClick}
+                data-tour={`nav-${item.key}`}
                 className={cn(
                   "flex items-center gap-[10px] px-[var(--space-3)] py-[9px] rounded-md text-sm no-underline",
                   active ? "text-accent bg-accent-100" : "text-text hover:bg-neutral-100"
