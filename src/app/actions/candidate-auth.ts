@@ -231,7 +231,7 @@ export async function registerCandidate(
         result.candidate.email,
         {
           firstName: getFirstName(result.candidate.firstName),
-          exploreProgrammesUrl: `${process.env.NEXTAUTH_URL}/programmes`,
+          exploreProgrammesUrl: `${process.env.NEXTAUTH_URL}/sign-in`,
           currentYear: new Date().getFullYear(),
         }
       );
