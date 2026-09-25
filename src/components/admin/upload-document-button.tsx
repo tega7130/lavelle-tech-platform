@@ -23,7 +23,7 @@ function formatBytes(bytes: number) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-const ACCEPT_ATTR = ".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+const ACCEPT_ATTR = ".pdf,.doc,.docx,.docm,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-word.document.macroEnabled.12";
 
 export function UploadDocumentButton({
   label = "Upload Document",
@@ -178,7 +178,7 @@ export function UploadDocumentButton({
                     className="text-[12.5px]"
                   />
                   <div className="text-neutral-500 text-[11.5px] mt-1">
-                    PDF or DOCX, up to {Math.round(MAX_DOCUMENT_BYTES / (1024 * 1024))}MB.
+                    PDF or Word (DOC, DOCX, DOCM), up to {Math.round(MAX_DOCUMENT_BYTES / (1024 * 1024))}MB.
                   </div>
                 </>
               )}
