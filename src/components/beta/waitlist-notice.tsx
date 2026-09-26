@@ -3,12 +3,12 @@
 import * as React from "react";
 import { Field, Textarea } from "@/components/ui/field";
 import { Button } from "@/components/ui/button";
-import { BetaFeature, BetaFeedbackKind } from "@/generated/prisma/client";
 import { submitBetaFeedbackAction } from "@/app/actions/beta-access";
+import { BETA_FEEDBACK_KIND, type BetaFeature } from "@/lib/beta-types";
 
 const FEATURE_LABEL: Record<BetaFeature, string> = {
-  [BetaFeature.PROGRAMME]: "course enrolment",
-  [BetaFeature.DOCUMENT_LIBRARY]: "Document Library",
+  PROGRAMME: "course enrolment",
+  DOCUMENT_LIBRARY: "Document Library",
 };
 
 /** Shown in place of an error toast when a checkout action returns `waitlisted: true`. */
@@ -22,7 +22,7 @@ export function WaitlistNotice({ feature }: { feature: BetaFeature }) {
     if (!trimmed) return;
     setSubmitting(true);
     try {
-      await submitBetaFeedbackAction(feature, BetaFeedbackKind.WAITLIST_INTEREST, trimmed);
+      await submitBetaFeedbackAction(feature, BETA_FEEDBACK_KIND.WAITLIST_INTEREST, trimmed);
       setState("submitted");
     } finally {
       setSubmitting(false);

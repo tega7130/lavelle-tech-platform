@@ -4,8 +4,8 @@ import * as React from "react";
 import { Dialog } from "@/components/ui/dialog";
 import { Field, Textarea } from "@/components/ui/field";
 import { Button } from "@/components/ui/button";
-import { BetaFeature, BetaFeedbackKind } from "@/generated/prisma/client";
 import { submitBetaFeedbackAction } from "@/app/actions/beta-access";
+import { BETA_FEEDBACK_KIND, type BetaFeature } from "@/lib/beta-types";
 
 /**
  * Un-dismissable by design (no skip) — the calling page only renders this
@@ -29,7 +29,7 @@ export function CompletionFeedbackModal({ feature, heading }: { feature: BetaFea
     setSubmitting(true);
     setError(null);
     try {
-      await submitBetaFeedbackAction(feature, BetaFeedbackKind.COMPLETION, trimmed);
+      await submitBetaFeedbackAction(feature, BETA_FEEDBACK_KIND.COMPLETION, trimmed);
       setSubmitted(true);
     } catch {
       setError("Something went wrong submitting your feedback. Please try again.");

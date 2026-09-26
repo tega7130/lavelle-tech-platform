@@ -6,7 +6,7 @@ import { useToast } from "@/components/ui/toast";
 import { getDocumentFileAccessAction } from "@/app/actions/document-purchase";
 import { shouldShowBetaCompletionFeedbackAction } from "@/app/actions/beta-access";
 import { CompletionFeedbackModal } from "@/components/beta/completion-feedback-modal";
-import { BetaFeature } from "@/generated/prisma/client";
+import { BETA_FEATURE } from "@/lib/beta-types";
 
 interface DocumentFileButtonProps {
   documentTemplateId: string;
@@ -27,7 +27,7 @@ function useOpenDocument(documentTemplateId: string, mode: "download" | "view") 
         const url = await getDocumentFileAccessAction(documentTemplateId, mode);
         window.open(url, "_blank", "noopener,noreferrer");
         if (mode === "download") {
-          shouldShowBetaCompletionFeedbackAction(BetaFeature.DOCUMENT_LIBRARY).then((show) => {
+          shouldShowBetaCompletionFeedbackAction(BETA_FEATURE.DOCUMENT_LIBRARY).then((show) => {
             if (show) setShowFeedback(true);
           });
         }
@@ -47,7 +47,7 @@ export function DownloadButton({ documentTemplateId, variant = "primary", classN
       <Button type="button" variant={variant} onClick={open} disabled={pending} className={className}>
         {pending ? "Preparing…" : "Download"}
       </Button>
-      {showFeedback && <CompletionFeedbackModal feature={BetaFeature.DOCUMENT_LIBRARY} heading="How was your first download?" />}
+      {showFeedback && <CompletionFeedbackModal feature={BETA_FEATURE.DOCUMENT_LIBRARY} heading="How was your first download?" />}
     </>
   );
 }

@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/toast";
 import { markFeaturePublicAction } from "@/app/actions/beta-admin";
-import { BetaFeature } from "@/generated/prisma/client";
+import type { BetaFeature } from "@/lib/beta-types";
 
 export function MarkFeaturePublicButton({ feature, label }: { feature: BetaFeature; label: string }) {
   const { showToast } = useToast();

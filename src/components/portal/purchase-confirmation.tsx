@@ -8,7 +8,7 @@ import { useToast } from "@/components/ui/toast";
 import { formatNaira } from "@/lib/format";
 import { validateDiscountCodeAction, initiateDocumentPurchaseAction } from "@/app/actions/document-purchase";
 import { WaitlistNotice } from "@/components/beta/waitlist-notice";
-import { BetaFeature } from "@/generated/prisma/client";
+import { BETA_FEATURE } from "@/lib/beta-types";
 
 interface DiscountState {
   applying: boolean;
@@ -130,7 +130,7 @@ export function PurchaseButton({
 
             {waitlisted ? (
               <>
-                <WaitlistNotice feature={BetaFeature.DOCUMENT_LIBRARY} />
+                <WaitlistNotice feature={BETA_FEATURE.DOCUMENT_LIBRARY} />
                 <div className="flex justify-end">
                   <Button type="button" variant="secondary" onClick={close}>
                     Close

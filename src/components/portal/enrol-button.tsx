@@ -4,7 +4,7 @@ import * as React from "react";
 import { Button } from "@/components/ui/button";
 import { initiatePayment } from "@/app/actions/payment";
 import { WaitlistNotice } from "@/components/beta/waitlist-notice";
-import { BetaFeature } from "@/generated/prisma/client";
+import { BETA_FEATURE } from "@/lib/beta-types";
 
 export function EnrolButton({ programmeId, label }: { programmeId: string; label: string }) {
   const [pending, startTransition] = React.useTransition();
@@ -40,7 +40,7 @@ export function EnrolButton({ programmeId, label }: { programmeId: string; label
         {pending ? "Starting checkout…" : label}
       </Button>
       {error && <div className="text-[11.5px] text-[#b42318] mt-2">{error}</div>}
-      {waitlisted && <WaitlistNotice feature={BetaFeature.PROGRAMME} />}
+      {waitlisted && <WaitlistNotice feature={BETA_FEATURE.PROGRAMME} />}
     </div>
   );
 }

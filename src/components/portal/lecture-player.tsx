@@ -21,7 +21,7 @@ import type { LectureStep } from "@/lib/lecture-steps";
 import { completeStepAction, submitDraftingAction, completeProgrammeAction } from "@/app/actions/player";
 import { shouldShowBetaCompletionFeedbackAction } from "@/app/actions/beta-access";
 import { CompletionFeedbackModal } from "@/components/beta/completion-feedback-modal";
-import { BetaFeature } from "@/generated/prisma/client";
+import { BETA_FEATURE } from "@/lib/beta-types";
 import type { getLecturePlayer } from "@/lib/player-reads";
 
 function fireConfetti() {
@@ -181,7 +181,7 @@ export function LecturePlayer({ enrolmentId, data }: { enrolmentId: string; data
       const result = await completeStepAction(enrolmentId, lecture.id, step);
       router.refresh();
       if (result.isComplete) {
-        shouldShowBetaCompletionFeedbackAction(BetaFeature.PROGRAMME).then((show) => {
+        shouldShowBetaCompletionFeedbackAction(BETA_FEATURE.PROGRAMME).then((show) => {
           if (show) setShowBetaFeedback(true);
         });
       }
@@ -697,7 +697,7 @@ export function LecturePlayer({ enrolmentId, data }: { enrolmentId: string; data
         )}
       </Dialog>
 
-      {showBetaFeedback && <CompletionFeedbackModal feature={BetaFeature.PROGRAMME} heading="How was your first lecture?" />}
+      {showBetaFeedback && <CompletionFeedbackModal feature={BETA_FEATURE.PROGRAMME} heading="How was your first lecture?" />}
     </div>
   );
 }

@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/field";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { manualGrantAction } from "@/app/actions/beta-admin";
-import { BetaFeature } from "@/generated/prisma/client";
+import type { BetaFeature } from "@/lib/beta-types";
 
 export function ManualGrantForm({ feature }: { feature: BetaFeature }) {
   const { showToast } = useToast();
