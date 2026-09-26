@@ -29,7 +29,7 @@ export function Dialog({ open, onClose, title, children, actions, className }: D
   if (!open || typeof document === "undefined") return null;
   return createPortal(
     <div
-      className="fixed inset-0 z-50 grid place-items-center p-[var(--space-4)] bg-[rgba(19,26,46,0.45)]"
+      className="fixed inset-0 z-50 grid place-items-center p-3 sm:p-[var(--space-4)] bg-[rgba(19,26,46,0.45)]"
       onClick={onClose}
     >
       <div
@@ -37,12 +37,12 @@ export function Dialog({ open, onClose, title, children, actions, className }: D
         aria-modal="true"
         onClick={(e) => e.stopPropagation()}
         className={cn(
-          "relative flex flex-col w-[min(460px,100%)] max-h-[85vh] rounded-lg bg-bg shadow-lg overflow-hidden",
+          "relative flex flex-col w-[min(460px,100%)] max-h-[90vh] sm:max-h-[85vh] rounded-lg bg-bg shadow-lg overflow-hidden",
           className
         )}
       >
         <CloseButton onClose={onClose} />
-        <div className="flex flex-col gap-[var(--space-3)] p-[var(--space-6)] overflow-y-auto">
+        <div className="flex flex-col gap-[var(--space-3)] p-4 sm:p-[var(--space-6)] overflow-y-auto">
           {title && <div className="font-heading font-bold text-xl pr-8">{title}</div>}
           {children && <div className="text-sm text-neutral-700">{children}</div>}
           {actions && (

@@ -167,8 +167,8 @@ export function ProfileCompletionModal({
   if (stage === "closed") return null;
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center overflow-auto bg-[rgba(19,26,46,.45)] p-6">
-      <div className="relative max-h-[calc(100vh-80px)] w-full max-w-[452px] overflow-auto rounded-[14px] bg-bg shadow-lg">
+    <div className="fixed inset-0 z-[80] flex items-center justify-center overflow-auto bg-[rgba(19,26,46,.45)] p-4 sm:p-6">
+      <div className="relative max-h-[calc(100vh-48px)] sm:max-h-[calc(100vh-80px)] w-full max-w-[452px] overflow-auto rounded-[14px] bg-bg shadow-lg">
         <button
           onClick={close}
           aria-label="Close — you can finish this later"
@@ -179,7 +179,7 @@ export function ProfileCompletionModal({
         </button>
 
         {stage === "welcome" && (
-          <div className="p-[30px] pb-[26px] text-center">
+          <div className="p-5 sm:p-[30px] pb-6 sm:pb-[26px] text-center">
             <div className="font-heading text-lg font-semibold text-accent">Hello {firstName},</div>
             <h2 className="mx-auto mt-1.5 max-w-[24ch] text-xl leading-[1.35] text-balance">
               We&rsquo;d love to know a little more about you
@@ -189,11 +189,11 @@ export function ProfileCompletionModal({
               certificates and Candidate ID reflect your standing accurately.
             </p>
             <div className="mt-2.5 text-[11.5px] text-neutral-500">Five short questions — about a minute</div>
-            <div className="mt-6 flex gap-2.5">
-              <Button onClick={openForm} className="h-11 flex-1 px-3.5 text-[13.5px] whitespace-nowrap">
+            <div className="mt-6 flex flex-col sm:flex-row gap-2.5">
+              <Button onClick={openForm} className="h-11 flex-1 px-3 sm:px-3.5 text-[13px] sm:text-[13.5px]">
                 Tell us about yourself →
               </Button>
-              <Button variant="secondary" onClick={close} className="h-11 flex-1 px-3.5 text-[13.5px] whitespace-nowrap">
+              <Button variant="secondary" onClick={close} className="h-11 flex-1 px-3 sm:px-3.5 text-[13px] sm:text-[13.5px]">
                 I&rsquo;ll come back to this
               </Button>
             </div>
@@ -202,7 +202,7 @@ export function ProfileCompletionModal({
 
         {stage === "form" && (
           <>
-            <div className="border-b border-dashed border-neutral-300 pl-[30px] pr-12 pt-[18px] pb-3.5">
+            <div className="border-b border-dashed border-neutral-300 px-4 sm:pl-[30px] sm:pr-12 pt-4 sm:pt-[18px] pb-3.5">
               <div className="flex items-baseline justify-between gap-3">
                 <div className="text-[9.5px] tracking-[0.14em] text-accent-700 uppercase">Step {step} of 3</div>
                 <div className="text-[11px] text-neutral-600">
@@ -220,7 +220,7 @@ export function ProfileCompletionModal({
               </div>
             </div>
 
-            <div className="px-[30px] pt-5 pb-1">
+            <div className="px-4 sm:px-[30px] pt-5 pb-4 sm:pb-1">
               {step === 1 && (
                 <>
                   <h3 className="m-0 text-[17px]">What is your professional status?</h3>
@@ -353,7 +353,7 @@ export function ProfileCompletionModal({
               )}
             </div>
 
-            <div className="px-[30px] pt-[18px] pb-[22px]">
+            <div className="px-4 sm:px-[30px] pt-4 sm:pt-[18px] pb-5 sm:pb-[22px]">
               {saveError && (
                 <div className="mb-3 rounded-md border border-[#f3c4bf] bg-[#fdecec] px-3 py-2 text-[12.5px] text-[#912019]">
                   {saveError}
@@ -385,7 +385,7 @@ export function ProfileCompletionModal({
         )}
 
         {stage === "done" && (
-          <div className="p-9 px-[30px] pb-[30px] text-center">
+          <div className="p-5 sm:p-9 px-4 sm:px-[30px] pb-6 sm:pb-[30px] text-center">
             <div className="mx-auto flex h-[54px] w-[54px] items-center justify-center rounded-full border-[1.5px] border-accent-2-300 bg-accent-2-100">
               <svg width="26" height="26" viewBox="0 0 30 30" fill="none">
                 <circle cx="15" cy="15" r="11" fill="#ffc629" />

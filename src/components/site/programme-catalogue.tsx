@@ -34,14 +34,14 @@ export function ProgrammeCatalogue({ listings }: { listings: Listing[] }) {
 
   return (
     <div>
-      <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-wrap gap-2">
           {TIER_FILTERS.map((f) => (
             <button
               key={f.value}
               onClick={() => setTier(f.value)}
               className={cn(
-                "px-[14px] py-2 rounded-full text-[12.5px] font-semibold border transition cursor-pointer",
+                "px-3 sm:px-[14px] py-2 rounded-full text-[11px] sm:text-[12.5px] font-semibold border transition cursor-pointer whitespace-nowrap",
                 tier === f.value ? "bg-accent border-accent text-accent-2" : "bg-bg border-divider text-neutral-700 hover:border-accent-200"
               )}
             >
@@ -50,7 +50,7 @@ export function ProgrammeCatalogue({ listings }: { listings: Listing[] }) {
           ))}
         </div>
 
-        <div className="relative sm:w-[280px]">
+        <div className="relative w-full sm:w-[280px]">
           <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500">
             <circle cx="7" cy="7" r="5.2" />
             <path d="M11 11 14.5 14.5" />
@@ -72,12 +72,12 @@ export function ProgrammeCatalogue({ listings }: { listings: Listing[] }) {
           <p className="text-neutral-600 text-[13px] mt-2 max-w-[44ch] mx-auto">Try a different keyword or clear the tier filter.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-[18px] mt-10">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-[18px] mt-10">
           {filtered.map((p) => (
             <Link
               key={p.code}
               href={`/programmes/${p.code}`}
-              className="group block bg-bg border border-divider rounded-[14px] p-[26px] no-underline text-text transition hover:-translate-y-1 hover:shadow-[0_18px_40px_rgba(19,26,46,0.1)] hover:border-accent-200"
+              className="group block bg-bg border border-divider rounded-[14px] p-4 sm:p-[26px] no-underline text-text transition hover:-translate-y-1 hover:shadow-[0_18px_40px_rgba(19,26,46,0.1)] hover:border-accent-200"
             >
               <div className="flex items-center justify-between gap-[14px]">
                 <span className={cn("px-[11px] py-1 rounded-full text-[10px] font-semibold tracking-[0.05em] uppercase", p.tier === "FOUNDATION" ? "bg-neutral-100 text-neutral-700" : p.tier === "ADVANCED_PRACTITIONER" ? "bg-accent-2-100 text-accent-2-800" : "bg-accent-100 text-accent-700")}>
