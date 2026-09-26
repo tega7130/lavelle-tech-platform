@@ -351,9 +351,8 @@ export function ApplicantDashboard({ candidate }: { candidate: CurrentCandidate 
         trigger={trigger}
         onClose={handleModalClose}
         onSaved={handleModalSaved}
-        onRequestTour={handleRequestTour}
       />
-      <ProductTour steps={ONBOARDING_TOUR_STEPS} active={tourActive} onFinish={handleTourFinish} />
+      <ProductTour steps={CATALOGUE_NUDGE_STEPS} active={catalogueNudgeActive} onFinish={finishCatalogueNudge} />
     </div>
   );
 }

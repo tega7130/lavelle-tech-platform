@@ -98,7 +98,7 @@ async function handlePaymentSuccess(payment: Payment) {
         });
         const modules = await prisma.module.findMany({
           where: { programmeId: result.programme.id },
-          include: { lectures: { select: { narrationUrl: true } } },
+          include: { lectures: { select: { id: true, narrationUrl: true } } },
         });
         const lectures = modules.flatMap(m => m.lectures);
         const lectureCount = lectures.length;
