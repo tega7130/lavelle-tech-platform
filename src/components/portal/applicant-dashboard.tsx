@@ -8,7 +8,7 @@ import type { CurrentCandidate } from "@/lib/candidate-session";
 import { buttonClassName } from "@/components/ui/button";
 import { ProfileCompletionModal, type ProfileModalTrigger } from "@/components/portal/profile-completion-modal";
 import { ProductTour } from "@/components/portal/product-tour";
-import { ONBOARDING_TOUR_STEPS } from "@/lib/portal-tours";
+import { CATALOGUE_NUDGE_STEPS } from "@/lib/portal-tours";
 
 const REGISTRATION_STEPS = [
   { label: "Registration completed", meta: "Provisional applicant number issued", done: true },
@@ -25,6 +25,7 @@ const BENEFITS = [
 ];
 
 const DISMISSED_KEY = "lavelle_onb_dismissed_v1";
+const CATALOGUE_NUDGE_KEY = "lavelle_catalogue_nudge_shown_v1";
 
 export function ApplicantDashboard({ candidate }: { candidate: CurrentCandidate }) {
   const { checklist } = candidate;
@@ -35,7 +36,20 @@ export function ApplicantDashboard({ candidate }: { candidate: CurrentCandidate 
   const [justCompleted, setJustCompleted] = React.useState(false);
   const [showNudge, setShowNudge] = React.useState(false);
   const [resendMessage, setResendMessage] = React.useState<string | null>(null);
-  const [tourActive, setTourActive] = React.useState(false);
+  const [catalogueNudgeActive, setCatalogueNudgeActive] = React.useState(false);
+
+  // Shows the one-off Catalogue spotlight once, after the welcome/profile
+  // sequence has had its chance to run — never before it (see the mount
+  // effect and the modal-conclusion handlers below, the only two callers).
+  function maybeShowCatalogueNudge() {
+    if (window.localStorage.getItem(CATALOGUE_NUDGE_KEY)) return;
+    setCatalogueNudgeActive(true);
+  }
+
+  function finishCatalogueNudge() {
+    window.localStorage.setItem(CATALOGUE_NUDGE_KEY, "1");
+    setCatalogueNudgeActive(false);
+  }
 
   React.useEffect(() => {
     // A genuine one-time read from an external system (localStorage isn't
@@ -50,10 +64,19 @@ export function ApplicantDashboard({ candidate }: { candidate: CurrentCandidate 
       setTrigger("form");
       return;
     }
-    if (checklist.allDone) return;
     const dismissed = typeof window !== "undefined" && window.localStorage.getItem(DISMISSED_KEY);
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (!dismissed) setTrigger("welcome");
+    if (!checklist.allDone && !dismissed) {
+      // Fresh visitor — the welcome modal is about to run. The Catalogue
+      // nudge waits for it to conclude (handleModalClose/handleModalSaved
+      // below) rather than firing here, so it never appears alongside or
+      // ahead of the welcome screen.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setTrigger("welcome");
+      return;
+    }
+    // Returning visitor who already saw (or finished) the welcome/profile
+    // sequence on an earlier visit — nothing left to wait for.
+    maybeShowCatalogueNudge();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -61,24 +84,14 @@ export function ApplicantDashboard({ candidate }: { candidate: CurrentCandidate 
     window.localStorage.setItem(DISMISSED_KEY, "1");
     setTrigger("closed");
     setShowNudge(true);
+    maybeShowCatalogueNudge();
   }
 
   function handleModalSaved() {
     window.localStorage.setItem(DISMISSED_KEY, "1");
     setJustCompleted(true);
     setTrigger("closed");
-  }
-
-  // Handed off from the welcome screen's "Tell us about yourself" button
-  // (profile-completion-modal.tsx's openForm) — the tour runs with the
-  // modal closed, then reopens it directly at the form stage on finish.
-  function handleRequestTour() {
-    setTourActive(true);
-  }
-
-  function handleTourFinish() {
-    setTourActive(false);
-    setTrigger("form");
+    maybeShowCatalogueNudge();
   }
 
   async function handleResend() {
