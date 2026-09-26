@@ -34,13 +34,7 @@ export function ProgrammeOverview({ overview }: { overview: Overview }) {
           <div className="flex items-start justify-between gap-[var(--space-6)]">
             <div className="max-w-[56ch]">
               <h1 className="font-heading text-[26px] leading-tight m-0">{programme.title}</h1>
-              <p className="text-white/70 text-[13px] mt-2 mb-0">{programme.summary}</p>
-              <div className="flex gap-[var(--space-6)] mt-[var(--space-4)] text-[12px] text-white/60">
-                <div>
-                  <div className="text-white/45 text-[10px] uppercase tracking-[0.08em]">Cohort</div>
-                  <div className="text-white mt-0.5">{enrolment.cohortId ? "Placed" : "Placement pending"}</div>
-                </div>
-              </div>
+              <p className="text-white/70 text-[13px] leading-[1.6] mt-2 mb-0 whitespace-pre-line">{programme.summary}</p>
               {isComplete ? (
                 <div className="mt-[var(--space-5)] inline-flex items-center gap-2 bg-white/10 rounded-md px-4 py-2.5 text-[13px]">
                   Course complete — you&apos;re eligible to register for the certifying exam.
@@ -91,7 +85,7 @@ export function ProgrammeOverview({ overview }: { overview: Overview }) {
       {tab === "overview" && (
         <Card elev="sm">
           <CardKicker>About this programme</CardKicker>
-          <p className="text-[13px] text-neutral-700 mt-2 mb-0">{programme.summary}</p>
+          <p className="text-[13px] text-neutral-700 leading-[1.6] mt-2 mb-0 whitespace-pre-line">{programme.summary}</p>
           <div className="grid grid-cols-3 max-[540px]:grid-cols-1 gap-3 mt-[var(--space-4)] text-[13px]">
             <div>
               <div className="text-neutral-500 text-xs">Duration</div>

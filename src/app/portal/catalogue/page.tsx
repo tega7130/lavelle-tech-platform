@@ -51,7 +51,7 @@ export default async function CataloguePage({
                 <Tag variant="neutral" className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">{p.category.name}</Tag>
               </div>
               <CardTitle className="mt-1.5">{p.title}</CardTitle>
-              <CardBody>{p.summary}</CardBody>
+              <CardBody className="whitespace-pre-line">{p.summary}</CardBody>
               <CardMeta>
                 {p.weeks} weeks
               </CardMeta>

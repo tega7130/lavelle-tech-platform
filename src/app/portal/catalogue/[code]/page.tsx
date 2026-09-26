@@ -32,7 +32,7 @@ export default async function ProgrammeDetailPage({ params }: { params: Promise<
         <Tag variant="neutral">{programme.category.name}</Tag>
       </div>
       <h1 className="font-heading text-[28px] m-0">{programme.title}</h1>
-      <p className="text-[14px] text-neutral-600 max-w-[640px] mt-2">{programme.summary}</p>
+      <p className="text-[14px] text-neutral-600 leading-[1.6] max-w-[640px] mt-2 whitespace-pre-line">{programme.summary}</p>
 
       {(embedUrl || directVideoUrl) && (
         <div className="mt-[var(--space-4)] max-w-[640px] aspect-video overflow-hidden rounded-md border border-divider bg-[#0b1322]">
