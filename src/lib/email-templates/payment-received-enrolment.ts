@@ -61,7 +61,7 @@ export function generatePaymentReceivedEnrolmentEmail(variables: PaymentReceived
                                     <td style="padding: 8px 0; color: #4a4a4a; font-size: 14px; line-height: 1.6;">✓ Full programme syllabus and schedule</td>
                                 </tr>
                                 <tr>
-                                    <td style="padding: 8px 0; color: #4a4a4a; font-size: 14px; line-height: 1.6;">✓ Week 1 materials (lectures, resources)</td>
+                                    <td style="padding: 8px 0; color: #4a4a4a; font-size: 14px; line-height: 1.6;">✓ Weekly materials (lectures, resources)</td>
                                 </tr>
                                 <tr>
                                     <td style="padding: 8px 0; color: #4a4a4a; font-size: 14px; line-height: 1.6;">✓ Your study dashboard and deadlines</td>
@@ -114,7 +114,7 @@ WHAT'S NEXT
 Your enrolment in {{programmeName}} ({{tier}}) is now active. You have immediate access to:
 
 ✓ Full programme syllabus and schedule
-✓ Week 1 materials (lectures, resources)
+✓ Weekly materials (lectures, resources)
 ✓ Your study dashboard and deadlines
 ✓ Faculty contact and support
 
