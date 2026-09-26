@@ -14,15 +14,13 @@ const testEmail = "praise1564@gmail.com"; // Change to your test email
 const templateTestData: Record<TemplateName, Record<string, any>> = {
   "account-welcome": {
     firstName: "John",
-    explorationUrl: "http://localhost:3000/portal/programmes",
-    supportEmail: EMAIL_CONFIG.supportEmail,
+    exploreProgrammesUrl: "http://localhost:3000/sign-in",
     currentYear: 2026,
   },
   "email-verification-otp": {
     firstName: "John",
-    otp: "123456",
-    expiryMinutes: 48,
-    supportEmail: EMAIL_CONFIG.supportEmail,
+    otpCode: "123456",
+    otpExpiryMinutes: 48,
     currentYear: 2026,
   },
   "password-reset-request": {
@@ -36,8 +34,10 @@ const templateTestData: Record<TemplateName, Record<string, any>> = {
     firstName: "John",
     programmeName: "Advanced Legal Practice",
     tier: "ADVANCED_PRACTITIONER",
-    startDate: new Date().toLocaleDateString(),
+    startDate: "You can commence right now",
     duration: "12 weeks",
+    weeklyCommitment: "5 hours",
+    lectureDescription: "4 recorded lectures with narration",
     portalUrl: "http://localhost:3000/portal/programmes/123",
     supportEmail: EMAIL_CONFIG.supportEmail,
     currentYear: 2026,

@@ -72,6 +72,9 @@ export const ADMIN_NAV: AdminNavGroup[] = [
     items: [
       { key: "staff", label: "Staff & permissions", href: "/admin/staff" },
       { key: "auditlog", label: "Audit log", href: "/admin/audit-log" },
+      // Temporary — remove this row along with the rest of the beta-access
+      // feature once the beta ends (see schema.prisma's BetaFeature comment).
+      { key: "betaaccess", label: "Beta access", href: "/admin/beta-access" },
     ],
   },
 ];

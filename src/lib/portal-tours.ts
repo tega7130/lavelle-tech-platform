@@ -1,41 +1,19 @@
 import type { TourStop } from "@/components/portal/product-tour";
 
-/** First-time applicant walkthrough — every nav item usable before enrolling. Gated items (Programme, Deadlines, Assessment, Notes, Lavelle AI) are deliberately excluded; see ENROLLED_FEATURES_TOUR_STEPS. */
-export const ONBOARDING_TOUR_STEPS: TourStop[] = [
-  {
-    target: '[data-tour="nav-dashboard"]',
-    title: "Your dashboard",
-    body: "Your home base — see your applicant number, profile progress, and what to do next at a glance.",
-  },
+/**
+ * A single, focused nudge — not a full nav walkthrough — shown once the
+ * welcome screen and profile wizard conclude (saved or skipped). Points
+ * straight at Catalogue: enrolling in a programme is the primary reason a
+ * candidate registers in the first place, so this replaces an earlier
+ * 7-stop tour of every nav item, which diluted that with items (Document
+ * Library, Exams, Credentials, Profile & ID, Contact us) that weren't the
+ * point of this particular moment.
+ */
+export const CATALOGUE_NUDGE_STEPS: TourStop[] = [
   {
     target: '[data-tour="nav-catalogue"]',
-    title: "Catalogue",
-    body: "Browse every programme by specialization and tier, and enrol when you're ready. This is usually the first stop.",
-  },
-  {
-    target: '[data-tour="nav-library"]',
-    title: "Document Library",
-    body: "Purchase drafting templates and reference materials — available independently of any programme enrolment.",
-  },
-  {
-    target: '[data-tour="nav-exams"]',
-    title: "Exams",
-    body: "Register for a certifying examination — you can sit one even without enrolling in a full programme.",
-  },
-  {
-    target: '[data-tour="nav-credentials"]',
-    title: "Credentials",
-    body: "Every certificate you earn, and its public verification link, lives here once issued.",
-  },
-  {
-    target: '[data-tour="nav-profile"]',
-    title: "Profile & ID",
-    body: "Your identity details, photo, and Candidate ID card — keep this up to date.",
-  },
-  {
-    target: '[data-tour="nav-support"]',
-    title: "Contact us",
-    body: "Questions about registration, payment, or anything else — reach the registrar's office from here.",
+    title: "Choose your first programme",
+    body: "Browse the catalogue by specialization and tier, and enrol when you're ready — this is where your practice specialization begins.",
   },
 ];
 

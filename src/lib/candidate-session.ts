@@ -147,6 +147,9 @@ export interface CurrentCandidate {
   phone: string | null;
   /** Set when the account was created (or linked) via Google OAuth — used to require a phone number in the profile checklist, since Google sign-up never collects one. */
   googleId: string | null;
+  /** Applicant-dashboard onboarding sequence (welcome -> profile wizard -> Catalogue nudge) — per-account, not a localStorage flag, so it's consistent across browsers/devices and repeated test registrations. */
+  onboardingSeenAt: Date | null;
+  catalogueNudgeSeenAt: Date | null;
   emailVerifiedAt: Date | null;
   accountStatus: CandidateAccountStatus;
   isEnrolled: boolean;
@@ -229,6 +232,8 @@ export async function resolveCandidateFromToken(token: string): Promise<CurrentC
     phoneCountryCode: candidate.phoneCountryCode,
     phone: candidate.phone,
     googleId: candidate.googleId,
+    onboardingSeenAt: candidate.onboardingSeenAt,
+    catalogueNudgeSeenAt: candidate.catalogueNudgeSeenAt,
     emailVerifiedAt: candidate.emailVerifiedAt,
     accountStatus: candidate.accountStatus,
     isEnrolled: candidate.candidateNumber !== null,

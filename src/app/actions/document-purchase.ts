@@ -2,8 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { PaymentStatus } from "@/generated/prisma/client";
+import { PaymentStatus, BetaFeature } from "@/generated/prisma/client";
 import { getCurrentCandidate } from "@/lib/candidate-session";
+import { gateBeforeCheckout } from "@/lib/beta-gate";
 import { getClientIp } from "@/lib/request-info";
 import { createProviderCheckout } from "@/lib/payment-provider";
 import { getSignedAssetUrl } from "@/lib/storage";
@@ -87,9 +88,12 @@ async function createCheckoutOrMarkFailed(
 export async function initiateDocumentPurchaseAction(
   documentTemplateId: string,
   discountCode?: string
-): Promise<{ checkoutUrl: string | null; internalReference: string | null; error?: string }> {
+): Promise<{ checkoutUrl: string | null; internalReference: string | null; error?: string; waitlisted?: boolean }> {
   const candidate = await getCurrentCandidate();
   if (!candidate) throw new Error("Sign in required.");
+
+  const canProceed = await gateBeforeCheckout(candidate.id, BetaFeature.DOCUMENT_LIBRARY, { grantImmediately: true });
+  if (!canProceed) return { checkoutUrl: null, internalReference: null, waitlisted: true };
 
   const ip = await getClientIp();
   try {

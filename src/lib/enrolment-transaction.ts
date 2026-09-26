@@ -1,10 +1,11 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
-import { Prisma, PaymentStatus, EnrolmentStatus, GuestCheckoutStatus, NotificationCategory, type OfflinePaymentMode } from "@/generated/prisma/client";
+import { Prisma, PaymentStatus, EnrolmentStatus, GuestCheckoutStatus, NotificationCategory, BetaFeature, type OfflinePaymentMode } from "@/generated/prisma/client";
 import { recordAuditEvent } from "@/lib/audit";
 import { formatNaira } from "@/lib/format";
 import { generateDeadlinesForEnrolment } from "@/lib/deadline-generation";
 import { p2002Target } from "@/lib/prisma-errors";
+import { recordConfirmedPayment } from "@/lib/beta-gate";
 
 export interface OfflinePaymentFields {
   amountMinor: number; // the actual amount received — never silently truncated to the fee (rule 7)
@@ -28,6 +29,7 @@ export interface ConfirmPaymentOptions {
 export interface ConfirmPaymentResult {
   alreadyConfirmed: boolean;
   paymentId: string;
+  candidateId: string;
   enrolmentId: string | null;
   candidateNumberAssigned: boolean;
   cohortAssigned: boolean;
@@ -49,7 +51,7 @@ export interface ConfirmPaymentResult {
  * the cohort row rather than racing past the capacity check together.
  */
 export async function confirmPayment(paymentId: string, opts: ConfirmPaymentOptions): Promise<ConfirmPaymentResult> {
-  return prisma.$transaction(async (tx) => {
+  const result: ConfirmPaymentResult = await prisma.$transaction(async (tx) => {
     // Step 1 — lock the payment row first, always, so every caller
     // acquires locks in the same order (payment -> candidate -> cohort)
     // and a retried webhook racing a manual confirmation blocks here
@@ -66,6 +68,7 @@ export async function confirmPayment(paymentId: string, opts: ConfirmPaymentOpti
       return {
         alreadyConfirmed: true,
         paymentId,
+        candidateId: locked.candidateId!,
         enrolmentId: locked.enrolmentId,
         candidateNumberAssigned: false,
         cohortAssigned: false,
@@ -316,6 +319,7 @@ export async function confirmPayment(paymentId: string, opts: ConfirmPaymentOpti
     return {
       alreadyConfirmed: false,
       paymentId,
+      candidateId,
       enrolmentId,
       candidateNumberAssigned,
       cohortAssigned,
@@ -326,4 +330,16 @@ export async function confirmPayment(paymentId: string, opts: ConfirmPaymentOpti
       confirmedAmount: confirmedAmountMinor,
     };
   });
+
+  // Temporary beta-access bookkeeping — non-transactional, best-effort,
+  // never allowed to affect a real payment confirmation. See beta-gate.ts.
+  if (!result.alreadyConfirmed && result.paymentPurpose === "PROGRAMME_FEE") {
+    try {
+      await recordConfirmedPayment(result.candidateId, BetaFeature.PROGRAMME);
+    } catch (e) {
+      console.error(`recordConfirmedPayment failed for candidate ${result.candidateId} (payment ${paymentId}):`, e);
+    }
+  }
+
+  return result;
 }

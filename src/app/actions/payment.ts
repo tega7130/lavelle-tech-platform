@@ -2,7 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { Prisma, Permission, PaymentPurpose, PaymentStatus, EnrolmentStatus } from "@/generated/prisma/client";
+import { Prisma, Permission, PaymentPurpose, PaymentStatus, EnrolmentStatus, BetaFeature } from "@/generated/prisma/client";
+import { gateBeforeCheckout } from "@/lib/beta-gate";
 import { requireStaffPermission } from "@/lib/staff-auth";
 import { getCurrentCandidate } from "@/lib/candidate-session";
 import { getClientIp } from "@/lib/request-info";
@@ -167,9 +168,14 @@ async function createCheckoutOrMarkFailed(
  * has no legitimate "let it stay a mysterious error" case, and the real
  * cause is still logged server-side for debugging.
  */
-export async function initiatePayment(programmeId: string): Promise<{ checkoutUrl: string | null; internalReference: string | null; error?: string }> {
+export async function initiatePayment(
+  programmeId: string
+): Promise<{ checkoutUrl: string | null; internalReference: string | null; error?: string; waitlisted?: boolean }> {
   const candidate = await getCurrentCandidate();
   if (!candidate) throw new Error("Sign in required.");
+
+  const canProceed = await gateBeforeCheckout(candidate.id, BetaFeature.PROGRAMME, { grantImmediately: false });
+  if (!canProceed) return { checkoutUrl: null, internalReference: null, waitlisted: true };
 
   const programme = await prisma.programme.findUniqueOrThrow({
     where: { id: programmeId },
