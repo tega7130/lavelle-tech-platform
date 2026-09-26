@@ -13,6 +13,8 @@ function makeCandidate(isEnrolled: boolean): CurrentCandidate {
     phoneCountryCode: "+234",
     phone: null,
     googleId: null,
+    onboardingSeenAt: null,
+    catalogueNudgeSeenAt: null,
     emailVerifiedAt: null,
     accountStatus: "ACTIVE",
     isEnrolled,

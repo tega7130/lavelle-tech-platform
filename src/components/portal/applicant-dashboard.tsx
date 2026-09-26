@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { resendVerification } from "@/app/actions/candidate-auth";
+import { resendVerification, markOnboardingSeenAction, markCatalogueNudgeSeenAction } from "@/app/actions/candidate-auth";
 import type { CurrentCandidate } from "@/lib/candidate-session";
 import { buttonClassName } from "@/components/ui/button";
 import { ProfileCompletionModal, type ProfileModalTrigger } from "@/components/portal/profile-completion-modal";
@@ -24,9 +24,6 @@ const BENEFITS = [
   "A verifiable certificate on completion of the tier",
 ];
 
-const DISMISSED_KEY = "lavelle_onb_dismissed_v1";
-const CATALOGUE_NUDGE_KEY = "lavelle_catalogue_nudge_shown_v1";
-
 export function ApplicantDashboard({ candidate }: { candidate: CurrentCandidate }) {
   const { checklist } = candidate;
   const firstName = candidate.firstName;
@@ -37,35 +34,43 @@ export function ApplicantDashboard({ candidate }: { candidate: CurrentCandidate 
   const [showNudge, setShowNudge] = React.useState(false);
   const [resendMessage, setResendMessage] = React.useState<string | null>(null);
   const [catalogueNudgeActive, setCatalogueNudgeActive] = React.useState(false);
+  // Per-account facts (candidate-session.ts), not localStorage — mirrored
+  // into state so the UI updates immediately on this visit without
+  // waiting for a full page reload, while the server action call below
+  // persists the same fact for every future visit, on any device.
+  const [onboardingSeen, setOnboardingSeen] = React.useState(!!candidate.onboardingSeenAt);
+  const [catalogueNudgeSeen, setCatalogueNudgeSeen] = React.useState(!!candidate.catalogueNudgeSeenAt);
+
+  function markOnboardingSeen() {
+    if (onboardingSeen) return;
+    setOnboardingSeen(true);
+    markOnboardingSeenAction().catch((err) => console.error("Failed to record onboarding seen:", err));
+  }
 
   // Shows the one-off Catalogue spotlight once, after the welcome/profile
   // sequence has had its chance to run — never before it (see the mount
   // effect and the modal-conclusion handlers below, the only two callers).
   function maybeShowCatalogueNudge() {
-    if (window.localStorage.getItem(CATALOGUE_NUDGE_KEY)) return;
+    if (catalogueNudgeSeen) return;
     setCatalogueNudgeActive(true);
   }
 
   function finishCatalogueNudge() {
-    window.localStorage.setItem(CATALOGUE_NUDGE_KEY, "1");
     setCatalogueNudgeActive(false);
+    setCatalogueNudgeSeen(true);
+    markCatalogueNudgeSeenAction().catch((err) => console.error("Failed to record Catalogue nudge seen:", err));
   }
 
   React.useEffect(() => {
-    // A genuine one-time read from an external system (localStorage isn't
-    // available during render/SSR, so this can't be computed during
-    // render like the error-state syncing elsewhere in this file) —
-    // exactly what effects are for, per react.dev/learn/synchronizing-with-effects.
     // The Profile & ID page's "Edit"/"Add details" link lands here with
-    // ?complete=professional — that takes priority over the localStorage
-    // dismissal, since the candidate just asked to edit this specific step.
+    // ?complete=professional — that takes priority over the onboarding
+    // sequence, since the candidate just asked to edit this specific step.
     if (searchParams.get("complete") === "professional") {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setTrigger("form");
       return;
     }
-    const dismissed = typeof window !== "undefined" && window.localStorage.getItem(DISMISSED_KEY);
-    if (!checklist.allDone && !dismissed) {
+    if (!checklist.allDone && !onboardingSeen) {
       // Fresh visitor — the welcome modal is about to run. The Catalogue
       // nudge waits for it to conclude (handleModalClose/handleModalSaved
       // below) rather than firing here, so it never appears alongside or
@@ -81,14 +86,14 @@ export function ApplicantDashboard({ candidate }: { candidate: CurrentCandidate 
   }, []);
 
   function handleModalClose() {
-    window.localStorage.setItem(DISMISSED_KEY, "1");
+    markOnboardingSeen();
     setTrigger("closed");
     setShowNudge(true);
     maybeShowCatalogueNudge();
   }
 
   function handleModalSaved() {
-    window.localStorage.setItem(DISMISSED_KEY, "1");
+    markOnboardingSeen();
     setJustCompleted(true);
     setTrigger("closed");
     maybeShowCatalogueNudge();

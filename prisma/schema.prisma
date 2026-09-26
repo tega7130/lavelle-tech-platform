@@ -82,6 +82,14 @@ model Candidate {
 
   lastLoginAt DateTime?
 
+  // Per-account onboarding markers — replaced a pair of localStorage
+  // flags in applicant-dashboard.tsx that tracked "has this browser seen
+  // it" rather than "has this candidate seen it", which meant testing the
+  // same account/browser repeatedly (or a real candidate switching
+  // devices) gave inconsistent results. Null means not yet shown.
+  onboardingSeenAt     DateTime?
+  catalogueNudgeSeenAt DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

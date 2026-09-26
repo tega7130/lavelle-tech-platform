@@ -587,3 +587,31 @@ export async function updateCandidateContactDetails(
   revalidatePath("/portal/dashboard");
   return { ok: true };
 }
+
+/**
+ * The applicant dashboard's onboarding sequence (welcome -> profile wizard
+ * -> Catalogue nudge) used to track "has this been seen" as a pair of
+ * localStorage flags — a fact about the browser, not the candidate, so
+ * re-testing the same account in the same browser (or a real candidate on
+ * a fresh device) gave inconsistent results. These two record it on the
+ * account instead. Idempotent by the `null` guard, not because a second
+ * write would be harmful, but so a repeat call never clobbers the
+ * original first-seen timestamp.
+ */
+export async function markOnboardingSeenAction(): Promise<void> {
+  const candidate = await getCurrentCandidate();
+  if (!candidate) return;
+  await prisma.candidate.updateMany({
+    where: { id: candidate.id, onboardingSeenAt: null },
+    data: { onboardingSeenAt: new Date() },
+  });
+}
+
+export async function markCatalogueNudgeSeenAction(): Promise<void> {
+  const candidate = await getCurrentCandidate();
+  if (!candidate) return;
+  await prisma.candidate.updateMany({
+    where: { id: candidate.id, catalogueNudgeSeenAt: null },
+    data: { catalogueNudgeSeenAt: new Date() },
+  });
+}
