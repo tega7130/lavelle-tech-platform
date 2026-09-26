@@ -166,10 +166,10 @@ export function ApplicantDashboard({ candidate }: { candidate: CurrentCandidate 
 
   return (
     <div className="flex max-w-[980px] flex-col gap-6">
-      <div className="rounded-md border border-divider bg-bg p-6">
-        <div className="flex items-start justify-between gap-6">
-          <div>
-            <div className="flex items-center gap-3">
+      <div className="rounded-md border border-divider bg-bg p-4 sm:p-6">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 sm:gap-6">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-3">
               <div className="text-[10px] font-semibold tracking-[0.1em] text-accent uppercase">
                 Registration complete
               </div>
@@ -188,14 +188,14 @@ export function ApplicantDashboard({ candidate }: { candidate: CurrentCandidate 
               until the acceptance window closes.
             </p>
           </div>
-          <div className="flex-none rounded-md border border-accent-200 bg-accent-100 p-4 text-right">
+          <div className="w-full sm:w-auto sm:flex-none rounded-md border border-accent-200 bg-accent-100 p-4 text-left sm:text-right">
             <div className="text-[10px] tracking-[0.08em] text-accent-700 uppercase">Provisional applicant no.</div>
             <div className="mt-1 font-mono text-base text-accent-700">{candidate.applicantNumber}</div>
             <div className="mt-1 text-[11px] text-neutral-600">Quote this when contacting us</div>
           </div>
         </div>
         <div className="hr" />
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-3">
           <Link href="/portal/catalogue" className={buttonClassName("primary")}>
             Browse programmes
           </Link>
@@ -311,10 +311,12 @@ export function ApplicantDashboard({ candidate }: { candidate: CurrentCandidate 
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-6 max-[900px]:grid-cols-1">
-        <div>
-          <h3>Your registration</h3>
-          <div className="overflow-hidden rounded-md border border-divider">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="h-fit rounded-md border border-divider bg-bg p-4">
+          <div className="text-[10px] font-semibold tracking-[0.1em] text-accent uppercase">
+            Your registration
+          </div>
+          <div className="mt-2 overflow-hidden rounded-md border border-divider">
             {REGISTRATION_STEPS.map((s) => (
               <div key={s.label} className="flex items-center gap-3 border-b border-dashed border-neutral-300 p-4 last:border-b-0">
                 <span
