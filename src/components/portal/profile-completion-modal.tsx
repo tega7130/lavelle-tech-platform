@@ -189,11 +189,11 @@ export function ProfileCompletionModal({
               certificates and Candidate ID reflect your standing accurately.
             </p>
             <div className="mt-2.5 text-[11.5px] text-neutral-500">Five short questions — about a minute</div>
-            <div className="mt-6 flex gap-2.5">
-              <Button onClick={openForm} className="h-11 flex-1 px-3.5 text-[13.5px] whitespace-nowrap">
+            <div className="mt-6 flex flex-col sm:flex-row gap-2.5">
+              <Button onClick={openForm} className="h-11 flex-1 px-3 sm:px-3.5 text-[13px] sm:text-[13.5px]">
                 Tell us about yourself →
               </Button>
-              <Button variant="secondary" onClick={close} className="h-11 flex-1 px-3.5 text-[13.5px] whitespace-nowrap">
+              <Button variant="secondary" onClick={close} className="h-11 flex-1 px-3 sm:px-3.5 text-[13px] sm:text-[13.5px]">
                 I&rsquo;ll come back to this
               </Button>
             </div>
