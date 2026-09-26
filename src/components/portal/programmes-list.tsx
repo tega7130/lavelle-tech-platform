@@ -77,15 +77,15 @@ export function ProgrammesList({ programmes }: { programmes: Programmes }) {
                 </div>
 
                 <div className="mt-[var(--space-4)] pt-[var(--space-3)] border-t border-dashed border-neutral-300">
-                  <div className="flex items-baseline justify-between gap-3 text-[12px]">
+                  <div className="flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-1.5 sm:gap-3 text-[12px]">
                     <div className="text-neutral-500">
                       <span className="uppercase tracking-[0.06em] text-[10px]">Lectures</span>
-                      <span className="ml-2 text-text tabular-nums">
+                      <span className="ml-2 text-text tabular-nums whitespace-nowrap">
                         {p.completedLectures} of {p.totalLectures}
                       </span>
                     </div>
                     {p.upNext && (
-                      <div className="text-neutral-500 text-right">
+                      <div className="text-neutral-500 sm:text-right">
                         <span className="uppercase tracking-[0.06em] text-[10px]">Next</span>
                         <span className="ml-2 text-text">
                           {p.upNext.moduleTitle} &middot; {p.upNext.lectureTitle}
