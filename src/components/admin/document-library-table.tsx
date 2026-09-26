@@ -188,22 +188,27 @@ function EditDocumentDialog({
                   <Button variant="secondary" className="h-8 text-[12px]" disabled={fileUrlLoading} onClick={viewFile}>
                     {fileUrlLoading ? "Opening…" : "View file"}
                   </Button>
-                  <label className="h-8">
-                    <input
-                      type="file"
-                      accept={ACCEPTED_DOCUMENT_EXTENSIONS.join(",")}
-                      disabled={fileUploading}
-                      onChange={(e) => {
-                        const selected = e.target.files?.[0];
-                        if (selected) void handleFileSelect(selected);
-                        e.target.value = "";
-                      }}
-                      className="hidden"
-                    />
+                  <input
+                    type="file"
+                    accept={ACCEPTED_DOCUMENT_EXTENSIONS.join(",")}
+                    disabled={fileUploading}
+                    onChange={(e) => {
+                      const selected = e.target.files?.[0];
+                      if (selected) void handleFileSelect(selected);
+                      e.target.value = "";
+                    }}
+                    className="hidden"
+                    id={`replace-file-${document.id}`}
+                  />
+                  <label htmlFor={`replace-file-${document.id}`} className="flex-none">
                     <button
                       type="button"
                       disabled={fileUploading}
-                      className="h-8 px-3 text-[12px] rounded border border-neutral-300 bg-white text-neutral-700 hover:bg-neutral-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="h-8 px-3 text-[12px] rounded border border-neutral-300 bg-white text-neutral-700 hover:bg-neutral-50 enabled:cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                      onClick={(e) => {
+                        const input = document.getElementById(`replace-file-${document.id}`) as HTMLInputElement;
+                        if (input) input.click();
+                      }}
                     >
                       {fileUploading ? "Uploading…" : "Replace"}
                     </button>
