@@ -4,15 +4,17 @@
 // rows in the DocumentCategory table (see createDocumentCategory /
 // listDocumentCategories), the same pattern as ProgrammeCategory.
 
-// PDF and DOCX only, per spec — keyed by the browser-reported MIME type
+// PDF and Word documents (DOC/DOCX), per spec — keyed by the browser-reported MIME type
 // at upload time (never trusted from the client's <input accept> alone;
 // see finaliseUpload's purpose === "document_library" branch).
 export const ACCEPTED_DOCUMENT_MIME_TYPES: Record<string, string> = {
   "application/pdf": "PDF",
+  "application/msword": "DOC",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "DOCX",
+  "application/vnd.ms-word.document.macroEnabled.12": "DOCM",
 };
 
-export const ACCEPTED_DOCUMENT_EXTENSIONS = [".pdf", ".docx"];
+export const ACCEPTED_DOCUMENT_EXTENSIONS = [".pdf", ".doc", ".docx", ".docm"];
 
 // A generous ceiling for a legal/professional document template — well
 // under the app-wide MAX_UPLOAD_BYTES (2GB, sized for lecture video), but

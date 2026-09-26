@@ -9,7 +9,7 @@ import { z } from "zod";
 const documentMetadataSchema = z.object({
   title: z.string({ error: "Enter a title" }).trim().min(1, "Enter a title").max(200, "Keep the title under 200 characters"),
   categoryId: z.string({ error: "Choose a category" }).min(1, "Choose a category"),
-  description: z.string().trim().max(2000).optional(),
+  description: z.string().trim().max(5000, "Keep the description under 5000 characters").optional(),
   // The admin types naira (a human amount, e.g. "15000"); the server
   // converts to kobo — priceMinor itself is never entered directly, same
   // discipline as Programme.feeNaira/feeMinor (src/lib/validation/programme.ts).

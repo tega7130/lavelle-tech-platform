@@ -7,6 +7,7 @@ import { getSignedAssetUrl } from "@/lib/storage";
 import {
   createDocumentTemplate,
   updateDocumentTemplateMetadata,
+  replaceDocumentTemplateFile,
   setDocumentTemplateActive,
   deleteDocumentTemplate,
   createDocumentCategory,
@@ -61,6 +62,29 @@ export async function updateDocumentTemplateAction(id: string, input: unknown) {
       description: parsed.data.description,
       priceMinor: Math.round(parsed.data.priceNaira * 100),
       discountedPriceMinor: parsed.data.discountedPriceNaira != null ? Math.round(parsed.data.discountedPriceNaira * 100) : null,
+    },
+    staff.id
+  );
+  revalidateAll();
+  return document;
+}
+
+export async function replaceDocumentFileAction(id: string, input: unknown) {
+  const staff = await requireStaffPermission(Permission.MANAGE_DOCUMENT_LIBRARY);
+  if (!input || typeof input !== "object") throw new Error("Invalid file input.");
+
+  const { storageKey, fileType, fileName, fileBytes } = input as Record<string, unknown>;
+  if (!storageKey || !fileType || !fileName || !fileBytes) {
+    throw new Error("Missing required file fields.");
+  }
+
+  const document = await replaceDocumentTemplateFile(
+    id,
+    {
+      storageKey: String(storageKey),
+      fileType: String(fileType),
+      fileName: String(fileName),
+      fileBytes: Number(fileBytes),
     },
     staff.id
   );
