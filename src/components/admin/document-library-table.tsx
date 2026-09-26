@@ -205,8 +205,8 @@ function EditDocumentDialog({
                       type="button"
                       disabled={fileUploading}
                       className="h-8 px-3 text-[12px] rounded border border-neutral-300 bg-white text-neutral-700 hover:bg-neutral-50 enabled:cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                      onClick={(e) => {
-                        const input = document.getElementById(`replace-file-${document.id}`) as HTMLInputElement;
+                      onClick={() => {
+                        const input = globalThis.document.getElementById(`replace-file-${document.id}`) as HTMLInputElement;
                         if (input) input.click();
                       }}
                     >
