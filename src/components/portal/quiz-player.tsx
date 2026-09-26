@@ -136,7 +136,7 @@ export function QuizPlayer({
                       </div>
                     )}
                   </div>
-                  <p className="text-neutral-600 mt-2 mb-0">{expanded.explanation || "No explanation provided."}</p>
+                  {expanded.explanation && <p className="text-neutral-600 mt-2 mb-0">{expanded.explanation}</p>}
                 </div>
               );
             })()}
