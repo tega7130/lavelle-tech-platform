@@ -7,6 +7,8 @@ import { Field, Label, Input, FieldError } from "@/components/ui/field";
 import { useToast } from "@/components/ui/toast";
 import { formatNaira } from "@/lib/format";
 import { validateDiscountCodeAction, initiateDocumentPurchaseAction } from "@/app/actions/document-purchase";
+import { WaitlistNotice } from "@/components/beta/waitlist-notice";
+import { BetaFeature } from "@/generated/prisma/client";
 
 interface DiscountState {
   applying: boolean;
@@ -42,6 +44,7 @@ export function PurchaseButton({
   const [discount, setDiscount] = React.useState<DiscountState | null>(null);
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const [waitlisted, setWaitlisted] = React.useState(false);
 
   function close() {
     if (busy) return;
@@ -49,6 +52,7 @@ export function PurchaseButton({
     setDiscountCode("");
     setDiscount(null);
     setError(null);
+    setWaitlisted(false);
   }
 
   async function applyDiscount() {
@@ -75,6 +79,11 @@ export function PurchaseButton({
     setError(null);
     try {
       const result = await initiateDocumentPurchaseAction(documentTemplateId, discount?.valid ? discountCode.trim() : undefined);
+      if (result.waitlisted) {
+        setWaitlisted(true);
+        setBusy(false);
+        return;
+      }
       if (result.error || !result.checkoutUrl) {
         setError(result.error ?? "Something went wrong. Please try again.");
         setBusy(false);
@@ -119,52 +128,65 @@ export function PurchaseButton({
               </div>
             </div>
 
-            <Field>
-              <Label>Have a discount code?</Label>
-              <div className="flex gap-2">
-                <Input
-                  dense
-                  value={discountCode}
-                  disabled={!!discount?.valid}
-                  onChange={(e) => {
-                    setDiscountCode(e.target.value);
-                    setDiscount(null);
-                  }}
-                  placeholder="Enter code"
-                  className="flex-1"
-                />
-                {discount?.valid ? (
-                  <Button type="button" variant="secondary" className="h-[38px] text-[12.5px]" onClick={removeDiscount}>
-                    Remove
+            {waitlisted ? (
+              <>
+                <WaitlistNotice feature={BetaFeature.DOCUMENT_LIBRARY} />
+                <div className="flex justify-end">
+                  <Button type="button" variant="secondary" onClick={close}>
+                    Close
                   </Button>
-                ) : (
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    className="h-[38px] text-[12.5px]"
-                    disabled={discount?.applying || !discountCode.trim()}
-                    onClick={applyDiscount}
-                  >
-                    {discount?.applying ? "Checking…" : "Apply"}
+                </div>
+              </>
+            ) : (
+              <>
+                <Field>
+                  <Label>Have a discount code?</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      dense
+                      value={discountCode}
+                      disabled={!!discount?.valid}
+                      onChange={(e) => {
+                        setDiscountCode(e.target.value);
+                        setDiscount(null);
+                      }}
+                      placeholder="Enter code"
+                      className="flex-1"
+                    />
+                    {discount?.valid ? (
+                      <Button type="button" variant="secondary" className="h-[38px] text-[12.5px]" onClick={removeDiscount}>
+                        Remove
+                      </Button>
+                    ) : (
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        className="h-[38px] text-[12.5px]"
+                        disabled={discount?.applying || !discountCode.trim()}
+                        onClick={applyDiscount}
+                      >
+                        {discount?.applying ? "Checking…" : "Apply"}
+                      </Button>
+                    )}
+                  </div>
+                  {discount?.valid && (
+                    <div className="mt-1.5 text-[11.5px] text-success-text">Code applied — you save {formatNaira(discount.discountMinor!)}.</div>
+                  )}
+                  {discount && discount.valid === false && <FieldError>{discount.reason}</FieldError>}
+                </Field>
+
+                {error && <div className="text-[12.5px] text-danger-heading">{error}</div>}
+
+                <div className="flex justify-end gap-2">
+                  <Button type="button" variant="secondary" onClick={close} disabled={busy}>
+                    Cancel
                   </Button>
-                )}
-              </div>
-              {discount?.valid && (
-                <div className="mt-1.5 text-[11.5px] text-success-text">Code applied — you save {formatNaira(discount.discountMinor!)}.</div>
-              )}
-              {discount && discount.valid === false && <FieldError>{discount.reason}</FieldError>}
-            </Field>
-
-            {error && <div className="text-[12.5px] text-danger-heading">{error}</div>}
-
-            <div className="flex justify-end gap-2">
-              <Button type="button" variant="secondary" onClick={close} disabled={busy}>
-                Cancel
-              </Button>
-              <Button type="button" variant="primary" onClick={confirmPurchase} disabled={busy}>
-                {busy ? "Redirecting…" : "Confirm Purchase"}
-              </Button>
-            </div>
+                  <Button type="button" variant="primary" onClick={confirmPurchase} disabled={busy}>
+                    {busy ? "Redirecting…" : "Confirm Purchase"}
+                  </Button>
+                </div>
+              </>
+            )}
           </div>
         </Dialog>
       )}

@@ -19,6 +19,9 @@ import { youtubeEmbedUrl } from "@/lib/format";
 import { loadYouTubeIframeApi, type YouTubePlayer } from "@/lib/youtube-player";
 import type { LectureStep } from "@/lib/lecture-steps";
 import { completeStepAction, submitDraftingAction, completeProgrammeAction } from "@/app/actions/player";
+import { shouldShowBetaCompletionFeedbackAction } from "@/app/actions/beta-access";
+import { CompletionFeedbackModal } from "@/components/beta/completion-feedback-modal";
+import { BetaFeature } from "@/generated/prisma/client";
 import type { getLecturePlayer } from "@/lib/player-reads";
 
 function fireConfetti() {
@@ -72,6 +75,7 @@ export function LecturePlayer({ enrolmentId, data }: { enrolmentId: string; data
   // Mobile-only drawer for the module/lecture rail — desktop keeps it as a
   // permanently visible column (see the `md:` split in the JSX below).
   const [railOpen, setRailOpen] = React.useState(false);
+  const [showBetaFeedback, setShowBetaFeedback] = React.useState(false);
 
   // ── Media state ──
   const [slideIndex, setSlideIndex] = React.useState(resumePosition.slideIndex);
@@ -174,8 +178,13 @@ export function LecturePlayer({ enrolmentId, data }: { enrolmentId: string; data
     if (completed.has(step)) return;
     setCompleted((prev) => new Set(prev).add(step));
     try {
-      await completeStepAction(enrolmentId, lecture.id, step);
+      const result = await completeStepAction(enrolmentId, lecture.id, step);
       router.refresh();
+      if (result.isComplete) {
+        shouldShowBetaCompletionFeedbackAction(BetaFeature.PROGRAMME).then((show) => {
+          if (show) setShowBetaFeedback(true);
+        });
+      }
     } catch {
       // Non-fatal — the rail/overview will simply lag one refresh behind.
     }
@@ -687,6 +696,8 @@ export function LecturePlayer({ enrolmentId, data }: { enrolmentId: string; data
           </p>
         )}
       </Dialog>
+
+      {showBetaFeedback && <CompletionFeedbackModal feature={BetaFeature.PROGRAMME} heading="How was your first lecture?" />}
     </div>
   );
 }

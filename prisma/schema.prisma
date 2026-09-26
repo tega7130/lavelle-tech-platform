@@ -63,14 +63,14 @@ model Candidate {
   email           String    @unique @db.Citext
   emailVerifiedAt DateTime?
 
-  phoneCountryCode String  @default("+234") @db.VarChar(6)
-  phone            String? @db.VarChar(24)
+  phoneCountryCode String    @default("+234") @db.VarChar(6)
+  phone            String?   @db.VarChar(24)
   phoneVerifiedAt  DateTime?
 
   passwordHash String?
 
-  googleId     String?   @unique @db.VarChar(255)
-  googleEmail  String?   @db.VarChar(255)
+  googleId    String? @unique @db.VarChar(255)
+  googleEmail String? @db.VarChar(255)
 
   acceptedTermsAt DateTime
   marketingOptIn  Boolean  @default(false)
@@ -85,26 +85,28 @@ model Candidate {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  profile                    CandidateProfile?
-  oauthProviders             CandidateOAuthProvider[]
-  emailVerificationTokens    EmailVerificationToken[]
-  passwordResetOtpChallenges PasswordResetOtpChallenge[]
-  notifications              Notification[]
-  sessions                   Session[]
-  enrolments                 Enrolment[]
-  payments                   Payment[]
-  idCards                    IdCard[]
-  certificates               Certificate[]
-  examRegistrations          ExamRegistration[]
-  supportRequests            SupportRequest[]
-  supportMessages            SupportMessage[]
-  candidateNotes             CandidateNote[]
-  announcementDeliveries     AnnouncementDelivery[]
-  reviews                    Review[]
-  uploadedMediaAssets        MediaAsset[]
-  documentFavorites          DocumentFavorite[]
-  documentPurchases          DocumentPurchase[]
+  profile                            CandidateProfile?
+  oauthProviders                     CandidateOAuthProvider[]
+  emailVerificationTokens            EmailVerificationToken[]
+  passwordResetOtpChallenges         PasswordResetOtpChallenge[]
+  notifications                      Notification[]
+  sessions                           Session[]
+  enrolments                         Enrolment[]
+  payments                           Payment[]
+  idCards                            IdCard[]
+  certificates                       Certificate[]
+  examRegistrations                  ExamRegistration[]
+  supportRequests                    SupportRequest[]
+  supportMessages                    SupportMessage[]
+  candidateNotes                     CandidateNote[]
+  announcementDeliveries             AnnouncementDelivery[]
+  reviews                            Review[]
+  uploadedMediaAssets                MediaAsset[]
+  documentFavorites                  DocumentFavorite[]
+  documentPurchases                  DocumentPurchase[]
   programmeNotificationSubscriptions ProgrammeNotificationSubscription[]
+  betaSignups                        BetaFeatureSignup[]
+  betaFeedback                       BetaFeedback[]
 
   @@index([accountStatus])
 }
@@ -2135,11 +2137,11 @@ model CandidateOAuthProvider {
   candidateId String    @db.Uuid
   candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
 
-  provider         String  @db.VarChar(50)
-  providerUserId   String  @db.VarChar(255)
-  providerEmail    String? @db.VarChar(255)
+  provider       String  @db.VarChar(50)
+  providerUserId String  @db.VarChar(255)
+  providerEmail  String? @db.VarChar(255)
 
-  linkedAt DateTime @default(now())
+  linkedAt  DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@unique([candidateId, provider])
@@ -2305,8 +2307,8 @@ model ProgrammeListing {
   publishedByStaff   Staff?    @relation("ListingPublishedBy", fields: [publishedByStaffId], references: [id])
   unpublishedAt      DateTime?
 
-  isComingSoon       Boolean   @default(false)
-  comingSoonMessage  String?
+  isComingSoon      Boolean @default(false)
+  comingSoonMessage String?
 
   notificationSubscriptions ProgrammeNotificationSubscription[]
 
@@ -2325,7 +2327,7 @@ model ProgrammeNotificationSubscription {
   candidateId String?    @db.Uuid
   candidate   Candidate? @relation(fields: [candidateId], references: [id], onDelete: Cascade)
 
-  email String
+  email            String
   // Nullable at the DB level so existing pre-migration rows (email-only)
   // stay valid — the "Notify me" form and its Zod schema require both on
   // every new submission (application-level, not DB-level, required).
@@ -2733,4 +2735,81 @@ model EmailLog {
   @@index([template, createdAt(sort: Desc)])
   @@index([recipient, createdAt(sort: Desc)])
   @@index([status, createdAt(sort: Desc)])
+}
+
+// ─── Beta Access (temporary — remove entirely once this feature goes GA) ────
+//
+// Deliberately outside the domain model above: a one-week capacity gate on
+// two features, not a permanent entity. When the beta ends, drop these two
+// models + three enums, remove the two Candidate relations above, and
+// delete src/lib/beta-gate.ts and its two call sites — nothing else in the
+// schema references these tables.
+
+enum BetaFeature {
+  PROGRAMME
+  DOCUMENT_LIBRARY
+}
+
+enum BetaSignupStatus {
+  GRANTED
+  WAITLISTED
+}
+
+enum BetaGrantSource {
+  AUTO
+  MANUAL
+}
+
+// One row per candidate per feature — doubles as both the access grant and
+// the waitlist entry, distinguished by `status`, so a candidate's beta
+// state for a feature is never split across two tables that could drift.
+model BetaFeatureSignup {
+  id          String    @id @default(uuid())
+  candidateId String    @db.Uuid
+  candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  feature BetaFeature
+  status  BetaSignupStatus
+
+  // Set only when status = GRANTED — which of the 10 slots this is and
+  // whether it was claimed automatically or handed out by an admin.
+  source BetaGrantSource?
+
+  // Set once, when an admin marks the feature public and every WAITLISTED
+  // row for it gets a Notification — never touched for GRANTED rows.
+  notifiedPublicAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  feedback BetaFeedback[]
+
+  @@unique([candidateId, feature])
+  @@index([feature, status])
+}
+
+enum BetaFeedbackKind {
+  COMPLETION
+  WAITLIST_INTEREST
+}
+
+model BetaFeedback {
+  id          String    @id @default(uuid())
+  candidateId String    @db.Uuid
+  candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  feature BetaFeature
+  kind    BetaFeedbackKind
+
+  // 1-5, required for COMPLETION only — enforced in the Zod schema, not
+  // the DB, since WAITLIST_INTEREST feedback has no rating.
+  rating  Int?
+  message String
+
+  signupId String?
+  signup   BetaFeatureSignup? @relation(fields: [signupId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+
+  @@index([feature, kind, createdAt(sort: Desc)])
 }

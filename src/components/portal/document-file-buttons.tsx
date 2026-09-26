@@ -4,6 +4,9 @@ import * as React from "react";
 import { Button, type ButtonVariant } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
 import { getDocumentFileAccessAction } from "@/app/actions/document-purchase";
+import { shouldShowBetaCompletionFeedbackAction } from "@/app/actions/beta-access";
+import { CompletionFeedbackModal } from "@/components/beta/completion-feedback-modal";
+import { BetaFeature } from "@/generated/prisma/client";
 
 interface DocumentFileButtonProps {
   documentTemplateId: string;
@@ -15,6 +18,7 @@ interface DocumentFileButtonProps {
 function useOpenDocument(documentTemplateId: string, mode: "download" | "view") {
   const { showToast } = useToast();
   const [pending, startTransition] = React.useTransition();
+  const [showFeedback, setShowFeedback] = React.useState(false);
 
   function open() {
     if (pending) return;
@@ -22,21 +26,29 @@ function useOpenDocument(documentTemplateId: string, mode: "download" | "view") 
       try {
         const url = await getDocumentFileAccessAction(documentTemplateId, mode);
         window.open(url, "_blank", "noopener,noreferrer");
+        if (mode === "download") {
+          shouldShowBetaCompletionFeedbackAction(BetaFeature.DOCUMENT_LIBRARY).then((show) => {
+            if (show) setShowFeedback(true);
+          });
+        }
       } catch {
         showToast({ tone: "danger", message: mode === "download" ? "Download failed. Please try again." : "Could not open this document. Please try again." });
       }
     });
   }
 
-  return { open, pending };
+  return { open, pending, showFeedback };
 }
 
 export function DownloadButton({ documentTemplateId, variant = "primary", className }: DocumentFileButtonProps) {
-  const { open, pending } = useOpenDocument(documentTemplateId, "download");
+  const { open, pending, showFeedback } = useOpenDocument(documentTemplateId, "download");
   return (
-    <Button type="button" variant={variant} onClick={open} disabled={pending} className={className}>
-      {pending ? "Preparing…" : "Download"}
-    </Button>
+    <>
+      <Button type="button" variant={variant} onClick={open} disabled={pending} className={className}>
+        {pending ? "Preparing…" : "Download"}
+      </Button>
+      {showFeedback && <CompletionFeedbackModal feature={BetaFeature.DOCUMENT_LIBRARY} heading="How was your first download?" />}
+    </>
   );
 }
 
