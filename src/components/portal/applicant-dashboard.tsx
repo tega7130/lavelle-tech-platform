@@ -3,12 +3,10 @@
 import * as React from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { resendVerification, markOnboardingSeenAction, markCatalogueNudgeSeenAction } from "@/app/actions/candidate-auth";
+import { resendVerification } from "@/app/actions/candidate-auth";
 import type { CurrentCandidate } from "@/lib/candidate-session";
 import { buttonClassName } from "@/components/ui/button";
 import { ProfileCompletionModal, type ProfileModalTrigger } from "@/components/portal/profile-completion-modal";
-import { ProductTour } from "@/components/portal/product-tour";
-import { CATALOGUE_NUDGE_STEPS } from "@/lib/portal-tours";
 
 const REGISTRATION_STEPS = [
   { label: "Registration completed", meta: "Provisional applicant number issued", done: true },
@@ -24,6 +22,8 @@ const BENEFITS = [
   "A verifiable certificate on completion of the tier",
 ];
 
+const DISMISSED_KEY = "lavelle_onb_dismissed_v1";
+
 export function ApplicantDashboard({ candidate }: { candidate: CurrentCandidate }) {
   const { checklist } = candidate;
   const firstName = candidate.firstName;
@@ -33,71 +33,39 @@ export function ApplicantDashboard({ candidate }: { candidate: CurrentCandidate 
   const [justCompleted, setJustCompleted] = React.useState(false);
   const [showNudge, setShowNudge] = React.useState(false);
   const [resendMessage, setResendMessage] = React.useState<string | null>(null);
-  const [catalogueNudgeActive, setCatalogueNudgeActive] = React.useState(false);
-  // Per-account facts (candidate-session.ts), not localStorage — mirrored
-  // into state so the UI updates immediately on this visit without
-  // waiting for a full page reload, while the server action call below
-  // persists the same fact for every future visit, on any device.
-  const [onboardingSeen, setOnboardingSeen] = React.useState(!!candidate.onboardingSeenAt);
-  const [catalogueNudgeSeen, setCatalogueNudgeSeen] = React.useState(!!candidate.catalogueNudgeSeenAt);
-
-  function markOnboardingSeen() {
-    if (onboardingSeen) return;
-    setOnboardingSeen(true);
-    markOnboardingSeenAction().catch((err) => console.error("Failed to record onboarding seen:", err));
-  }
-
-  // Shows the one-off Catalogue spotlight once, after the welcome/profile
-  // sequence has had its chance to run — never before it (see the mount
-  // effect and the modal-conclusion handlers below, the only two callers).
-  function maybeShowCatalogueNudge() {
-    if (catalogueNudgeSeen) return;
-    setCatalogueNudgeActive(true);
-  }
-
-  function finishCatalogueNudge() {
-    setCatalogueNudgeActive(false);
-    setCatalogueNudgeSeen(true);
-    markCatalogueNudgeSeenAction().catch((err) => console.error("Failed to record Catalogue nudge seen:", err));
-  }
 
   React.useEffect(() => {
+    // A genuine one-time read from an external system (localStorage isn't
+    // available during render/SSR, so this can't be computed during
+    // render like the error-state syncing elsewhere in this file) —
+    // exactly what effects are for, per react.dev/learn/synchronizing-with-effects.
     // The Profile & ID page's "Edit"/"Add details" link lands here with
-    // ?complete=professional — that takes priority over the onboarding
-    // sequence, since the candidate just asked to edit this specific step.
+    // ?complete=professional — that takes priority over the localStorage
+    // dismissal, since the candidate just asked to edit this specific step.
     if (searchParams.get("complete") === "professional") {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setTrigger("form");
       return;
     }
-    if (!checklist.allDone && !onboardingSeen) {
-      // Fresh visitor — the welcome modal is about to run. The Catalogue
-      // nudge waits for it to conclude (handleModalClose/handleModalSaved
-      // below) rather than firing here, so it never appears alongside or
-      // ahead of the welcome screen.
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setTrigger("welcome");
-      return;
-    }
-    // Returning visitor who already saw (or finished) the welcome/profile
-    // sequence on an earlier visit — nothing left to wait for.
-    maybeShowCatalogueNudge();
+    if (checklist.allDone) return;
+    const dismissed = typeof window !== "undefined" && window.localStorage.getItem(DISMISSED_KEY);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (!dismissed) setTrigger("welcome");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function handleModalClose() {
-    markOnboardingSeen();
+    window.localStorage.setItem(DISMISSED_KEY, "1");
     setTrigger("closed");
     setShowNudge(true);
-    maybeShowCatalogueNudge();
   }
 
   function handleModalSaved() {
-    markOnboardingSeen();
+    window.localStorage.setItem(DISMISSED_KEY, "1");
     setJustCompleted(true);
     setTrigger("closed");
-    maybeShowCatalogueNudge();
   }
+
 
   async function handleResend() {
     setResendMessage("Sending…");
@@ -166,10 +134,10 @@ export function ApplicantDashboard({ candidate }: { candidate: CurrentCandidate 
 
   return (
     <div className="flex max-w-[980px] flex-col gap-6">
-      <div className="rounded-md border border-divider bg-bg p-4 sm:p-6">
-        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 sm:gap-6">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-3">
+      <div className="rounded-md border border-divider bg-bg p-6">
+        <div className="flex items-start justify-between gap-6">
+          <div>
+            <div className="flex items-center gap-3">
               <div className="text-[10px] font-semibold tracking-[0.1em] text-accent uppercase">
                 Registration complete
               </div>
@@ -188,14 +156,14 @@ export function ApplicantDashboard({ candidate }: { candidate: CurrentCandidate 
               until the acceptance window closes.
             </p>
           </div>
-          <div className="w-full sm:w-auto sm:flex-none rounded-md border border-accent-200 bg-accent-100 p-4 text-left sm:text-right">
+          <div className="flex-none rounded-md border border-accent-200 bg-accent-100 p-4 text-right">
             <div className="text-[10px] tracking-[0.08em] text-accent-700 uppercase">Provisional applicant no.</div>
             <div className="mt-1 font-mono text-base text-accent-700">{candidate.applicantNumber}</div>
             <div className="mt-1 text-[11px] text-neutral-600">Quote this when contacting us</div>
           </div>
         </div>
         <div className="hr" />
-        <div className="flex flex-wrap gap-3">
+        <div className="flex gap-3">
           <Link href="/portal/catalogue" className={buttonClassName("primary")}>
             Browse programmes
           </Link>
@@ -311,12 +279,10 @@ export function ApplicantDashboard({ candidate }: { candidate: CurrentCandidate 
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="h-fit rounded-md border border-divider bg-bg p-4">
-          <div className="text-[10px] font-semibold tracking-[0.1em] text-accent uppercase">
-            Your registration
-          </div>
-          <div className="mt-2 overflow-hidden rounded-md border border-divider">
+      <div className="grid grid-cols-2 gap-6 max-[900px]:grid-cols-1">
+        <div>
+          <h3>Your registration</h3>
+          <div className="overflow-hidden rounded-md border border-divider">
             {REGISTRATION_STEPS.map((s) => (
               <div key={s.label} className="flex items-center gap-3 border-b border-dashed border-neutral-300 p-4 last:border-b-0">
                 <span
@@ -359,7 +325,6 @@ export function ApplicantDashboard({ candidate }: { candidate: CurrentCandidate 
         onClose={handleModalClose}
         onSaved={handleModalSaved}
       />
-      <ProductTour steps={CATALOGUE_NUDGE_STEPS} active={catalogueNudgeActive} onFinish={finishCatalogueNudge} />
     </div>
   );
 }
