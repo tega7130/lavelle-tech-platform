@@ -9,7 +9,8 @@ import { getCurrentCandidate } from "@/lib/candidate-session";
 import { getClientIp } from "@/lib/request-info";
 import { recordAuditEvent } from "@/lib/audit";
 import { enforceRateLimit, RateLimitError } from "@/lib/rate-limit";
-import { createProviderCheckout, generateInternalReference } from "@/lib/payment-provider";
+import { createProviderCheckout, generateInternalReference, isNombaBypassEnabled } from "@/lib/payment-provider";
+import { simulateBetaPaymentSuccess } from "@/lib/payment-success";
 import { LiveEnrolmentExistsError, PaymentNotPendingError, ProgrammeNotOpenError, ProgrammeComingSoonError, assertProgrammeOpenForEnrolment } from "@/lib/payment-errors";
 import { applyOfflineRecording } from "@/lib/offline-recording";
 import { offlinePaymentInputSchema, recordOfflinePaymentSchema, fieldErrors } from "@/lib/validation/payment";
@@ -185,6 +186,16 @@ export async function initiatePayment(
   try {
     assertProgrammeOpenForEnrolment(programme);
     const { payment } = await resolveEnrolmentForPayment(candidate.id, programmeId, programme.feeMinor);
+
+    if (isNombaBypassEnabled()) {
+      await simulateBetaPaymentSuccess(payment.id);
+      revalidatePath("/portal/catalogue");
+      return {
+        internalReference: payment.internalReference,
+        checkoutUrl: `${process.env.NEXTAUTH_URL}/portal/checkout/${payment.internalReference}`,
+      };
+    }
+
     const checkout = await createCheckoutOrMarkFailed(
       payment,
       candidate.email,
@@ -288,6 +299,14 @@ export async function initiateGuestCheckout(_prev: FormActionState, formData: Fo
         });
         return payment;
       });
+
+      if (isNombaBypassEnabled()) {
+        await simulateBetaPaymentSuccess(payment.id);
+        return {
+          ok: true,
+          data: { checkoutUrl: `${process.env.NEXTAUTH_URL}/checkout/return/${payment.internalReference}?token=${checkoutToken}` },
+        };
+      }
 
       const checkout = await createCheckoutOrMarkFailed(
         payment,

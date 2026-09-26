@@ -6,7 +6,8 @@ import { PaymentStatus, BetaFeature } from "@/generated/prisma/client";
 import { getCurrentCandidate } from "@/lib/candidate-session";
 import { gateBeforeCheckout } from "@/lib/beta-gate";
 import { getClientIp } from "@/lib/request-info";
-import { createProviderCheckout } from "@/lib/payment-provider";
+import { createProviderCheckout, isNombaBypassEnabled } from "@/lib/payment-provider";
+import { simulateBetaPaymentSuccess } from "@/lib/payment-success";
 import { getSignedAssetUrl } from "@/lib/storage";
 import { enforceRateLimit, RateLimitError } from "@/lib/rate-limit";
 import { effectivePriceMinor } from "@/lib/document-library";
@@ -129,6 +130,16 @@ export async function initiateDocumentPurchaseAction(
       discountCodeId,
       amountMinor,
     });
+
+    if (isNombaBypassEnabled()) {
+      await simulateBetaPaymentSuccess(payment.id);
+      revalidatePath("/portal/library");
+      return {
+        internalReference: payment.internalReference,
+        checkoutUrl: `${process.env.NEXTAUTH_URL}/portal/checkout/${payment.internalReference}`,
+      };
+    }
+
     const checkout = await createCheckoutOrMarkFailed(
       payment,
       candidate.email,

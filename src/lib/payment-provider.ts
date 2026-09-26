@@ -19,6 +19,20 @@ function secret() {
   return s;
 }
 
+/**
+ * Beta kill switch: while true, initiatePayment/initiateGuestCheckout
+ * (payment.ts) skip creating a Nomba checkout order entirely and mark
+ * the payment SUCCESS immediately via simulateBetaPaymentSuccess — used
+ * only while an environment has no live Nomba credentials. Set on
+ * Production only; leave unset on preview/staging where Nomba sandbox
+ * credentials already work. Flip back to false (or unset) and redeploy
+ * to restore the real Nomba flow — no other code changes needed, since
+ * this only wraps the existing checkout call, never replaces it.
+ */
+export function isNombaBypassEnabled(): boolean {
+  return process.env.NOMBA_BYPASS_ENABLED === "true";
+}
+
 /** Base URL for every Nomba API call — https://api.nomba.com (production) or https://sandbox.nomba.com (sandbox), set per environment rather than hard-coded, so switching envs is a config change, not a deploy. */
 function nombaApiUrl(): string {
   const url = process.env.NOMBA_API_URL;
