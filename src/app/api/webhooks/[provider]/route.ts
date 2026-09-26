@@ -98,9 +98,12 @@ async function handlePaymentSuccess(payment: Payment) {
         });
         const modules = await prisma.module.findMany({
           where: { programmeId: result.programme.id },
-          include: { lectures: true },
+          include: { lectures: { select: { narrationUrl: true } } },
         });
-        const lectureCount = modules.reduce((sum, m) => sum + m.lectures.length, 0);
+        const lectures = modules.flatMap(m => m.lectures);
+        const lectureCount = lectures.length;
+        const hasNarrations = lectures.some(l => l.narrationUrl);
+        const lectureDescription = `${lectureCount} recorded lecture${lectureCount !== 1 ? 's' : ''}${hasNarrations ? ' with narration' : ''}`;
         const fullProgramme = await prisma.programme.findUniqueOrThrow({ where: { id: result.programme.id } });
 
         await sendTransactionalEmailByTemplate("enrolment-confirmation", result.candidate.email, {
@@ -109,8 +112,8 @@ async function handlePaymentSuccess(payment: Payment) {
           tier: result.programme.tier,
           duration: (fullProgramme as any).durationWeeks ? `${(fullProgramme as any).durationWeeks} weeks` : "TBD",
           weeklyCommitment: (fullProgramme as any).weeklyHours ? `${(fullProgramme as any).weeklyHours} hours` : "TBD",
-          startDate: enrolment.intake?.startsAt?.toLocaleDateString() || "TBD",
-          lectureCount,
+          startDate: enrolment.intake?.startsAt?.toLocaleDateString() || "You can commence right now",
+          lectureDescription,
           portalUrl: `${process.env.NEXTAUTH_URL}/portal/programmes/${result.programme.id}`,
           supportEmail: EMAIL_CONFIG.supportEmail,
           currentYear,

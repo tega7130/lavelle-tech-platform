@@ -7,7 +7,7 @@ export interface EnrolmentConfirmationVariables {
   duration: string;
   weeklyCommitment: string;
   startDate: string;
-  lectureCount: number;
+  lectureDescription: string;
   portalUrl: string;
   supportEmail: string;
   currentYear: number;
@@ -54,7 +54,7 @@ export function generateEnrolmentConfirmationEmail(variables: EnrolmentConfirmat
                             <h4 style="margin: 20px 0 12px 0; color: #1a1a1a; font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">What's Included</h4>
                             <table cellpadding="0" cellspacing="0" width="100%" style="margin: 0 0 25px 0;">
                                 <tr>
-                                    <td style="padding: 8px 0; color: #4a4a4a; font-size: 14px; line-height: 1.6;">✓ {{lectureCount}} recorded lectures with narration</td>
+                                    <td style="padding: 8px 0; color: #4a4a4a; font-size: 14px; line-height: 1.6;">✓ {{lectureDescription}}</td>
                                 </tr>
                                 <tr>
                                     <td style="padding: 8px 0; color: #4a4a4a; font-size: 14px; line-height: 1.6;">✓ Applied scenarios and drafting exercises</td>
@@ -119,7 +119,7 @@ Start date: {{startDate}}
 Access: 24/7 via your Lavelle portal
 
 WHAT'S INCLUDED
-✓ {{lectureCount}} recorded lectures with narration
+✓ {{lectureDescription}}
 ✓ Applied scenarios and drafting exercises
 ✓ Quiz assessments
 ✓ Certificate upon passing
