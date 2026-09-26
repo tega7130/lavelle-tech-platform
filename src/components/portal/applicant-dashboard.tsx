@@ -133,11 +133,11 @@ export function ApplicantDashboard({ candidate }: { candidate: CurrentCandidate 
   ];
 
   return (
-    <div className="flex max-w-[980px] flex-col gap-6">
-      <div className="rounded-md border border-divider bg-bg p-6">
-        <div className="flex items-start justify-between gap-6">
+    <div className="flex max-w-[980px] flex-col gap-6 px-4 sm:px-0">
+      <div className="rounded-md border border-divider bg-bg p-4 sm:p-6">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 sm:gap-6">
           <div>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               <div className="text-[10px] font-semibold tracking-[0.1em] text-accent uppercase">
                 Registration complete
               </div>
@@ -156,14 +156,14 @@ export function ApplicantDashboard({ candidate }: { candidate: CurrentCandidate 
               until the acceptance window closes.
             </p>
           </div>
-          <div className="flex-none rounded-md border border-accent-200 bg-accent-100 p-4 text-right">
+          <div className="w-full sm:w-auto sm:flex-none rounded-md border border-accent-200 bg-accent-100 p-4 text-left sm:text-right">
             <div className="text-[10px] tracking-[0.08em] text-accent-700 uppercase">Provisional applicant no.</div>
             <div className="mt-1 font-mono text-base text-accent-700">{candidate.applicantNumber}</div>
             <div className="mt-1 text-[11px] text-neutral-600">Quote this when contacting us</div>
           </div>
         </div>
         <div className="hr" />
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-3">
           <Link href="/portal/catalogue" className={buttonClassName("primary")}>
             Browse programmes
           </Link>
@@ -178,7 +178,7 @@ export function ApplicantDashboard({ candidate }: { candidate: CurrentCandidate 
           now) and not gated on allDone — an otherwise-complete old account
           shouldn't lose its only path to resend. */}
       {!checklist.email && (
-        <div className="flex items-center gap-4 rounded-md border border-[#f3c4bf] bg-[#fdecec] px-4 py-3">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 rounded-md border border-[#f3c4bf] bg-[#fdecec] px-3 sm:px-4 py-3">
           <div className="min-w-0 flex-1">
             <div className="font-heading text-[13.5px] font-semibold text-[#912019]">Your email isn&rsquo;t verified</div>
             <div className="text-[12.5px] text-[#912019]/80 text-pretty">
@@ -195,7 +195,7 @@ export function ApplicantDashboard({ candidate }: { candidate: CurrentCandidate 
       )}
 
       {showNudge && !allDone && !professionalDone && (
-        <div className="flex items-center gap-4 rounded-md border border-accent-200 bg-accent-100 px-4 py-3">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 rounded-md border border-accent-200 bg-accent-100 px-3 sm:px-4 py-3">
           <span className="flex h-[30px] w-[30px] flex-none items-center justify-center rounded-full border border-accent-200 bg-bg">
             <svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="var(--color-accent)" strokeWidth={1.5} strokeLinecap="round">
               <circle cx="10" cy="6.6" r="3.1" />
@@ -208,28 +208,30 @@ export function ApplicantDashboard({ candidate }: { candidate: CurrentCandidate 
               Your background determines how your credentials are recorded and issued.
             </div>
           </div>
-          <button
-            onClick={() => {
-              setShowNudge(false);
-              setTrigger("form");
-            }}
-            className="flex-none font-heading text-[13px] font-semibold text-text"
-          >
-            Do it now →
-          </button>
-          <button
-            onClick={() => setShowNudge(false)}
-            aria-label="Dismiss"
-            className="flex-none cursor-pointer border-0 bg-transparent p-1 text-[15px] leading-none text-neutral-500"
-          >
-            ×
-          </button>
+          <div className="flex gap-2 sm:flex-none">
+            <button
+              onClick={() => {
+                setShowNudge(false);
+                setTrigger("form");
+              }}
+              className="flex-1 sm:flex-none font-heading text-[13px] font-semibold text-text"
+            >
+              Do it now →
+            </button>
+            <button
+              onClick={() => setShowNudge(false)}
+              aria-label="Dismiss"
+              className="flex-none cursor-pointer border-0 bg-transparent p-1 text-[15px] leading-none text-neutral-500"
+            >
+              ×
+            </button>
+          </div>
         </div>
       )}
 
       {!showNudge && !allDone && (
-        <div className="rounded-md border border-divider bg-bg p-5 px-6">
-          <div className="flex items-baseline justify-between gap-4">
+        <div className="rounded-md border border-divider bg-bg p-4 sm:p-5 sm:px-6">
+          <div className="flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-2 sm:gap-4">
             <h3 className="m-0">Complete your profile</h3>
             <div className="text-xs text-neutral-600">{finalDoneCount} of {totalSteps} complete</div>
           </div>
@@ -279,10 +281,10 @@ export function ApplicantDashboard({ candidate }: { candidate: CurrentCandidate 
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-6 max-[900px]:grid-cols-1">
-        <div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+        <div className="h-fit">
           <h3>Your registration</h3>
-          <div className="overflow-hidden rounded-md border border-divider">
+          <div className="mt-3 overflow-hidden rounded-md border border-divider">
             {REGISTRATION_STEPS.map((s) => (
               <div key={s.label} className="flex items-center gap-3 border-b border-dashed border-neutral-300 p-4 last:border-b-0">
                 <span
@@ -304,7 +306,7 @@ export function ApplicantDashboard({ candidate }: { candidate: CurrentCandidate 
           </div>
         </div>
 
-        <div className="h-fit rounded-md border border-divider bg-bg p-4">
+        <div className="h-fit rounded-md border border-divider bg-bg p-3 sm:p-4">
           <div className="text-[10px] font-semibold tracking-[0.1em] text-accent uppercase">
             What you get on enrolment
           </div>
