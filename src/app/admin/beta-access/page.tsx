@@ -1,21 +1,15 @@
 import { redirect } from "next/navigation";
-import Link from "next/link";
 import { getCurrentStaff } from "@/lib/staff-session";
 import { getFeatureSummary, listSignups } from "@/lib/beta-gate";
-import { BetaFeature } from "@/generated/prisma/client";
-import { Table, Thead, Tbody, Tr, Th, Td } from "@/components/ui/table";
+import { BETA_FEATURE, type BetaFeature } from "@/lib/beta-types";
 import { Tag, type TagVariant } from "@/components/ui/tag";
 import { ManualGrantForm } from "@/components/admin/beta-manual-grant-form";
 import { MarkFeaturePublicButton } from "@/components/admin/beta-mark-public-button";
+import { BetaFeatureSectionClient } from "@/components/admin/beta-feature-section-client";
 
 const FEATURE_LABEL: Record<BetaFeature, string> = {
-  [BetaFeature.PROGRAMME]: "Course enrolment",
-  [BetaFeature.DOCUMENT_LIBRARY]: "Document Library",
-};
-
-const STATUS_TAG: Record<string, TagVariant | "success" | "warning" | "danger"> = {
-  GRANTED: "success",
-  WAITLISTED: "warning",
+  PROGRAMME: "Course enrolment",
+  DOCUMENT_LIBRARY: "Document Library",
 };
 
 async function FeatureSection({ feature }: { feature: BetaFeature }) {
@@ -39,50 +33,7 @@ async function FeatureSection({ feature }: { feature: BetaFeature }) {
       {signups.length === 0 ? (
         <div className="text-center py-10 border border-divider rounded-md text-[13px] text-neutral-500">No signups yet</div>
       ) : (
-        <div className="border border-divider rounded-md overflow-hidden">
-          <Table>
-            <Thead>
-              <Tr>
-                <Th className="pl-[var(--space-4)]">Candidate</Th>
-                <Th>Status</Th>
-                <Th>Source</Th>
-                <Th>Signed up</Th>
-                <Th className="pr-[var(--space-4)]">Feedback</Th>
-              </Tr>
-            </Thead>
-            <Tbody>
-              {signups.map((s) => (
-                <Tr key={s.id}>
-                  <Td className="pl-[var(--space-4)] font-medium">
-                    <Link href={`/admin/candidates/${s.candidateId}`} className="text-accent no-underline">
-                      {s.candidate.firstName} {s.candidate.lastName}
-                    </Link>
-                    <div className="text-[11px] text-neutral-500">{s.candidate.email}</div>
-                  </Td>
-                  <Td>
-                    <Tag variant={STATUS_TAG[s.status] as TagVariant}>{s.status}</Tag>
-                  </Td>
-                  <Td className="text-[12px] text-neutral-600">{s.source ?? "—"}</Td>
-                  <Td className="text-[12px] text-neutral-600">{s.createdAt.toLocaleDateString()}</Td>
-                  <Td className="pr-[var(--space-4)] text-[12.5px] max-w-[320px]">
-                    {s.feedback.length === 0 ? (
-                      <span className="text-neutral-400">—</span>
-                    ) : (
-                      <div className="flex flex-col gap-1.5">
-                        {s.feedback.map((f) => (
-                          <div key={f.id}>
-                            <span className="text-[10.5px] uppercase tracking-wide text-neutral-500">{f.kind}</span>
-                            <div>{f.message}</div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </Td>
-                </Tr>
-              ))}
-            </Tbody>
-          </Table>
-        </div>
+        <BetaFeatureSectionClient signups={signups} />
       )}
     </div>
   );
@@ -103,8 +54,8 @@ export default async function BetaAccessPage() {
       <p className="text-[13px] text-neutral-600 mb-[var(--space-6)]">
         Temporary capacity gate for the beta test — 10 slots per feature, plus manual grants.
       </p>
-      <FeatureSection feature={BetaFeature.PROGRAMME} />
-      <FeatureSection feature={BetaFeature.DOCUMENT_LIBRARY} />
+      <FeatureSection feature={BETA_FEATURE.PROGRAMME} />
+      <FeatureSection feature={BETA_FEATURE.DOCUMENT_LIBRARY} />
     </div>
   );
 }
