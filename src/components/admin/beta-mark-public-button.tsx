@@ -3,28 +3,32 @@
 import * as React from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
-import { useToast } from "@/components/ui/toast";
 import { markFeaturePublicAction } from "@/app/actions/beta-admin";
 import type { BetaFeature } from "@/lib/beta-types";
 
 export function MarkFeaturePublicButton({ feature, label }: { feature: BetaFeature; label: string }) {
-  const { showToast } = useToast();
   const [open, setOpen] = React.useState(false);
   const [pending, startTransition] = React.useTransition();
+  const [notified, setNotified] = React.useState<number | null>(null);
 
   function confirm() {
     startTransition(async () => {
       const result = await markFeaturePublicAction(feature);
-      showToast({ tone: "success", message: `${label} marked public — ${result.notified} candidate(s) notified.` });
+      setNotified(result.notified);
       setOpen(false);
     });
   }
 
   return (
-    <>
+    <div>
       <Button type="button" variant="secondary" className="h-[38px] text-[12.5px]" onClick={() => setOpen(true)}>
         Mark public
       </Button>
+      {notified !== null && (
+        <div className="mt-1.5 text-[11.5px] text-success-text">
+          {label} marked public — {notified} candidate(s) notified.
+        </div>
+      )}
       {open && (
         <Dialog
           open
@@ -47,6 +51,6 @@ export function MarkFeaturePublicButton({ feature, label }: { feature: BetaFeatu
           </p>
         </Dialog>
       )}
-    </>
+    </div>
   );
 }
