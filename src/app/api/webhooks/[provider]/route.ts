@@ -98,11 +98,11 @@ async function handlePaymentSuccess(payment: Payment) {
         });
         const modules = await prisma.module.findMany({
           where: { programmeId: result.programme.id },
-          include: { lectures: { select: { id: true, narrationUrl: true } } },
+          include: { lectures: { select: { id: true, narrationMode: true } } },
         });
         const lectures = modules.flatMap(m => m.lectures);
         const lectureCount = lectures.length;
-        const hasNarrations = lectures.some(l => l.narrationUrl);
+        const hasNarrations = lectures.some(l => l.narrationMode !== "NONE");
         const lectureDescription = `${lectureCount} recorded lecture${lectureCount !== 1 ? 's' : ''}${hasNarrations ? ' with narration' : ''}`;
         const fullProgramme = await prisma.programme.findUniqueOrThrow({ where: { id: result.programme.id } });
 
