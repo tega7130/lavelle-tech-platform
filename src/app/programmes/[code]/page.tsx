@@ -87,7 +87,7 @@ export default async function ProgrammeDetailPage({ params }: { params: Promise<
                 </span>
               </div>
               <h1 className="font-heading font-semibold text-[26px] sm:text-[30px] lg:text-[38px] leading-[1.12] mt-4 max-w-[22ch] tracking-[-0.022em]">{detail.title}</h1>
-              <p className="text-[16px] leading-[1.7] text-neutral-700 mt-[18px] max-w-[60ch]">{detail.pitch}</p>
+              <p className="text-[16px] leading-[1.7] text-neutral-700 mt-[18px] max-w-[60ch] whitespace-pre-line">{detail.pitch}</p>
 
               {detail.video && <ProgrammeVideo video={detail.video} title={detail.title} />}
 
