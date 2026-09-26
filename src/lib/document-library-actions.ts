@@ -101,6 +101,32 @@ export async function updateDocumentTemplateMetadata(
   return document;
 }
 
+/** File replacement only — keeps all metadata intact and swaps just the file reference. */
+export async function replaceDocumentTemplateFile(
+  id: string,
+  input: DocumentTemplateFileInput,
+  staffId: string
+) {
+  const document = await prisma.documentTemplate.update({
+    where: { id },
+    data: {
+      storageKey: input.storageKey,
+      fileType: input.fileType,
+      fileName: input.fileName,
+      fileBytes: input.fileBytes,
+    },
+    include: { category: true },
+  });
+  await recordAuditEvent(prisma, {
+    actorStaffId: staffId,
+    subjectType: "document_template",
+    subjectId: document.id,
+    action: "document_template.file_replaced",
+    description: `Replaced the file for document template "${document.title}"`,
+  });
+  return document;
+}
+
 export async function setDocumentTemplateActive(id: string, isActive: boolean, staffId: string) {
   const document = await prisma.documentTemplate.update({ where: { id }, data: { isActive } });
   await recordAuditEvent(prisma, {
