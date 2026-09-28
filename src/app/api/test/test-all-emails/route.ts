@@ -201,7 +201,6 @@ const templateTestData: Record<TemplateName, Record<string, any>> = {
     amount: "15,000",
     purchaseDate: new Date().toLocaleDateString(),
     transactionId: "LVL-PAY-2026-00123",
-    receiptUrl: "http://localhost:3000/invoices/123",
     candidatePortalUrl: "http://localhost:3000/portal/library",
     currentYear: 2026,
   },

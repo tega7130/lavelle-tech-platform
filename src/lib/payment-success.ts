@@ -30,7 +30,6 @@ export async function handlePaymentSuccess(payment: Payment) {
         amount: (docResult.amountMinor / 100).toFixed(2),
         purchaseDate: payment.confirmedAt?.toLocaleDateString() || new Date().toLocaleDateString(),
         transactionId: payment.internalReference,
-        receiptUrl: `${process.env.NEXTAUTH_URL}/invoices/${payment.id}`,
         candidatePortalUrl: `${process.env.NEXTAUTH_URL}/portal/library`,
         currentYear: new Date().getFullYear(),
       });

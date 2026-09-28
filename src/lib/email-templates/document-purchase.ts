@@ -6,7 +6,6 @@ export interface DocumentPurchaseVariables {
   amount: string;
   purchaseDate: string;
   transactionId: string;
-  receiptUrl: string;
   candidatePortalUrl: string;
   currentYear: number;
 }
@@ -46,9 +45,6 @@ export function generateDocumentPurchaseEmail(variables: DocumentPurchaseVariabl
                                 </tr>
                                 <tr>
                                     <td style="padding: 8px 0; color: #4a4a4a; font-size: 14px; line-height: 1.6;"><strong>Transaction ID:</strong> {{transactionId}}</td>
-                                </tr>
-                                <tr>
-                                    <td style="padding: 8px 0; color: #4a4a4a; font-size: 14px; line-height: 1.6;"><strong>Receipt:</strong> <a href="{{receiptUrl}}" style="color: #1668e3; text-decoration: none;">View receipt</a></td>
                                 </tr>
                             </table>
                             <h3 style="margin: 20px 0 15px 0; color: #1a1a1a; font-size: 15px; font-weight: 700;">What's next:</h3>
@@ -104,7 +100,6 @@ Document: {{documentName}}
 Price: ₦{{amount}} NGN
 Purchase date: {{purchaseDate}}
 Transaction ID: {{transactionId}}
-Receipt: {{receiptUrl}}
 
 WHAT'S NEXT
 
