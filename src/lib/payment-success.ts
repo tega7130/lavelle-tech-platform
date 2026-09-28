@@ -16,12 +16,28 @@ import { EMAIL_CONFIG } from "@/lib/email-config";
  */
 export async function handlePaymentSuccess(payment: Payment) {
   // Document purchases are a separate, simpler path — no enrolment,
-  // cohort or ID-card machinery, and no email (Phase 2 rule: no email
-  // notifications for these actions) — so this branches off before ever
+  // cohort or ID-card machinery — so this branches off before ever
   // reaching confirmPayment, rather than teaching that function a third,
   // unrelated purpose.
   if (payment.purpose === "DOCUMENT_PURCHASE") {
-    await confirmDocumentPurchase(payment.id);
+    const docResult = await confirmDocumentPurchase(payment.id);
+    if (docResult.alreadyConfirmed) return;
+
+    try {
+      await sendTransactionalEmailByTemplate("document-purchase", docResult.candidate.email, {
+        firstName: getFirstName(docResult.candidate.firstName),
+        documentName: docResult.documentTitle,
+        amount: (docResult.amountMinor / 100).toFixed(2),
+        purchaseDate: payment.confirmedAt?.toLocaleDateString() || new Date().toLocaleDateString(),
+        transactionId: payment.internalReference,
+        receiptUrl: `${process.env.NEXTAUTH_URL}/invoices/${payment.id}`,
+        candidatePortalUrl: `${process.env.NEXTAUTH_URL}/portal/library`,
+        currentYear: new Date().getFullYear(),
+      });
+    } catch (emailError) {
+      console.error("Failed to send document-purchase email:", emailError);
+      // Do not fail the webhook on email errors — log and continue
+    }
     return;
   }
 

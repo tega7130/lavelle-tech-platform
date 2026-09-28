@@ -198,6 +198,16 @@ const templateTestData: Record<TemplateName, Record<string, any>> = {
     programmeUrl: "http://localhost:3000/programmes/ELR-201",
     currentYear: 2026,
   },
+  "document-purchase": {
+    firstName: "John",
+    documentName: "Shareholders' Agreement Template",
+    amount: "15,000",
+    purchaseDate: new Date().toLocaleDateString(),
+    transactionId: "LVL-PAY-2026-00123",
+    receiptUrl: "http://localhost:3000/invoices/123",
+    candidatePortalUrl: "http://localhost:3000/portal/library",
+    currentYear: 2026,
+  },
 };
 
 export async function POST(request: Request) {
