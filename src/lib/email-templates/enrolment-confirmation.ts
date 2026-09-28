@@ -4,9 +4,6 @@ export interface EnrolmentConfirmationVariables {
   firstName: string;
   programmeName: string;
   tier: string;
-  duration: string;
-  weeklyCommitment: string;
-  startDate: string;
   lectureDescription: string;
   portalUrl: string;
   supportEmail: string;
@@ -36,21 +33,6 @@ export function generateEnrolmentConfirmationEmail(variables: EnrolmentConfirmat
                             <p style="margin: 0 0 20px 0; color: #1a1a1a; font-size: 16px; line-height: 1.6;">Hi {{firstName}},</p>
                             <p style="margin: 0 0 20px 0; color: #1a1a1a; font-size: 16px; font-weight: 600; line-height: 1.6;">You're in! Your enrolment in <strong>{{programmeName}}</strong> ({{tier}}) is confirmed and active.</p>
                             <h3 style="margin: 25px 0 15px 0; color: #1a1a1a; font-size: 15px; font-weight: 700;">Your learning journey begins now:</h3>
-                            <h4 style="margin: 20px 0 12px 0; color: #1a1a1a; font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">Programme Details</h4>
-                            <table cellpadding="0" cellspacing="0" width="100%" style="margin: 0 0 20px 0;">
-                                <tr>
-                                    <td style="padding: 8px 0; color: #4a4a4a; font-size: 14px; line-height: 1.6;"><strong>Duration:</strong> {{duration}}</td>
-                                </tr>
-                                <tr>
-                                    <td style="padding: 8px 0; color: #4a4a4a; font-size: 14px; line-height: 1.6;"><strong>Commitment:</strong> {{weeklyCommitment}} per week</td>
-                                </tr>
-                                <tr>
-                                    <td style="padding: 8px 0; color: #4a4a4a; font-size: 14px; line-height: 1.6;"><strong>Start date:</strong> {{startDate}}</td>
-                                </tr>
-                                <tr>
-                                    <td style="padding: 8px 0; color: #4a4a4a; font-size: 14px; line-height: 1.6;"><strong>Access:</strong> 24/7 via your Lavelle portal</td>
-                                </tr>
-                            </table>
                             <h4 style="margin: 20px 0 12px 0; color: #1a1a1a; font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">What's Included</h4>
                             <table cellpadding="0" cellspacing="0" width="100%" style="margin: 0 0 25px 0;">
                                 <tr>
@@ -111,12 +93,6 @@ export function generateEnrolmentConfirmationEmail(variables: EnrolmentConfirmat
 You're in! Your enrolment in {{programmeName}} ({{tier}}) is confirmed and active.
 
 Your learning journey begins now:
-
-PROGRAMME DETAILS
-Duration: {{duration}}
-Commitment: {{weeklyCommitment}} per week
-Start date: {{startDate}}
-Access: 24/7 via your Lavelle portal
 
 WHAT'S INCLUDED
 ✓ {{lectureDescription}}
