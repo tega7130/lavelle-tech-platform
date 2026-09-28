@@ -6,7 +6,7 @@ import { Table, Thead, Tbody, Tr, Th, Td } from "@/components/ui/table";
 import { listCandidatePurchases } from "@/lib/candidate-document-reads";
 import { PurchasesFiltersBar } from "@/components/portal/purchases-filters-bar";
 import { FavoriteButton } from "@/components/portal/favorite-button";
-import { DownloadButton, ViewOnlineButton } from "@/components/portal/document-file-buttons";
+import { DownloadButton } from "@/components/portal/document-file-buttons";
 
 function formatDateTime(d: Date) {
   const date = new Date(d);
@@ -73,11 +73,8 @@ export default async function MyPurchasesPage({ searchParams }: { searchParams: 
                   <Td>
                     <FavoriteButton documentTemplateId={p.documentTemplate.id} initialFavorited={p.viewerFavorited} className="h-8 w-8" />
                   </Td>
-                  <Td className="pr-[var(--space-4)] text-right">
-                    <div className="flex justify-end gap-2">
-                      <DownloadButton documentTemplateId={p.documentTemplate.id} variant="secondary" className="h-8 px-3 text-xs" />
-                      <ViewOnlineButton documentTemplateId={p.documentTemplate.id} variant="secondary" className="h-8 px-3 text-xs" />
-                    </div>
+                  <Td className="pr-[var(--space-4)]">
+                    <DownloadButton documentTemplateId={p.documentTemplate.id} variant="secondary" className="h-8 px-3 text-xs" />
                   </Td>
                 </Tr>
               ))}

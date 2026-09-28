@@ -4,7 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { pollPaymentStatus } from "@/app/actions/payment";
 import { buttonClassName } from "@/components/ui/button";
-import { DownloadButton, ViewOnlineButton } from "@/components/portal/document-file-buttons";
+import { DownloadButton } from "@/components/portal/document-file-buttons";
 
 type PaymentStatusResult = Awaited<ReturnType<typeof pollPaymentStatus>>;
 
@@ -75,9 +75,8 @@ export function CheckoutStatus({ reference, initial }: { reference: string; init
             {documentTitle ? `Your purchase of "${documentTitle}" is confirmed. It's now in My Purchases.` : "Your purchase has been confirmed."}
           </p>
           {documentTemplateId && (
-            <div className="flex flex-wrap items-center justify-center gap-2 mt-5">
+            <div className="mt-5">
               <DownloadButton documentTemplateId={documentTemplateId} variant="primary" />
-              <ViewOnlineButton documentTemplateId={documentTemplateId} variant="secondary" />
             </div>
           )}
           <div className="mt-4">

@@ -7,7 +7,7 @@ import { Card, CardKicker } from "@/components/ui/card";
 import { Tag } from "@/components/ui/tag";
 import { FavoriteButton } from "@/components/portal/favorite-button";
 import { PurchaseButton } from "@/components/portal/purchase-confirmation";
-import { DownloadButton, ViewOnlineButton } from "@/components/portal/document-file-buttons";
+import { DownloadButton } from "@/components/portal/document-file-buttons";
 
 function formatDate(d: Date) {
   return new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
@@ -85,7 +85,6 @@ export default async function TemplateDetailPage({ params }: { params: Promise<{
                 Already Purchased
               </Tag>
               <DownloadButton documentTemplateId={document.id} variant="primary" className="w-full justify-center" />
-              <ViewOnlineButton documentTemplateId={document.id} variant="secondary" className="w-full justify-center" />
             </div>
           ) : document.isActive ? (
             <PurchaseButton documentTemplateId={document.id} title={document.title} priceMinor={effectivePriceMinor(document)} fileFormatLabel={fileFormatLabel} />
