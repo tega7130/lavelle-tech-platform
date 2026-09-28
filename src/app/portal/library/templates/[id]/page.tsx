@@ -7,11 +7,7 @@ import { Card, CardKicker } from "@/components/ui/card";
 import { Tag } from "@/components/ui/tag";
 import { FavoriteButton } from "@/components/portal/favorite-button";
 import { PurchaseButton } from "@/components/portal/purchase-confirmation";
-import { DownloadButton, ViewOnlineButton } from "@/components/portal/document-file-buttons";
-
-function formatDate(d: Date) {
-  return new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
-}
+import { DownloadButton } from "@/components/portal/document-file-buttons";
 
 function formatBytes(bytes: number) {
   if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
@@ -64,10 +60,6 @@ export default async function TemplateDetailPage({ params }: { params: Promise<{
               <div className="text-[11px] uppercase tracking-[0.08em] text-neutral-500">File size</div>
               <div className="mt-0.5">{formatBytes(document.fileBytes)}</div>
             </div>
-            <div>
-              <div className="text-[11px] uppercase tracking-[0.08em] text-neutral-500">Uploaded</div>
-              <div className="mt-0.5">{formatDate(document.createdAt)}</div>
-            </div>
           </div>
         </div>
 
@@ -85,7 +77,6 @@ export default async function TemplateDetailPage({ params }: { params: Promise<{
                 Already Purchased
               </Tag>
               <DownloadButton documentTemplateId={document.id} variant="primary" className="w-full justify-center" />
-              <ViewOnlineButton documentTemplateId={document.id} variant="secondary" className="w-full justify-center" />
             </div>
           ) : document.isActive ? (
             <PurchaseButton documentTemplateId={document.id} title={document.title} priceMinor={effectivePriceMinor(document)} fileFormatLabel={fileFormatLabel} />

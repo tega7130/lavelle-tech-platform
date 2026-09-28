@@ -16,12 +16,27 @@ import { EMAIL_CONFIG } from "@/lib/email-config";
  */
 export async function handlePaymentSuccess(payment: Payment) {
   // Document purchases are a separate, simpler path — no enrolment,
-  // cohort or ID-card machinery, and no email (Phase 2 rule: no email
-  // notifications for these actions) — so this branches off before ever
+  // cohort or ID-card machinery — so this branches off before ever
   // reaching confirmPayment, rather than teaching that function a third,
   // unrelated purpose.
   if (payment.purpose === "DOCUMENT_PURCHASE") {
-    await confirmDocumentPurchase(payment.id);
+    const docResult = await confirmDocumentPurchase(payment.id);
+    if (docResult.alreadyConfirmed) return;
+
+    try {
+      await sendTransactionalEmailByTemplate("document-purchase", docResult.candidate.email, {
+        firstName: getFirstName(docResult.candidate.firstName),
+        documentName: docResult.documentTitle,
+        amount: (docResult.amountMinor / 100).toFixed(2),
+        purchaseDate: payment.confirmedAt?.toLocaleDateString() || new Date().toLocaleDateString(),
+        transactionId: payment.internalReference,
+        candidatePortalUrl: `${process.env.NEXTAUTH_URL}/portal/library`,
+        currentYear: new Date().getFullYear(),
+      });
+    } catch (emailError) {
+      console.error("Failed to send document-purchase email:", emailError);
+      // Do not fail the webhook on email errors — log and continue
+    }
     return;
   }
 
@@ -52,10 +67,6 @@ export async function handlePaymentSuccess(payment: Payment) {
       });
 
       if (result.enrolmentId) {
-        const enrolment = await prisma.enrolment.findUniqueOrThrow({
-          where: { id: result.enrolmentId },
-          include: { intake: true },
-        });
         const modules = await prisma.module.findMany({
           where: { programmeId: result.programme.id },
           include: { lectures: { select: { id: true, narrationMode: true } } },
@@ -64,15 +75,11 @@ export async function handlePaymentSuccess(payment: Payment) {
         const lectureCount = lectures.length;
         const hasNarrations = lectures.some((l) => l.narrationMode !== "NONE");
         const lectureDescription = `${lectureCount} recorded lecture${lectureCount !== 1 ? "s" : ""}${hasNarrations ? " with narration" : ""}`;
-        const fullProgramme = await prisma.programme.findUniqueOrThrow({ where: { id: result.programme.id } });
 
         await sendTransactionalEmailByTemplate("enrolment-confirmation", result.candidate.email, {
           firstName: getFirstName(result.candidate.firstName),
           programmeName: result.programme.title,
           tier: result.programme.tier,
-          duration: (fullProgramme as any).durationWeeks ? `${(fullProgramme as any).durationWeeks} weeks` : "TBD",
-          weeklyCommitment: (fullProgramme as any).weeklyHours ? `${(fullProgramme as any).weeklyHours} hours` : "TBD",
-          startDate: enrolment.intake?.startsAt?.toLocaleDateString() || "You can commence right now",
           lectureDescription,
           portalUrl: `${process.env.NEXTAUTH_URL}/portal/programmes/${result.programme.id}`,
           supportEmail: EMAIL_CONFIG.supportEmail,

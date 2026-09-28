@@ -1,5 +1,5 @@
 import "server-only";
-import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, GetObjectCommand, HeadObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 const s3 = new S3Client({
@@ -61,4 +61,15 @@ export async function getObjectBytes(storageKey: string): Promise<Buffer> {
   const chunks: Uint8Array[] = [];
   for await (const chunk of result.Body as AsyncIterable<Uint8Array>) chunks.push(chunk);
   return Buffer.concat(chunks);
+}
+
+/** Check if a file exists in storage — used after uploads to verify the file was actually persisted. */
+export async function objectExists(storageKey: string): Promise<boolean> {
+  try {
+    await s3.send(new HeadObjectCommand({ Bucket: bucket(), Key: storageKey }));
+    return true;
+  } catch (e) {
+    // HeadObject throws NoSuchKey error if file doesn't exist
+    return false;
+  }
 }

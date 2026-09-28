@@ -17,6 +17,7 @@ import { generateExamSubmissionReceivedAdminEmail, type ExamSubmissionReceivedAd
 import { generateReEngagementReminder3dayEmail, type ReEngagementReminder3dayVariables } from './re-engagement-reminder-3day';
 import { generateReEngagementReminder7dayEmail, type ReEngagementReminder7dayVariables } from './re-engagement-reminder-7day';
 import { generateProgrammeGoliveNotificationEmail, type ProgrammeGoliveNotificationVariables } from './programme-golive-notification';
+import { generateDocumentPurchaseEmail, type DocumentPurchaseVariables } from './document-purchase';
 
 export interface EmailTemplate {
   subject: string;
@@ -43,7 +44,8 @@ export type EmailTemplateVariables =
   | { template: 'exam-submission-received-admin'; variables: ExamSubmissionReceivedAdminVariables }
   | { template: 're-engagement-reminder-3day'; variables: ReEngagementReminder3dayVariables }
   | { template: 're-engagement-reminder-7day'; variables: ReEngagementReminder7dayVariables }
-  | { template: 'programme-golive-notification'; variables: ProgrammeGoliveNotificationVariables };
+  | { template: 'programme-golive-notification'; variables: ProgrammeGoliveNotificationVariables }
+  | { template: 'document-purchase'; variables: DocumentPurchaseVariables };
 
 export const emailTemplates = {
   'account-welcome': generateAccountWelcomeEmail,
@@ -65,6 +67,7 @@ export const emailTemplates = {
   're-engagement-reminder-3day': generateReEngagementReminder3dayEmail,
   're-engagement-reminder-7day': generateReEngagementReminder7dayEmail,
   'programme-golive-notification': generateProgrammeGoliveNotificationEmail,
+  'document-purchase': generateDocumentPurchaseEmail,
 };
 
 export type TemplateName = keyof typeof emailTemplates;
