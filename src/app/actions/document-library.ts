@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { Permission } from "@/generated/prisma/client";
 import { requireStaffPermission } from "@/lib/staff-auth";
-import { getSignedAssetUrl } from "@/lib/storage";
+import { getSignedAssetUrl, objectExists } from "@/lib/storage";
 import {
   createDocumentTemplate,
   updateDocumentTemplateMetadata,
@@ -30,6 +30,12 @@ export async function createDocumentTemplateAction(input: unknown) {
   const staff = await requireStaffPermission(Permission.MANAGE_DOCUMENT_LIBRARY);
   const parsed = createDocumentTemplateSchema.safeParse(input);
   if (!parsed.success) throw new Error(Object.values(fieldErrors(parsed.error))[0] ?? "Invalid input.");
+
+  // Verify the uploaded file actually exists in storage before committing the document
+  const fileExists = await objectExists(parsed.data.storageKey);
+  if (!fileExists) {
+    throw new Error("The uploaded file could not be verified in storage. Please try uploading again.");
+  }
 
   const document = await createDocumentTemplate(
     {
@@ -76,6 +82,12 @@ export async function replaceDocumentFileAction(id: string, input: unknown) {
   const { storageKey, fileType, fileName, fileBytes } = input as Record<string, unknown>;
   if (!storageKey || !fileType || !fileName || !fileBytes) {
     throw new Error("Missing required file fields.");
+  }
+
+  // Verify the uploaded file actually exists in storage before replacing
+  const fileExists = await objectExists(String(storageKey));
+  if (!fileExists) {
+    throw new Error("The uploaded file could not be verified in storage. Please try uploading again.");
   }
 
   const document = await replaceDocumentTemplateFile(
