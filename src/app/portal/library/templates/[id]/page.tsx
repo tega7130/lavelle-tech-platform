@@ -9,10 +9,6 @@ import { FavoriteButton } from "@/components/portal/favorite-button";
 import { PurchaseButton } from "@/components/portal/purchase-confirmation";
 import { DownloadButton } from "@/components/portal/document-file-buttons";
 
-function formatDate(d: Date) {
-  return new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
-}
-
 function formatBytes(bytes: number) {
   if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
@@ -63,10 +59,6 @@ export default async function TemplateDetailPage({ params }: { params: Promise<{
             <div>
               <div className="text-[11px] uppercase tracking-[0.08em] text-neutral-500">File size</div>
               <div className="mt-0.5">{formatBytes(document.fileBytes)}</div>
-            </div>
-            <div>
-              <div className="text-[11px] uppercase tracking-[0.08em] text-neutral-500">Uploaded</div>
-              <div className="mt-0.5">{formatDate(document.createdAt)}</div>
             </div>
           </div>
         </div>
