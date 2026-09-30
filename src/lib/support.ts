@@ -1,6 +1,9 @@
 import { prisma } from "@/lib/prisma";
 import { recordAuditEvent } from "@/lib/audit";
 import { RequestStatus, type RequestPriority, type RequestCategory } from "@/generated/prisma/client";
+import { sendTransactionalEmailByTemplate } from "@/lib/send-transactional-email";
+import { getFirstName } from "@/lib/email-utils";
+import { EMAIL_CONFIG } from "@/lib/email-config";
 
 /**
  * Reply to a support request. Sets firstRespondedAt on the request's
@@ -10,6 +13,10 @@ import { RequestStatus, type RequestPriority, type RequestCategory } from "@/gen
  * self-assigns the replier as a courtesy (pre-dates Slice 10's formal
  * Assign dialog) — assignedByStaffId stays null there, which correctly
  * means only that assignee (not a second "assigner") may resolve it.
+ *
+ * A guest enquiry (no candidateId) has no portal to read the reply in, so
+ * it's emailed to guestEmail instead — a logged-in candidate already sees
+ * staff replies in /portal/support and would get this twice otherwise.
  */
 export async function respondToRequest(requestId: string, staffId: string, body: string) {
   const request = await prisma.supportRequest.findUniqueOrThrow({ where: { id: requestId } });
@@ -24,6 +31,21 @@ export async function respondToRequest(requestId: string, staffId: string, body:
       },
     });
   });
+
+  if (!request.candidateId && request.guestEmail) {
+    try {
+      await sendTransactionalEmailByTemplate("support-reply", request.guestEmail, {
+        firstName: getFirstName(request.guestName),
+        originalMessage: request.body,
+        replyMessage: body,
+        supportEmail: EMAIL_CONFIG.supportEmail,
+        currentYear: new Date().getFullYear(),
+      });
+    } catch (emailError) {
+      console.error("Failed to send support-reply email:", emailError);
+      // Do not fail the reply on email errors — log and continue
+    }
+  }
 }
 
 export interface AssignRequestInput {
