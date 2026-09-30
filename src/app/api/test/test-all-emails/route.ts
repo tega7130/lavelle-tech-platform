@@ -204,6 +204,13 @@ const templateTestData: Record<TemplateName, Record<string, any>> = {
     candidatePortalUrl: "http://localhost:3000/portal/library",
     currentYear: 2026,
   },
+  "support-reply": {
+    firstName: "John",
+    originalMessage: "I'm just trying to figure things out",
+    replyMessage: "No problem at all — happy to help you get started. Let us know what you'd like to figure out first.",
+    supportEmail: EMAIL_CONFIG.supportEmail,
+    currentYear: 2026,
+  },
 };
 
 export async function POST(request: Request) {

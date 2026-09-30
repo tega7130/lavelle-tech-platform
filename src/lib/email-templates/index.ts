@@ -18,6 +18,7 @@ import { generateReEngagementReminder3dayEmail, type ReEngagementReminder3dayVar
 import { generateReEngagementReminder7dayEmail, type ReEngagementReminder7dayVariables } from './re-engagement-reminder-7day';
 import { generateProgrammeGoliveNotificationEmail, type ProgrammeGoliveNotificationVariables } from './programme-golive-notification';
 import { generateDocumentPurchaseEmail, type DocumentPurchaseVariables } from './document-purchase';
+import { generateSupportReplyEmail, type SupportReplyVariables } from './support-reply';
 
 export interface EmailTemplate {
   subject: string;
@@ -45,7 +46,8 @@ export type EmailTemplateVariables =
   | { template: 're-engagement-reminder-3day'; variables: ReEngagementReminder3dayVariables }
   | { template: 're-engagement-reminder-7day'; variables: ReEngagementReminder7dayVariables }
   | { template: 'programme-golive-notification'; variables: ProgrammeGoliveNotificationVariables }
-  | { template: 'document-purchase'; variables: DocumentPurchaseVariables };
+  | { template: 'document-purchase'; variables: DocumentPurchaseVariables }
+  | { template: 'support-reply'; variables: SupportReplyVariables };
 
 export const emailTemplates = {
   'account-welcome': generateAccountWelcomeEmail,
@@ -68,6 +70,7 @@ export const emailTemplates = {
   're-engagement-reminder-7day': generateReEngagementReminder7dayEmail,
   'programme-golive-notification': generateProgrammeGoliveNotificationEmail,
   'document-purchase': generateDocumentPurchaseEmail,
+  'support-reply': generateSupportReplyEmail,
 };
 
 export type TemplateName = keyof typeof emailTemplates;
