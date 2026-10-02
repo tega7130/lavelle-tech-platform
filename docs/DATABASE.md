@@ -1988,6 +1988,97 @@ model DiscountCodeDocument {
 
 ---
 
+## Beta Access (Temporary)
+
+A one-week capacity gate — 10 slots each for Programme enrolment and
+Document Library purchases, first-come-first-served, with manual
+overrides and waitlist feedback. Deliberately isolated to these two
+tables plus `src/lib/beta-gate.ts` so the whole feature can be deleted
+cleanly (migration + these two models + that one file + the UI wired into
+checkout) once the beta ends — nothing else in the schema depends on it.
+
+```prisma
+enum BetaFeature {
+  PROGRAMME
+  DOCUMENT_LIBRARY
+}
+
+enum BetaSignupStatus {
+  GRANTED
+  WAITLISTED
+}
+
+enum BetaGrantSource {
+  AUTO
+  MANUAL
+}
+```
+
+### Beta Feature Signup
+
+One row per candidate per feature — doubles as both the access grant and the waitlist entry, distinguished by `status`, so a candidate's beta state for a feature is never split across two tables that could drift.
+
+```prisma
+model BetaFeatureSignup {
+  id          String    @id @default(uuid())
+  candidateId String    @db.Uuid
+  candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  feature BetaFeature
+  status  BetaSignupStatus
+
+  // Set only when status = GRANTED — which of the 10 slots this is and
+  // whether it was claimed automatically or handed out by an admin.
+  source BetaGrantSource?
+
+  // Set once, when an admin marks the feature public and every WAITLISTED
+  // row for it gets a Notification — never touched for GRANTED rows.
+  notifiedPublicAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  feedback BetaFeedback[]
+
+  @@unique([candidateId, feature])
+  @@index([feature, status])
+}
+```
+
+### Beta Feedback
+
+Required (blocking, text-only, no rating) after a granted candidate's first lecture or first document download — `COMPLETION`. Optional and skippable for a waitlisted candidate — `WAITLIST_INTEREST`.
+
+```prisma
+enum BetaFeedbackKind {
+  COMPLETION
+  WAITLIST_INTEREST
+}
+
+model BetaFeedback {
+  id          String    @id @default(uuid())
+  candidateId String    @db.Uuid
+  candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  feature BetaFeature
+  kind    BetaFeedbackKind
+
+  // 1-5, required for COMPLETION only — enforced in the Zod schema, not
+  // the DB, since WAITLIST_INTEREST feedback has no rating.
+  rating  Int?
+  message String
+
+  signupId String?
+  signup   BetaFeatureSignup? @relation(fields: [signupId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+
+  @@index([feature, kind, createdAt(sort: Desc)])
+}
+```
+
+---
+
 ## Media & Assets
 
 ### Media Asset
@@ -2111,8 +2202,8 @@ model RateLimitAttempt {
 
 ## Data Model Summary
 
-**Total Models:** 73  
-**Total Enums:** 42  
+**Total Models:** 75  
+**Total Enums:** 46  
 **Relationships:** ~100+ foreign keys and relations  
 **Key Constraints:** Unique, check, partial unique indexes  
 
@@ -2129,6 +2220,7 @@ model RateLimitAttempt {
 - Public Content (5 models: ProgrammeListing, Review, Blog, FAQ, Category)
 - Document Library (6 models: DocumentTemplate, DocumentCategory, DocumentFavorite, DocumentPurchase, DiscountCode, DiscountCodeDocument)
 - Media & Assets (3 models: MediaAsset, VideoUpload, Audit)
+- Beta Access (2 models, temporary: BetaFeatureSignup, BetaFeedback — see note above)
 - Audit & Monitoring (4 models: AuditEvent, EmailLog, RateLimiting)
 
 This schema represents a complete, production-ready legal education platform with sophisticated progress tracking, assessment management, examinations, and institutional operations.
