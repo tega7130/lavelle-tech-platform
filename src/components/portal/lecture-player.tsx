@@ -80,6 +80,11 @@ export function LecturePlayer({ enrolmentId, data }: { enrolmentId: string; data
   // ── Media state ──
   const [slideIndex, setSlideIndex] = React.useState(resumePosition.slideIndex);
   const [mediaBuffering, setMediaBuffering] = React.useState(lecture.mediaKind === "VIDEO");
+  // Distinct from mediaBuffering: a missing/expired/broken video source
+  // never fires onCanPlay/onWaiting/onPlaying at all, so mediaBuffering
+  // alone would stay stuck true forever with no way out — this gives
+  // that case its own terminal state instead of an infinite spinner.
+  const [videoError, setVideoError] = React.useState(false);
   const videoRef = React.useRef<HTMLVideoElement>(null);
   const hasSeekedToResumeRef = React.useRef(false);
   const narrationRef = React.useRef<HTMLAudioElement>(null);
@@ -446,6 +451,15 @@ export function LecturePlayer({ enrolmentId, data }: { enrolmentId: string; data
                     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                     allowFullScreen
                   />
+                ) : !lecture.videoUrl || videoError ? (
+                  <div className="aspect-video flex flex-col items-center justify-center text-white bg-black text-[13px] text-center px-6">
+                    <div className="w-9 h-9 rounded-full bg-white/10 border border-white/20 flex items-center justify-center text-base">!</div>
+                    <div className="font-heading font-semibold text-[14px] mt-3">This video isn&apos;t available right now</div>
+                    <div className="text-white/60 text-[11.5px] mt-1 max-w-[42ch]">
+                      It may still be processing, or something went wrong loading it. Your progress is saved — please contact support if this
+                      continues.
+                    </div>
+                  </div>
                 ) : (
                   <>
                     {mediaBuffering && (
@@ -456,7 +470,8 @@ export function LecturePlayer({ enrolmentId, data }: { enrolmentId: string; data
                     )}
                     <video
                       ref={videoRef}
-                      src={lecture.videoUrl ?? undefined}
+                      src={lecture.videoUrl}
+                      preload="auto"
                       controls
                       controlsList="nodownload noremoteplayback"
                       disablePictureInPicture
@@ -465,6 +480,10 @@ export function LecturePlayer({ enrolmentId, data }: { enrolmentId: string; data
                       onCanPlay={() => setMediaBuffering(false)}
                       onWaiting={() => setMediaBuffering(true)}
                       onPlaying={() => setMediaBuffering(false)}
+                      onError={() => {
+                        setMediaBuffering(false);
+                        setVideoError(true);
+                      }}
                       onTimeUpdate={(e) => {
                         positionRef.current.mediaPositionSeconds = Math.floor(e.currentTarget.currentTime);
                       }}
