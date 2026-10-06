@@ -304,11 +304,29 @@ export async function setProgrammeStatus(id: string, status: ProgrammeStatus) {
   return updated;
 }
 
+// Matches programmeCodeSchema's own cap (validation/programme.ts) — a
+// code built here must satisfy the exact same rule a staff-typed one
+// would, or the duplicate lands un-saveable with no indication why.
+const MAX_CODE_LENGTH = 40;
+
+/**
+ * Strips a trailing "-COPY" / "-COPY-<n>" so duplicating a duplicate
+ * increments cleanly ("X-COPY" again, or "X-COPY-2") instead of chaining
+ * suffixes onto every prior one ("X-COPY-COPY-COPY-2-COPY"), which is
+ * also how this used to grow past MAX_CODE_LENGTH on repeated use.
+ */
+function stripCopySuffix(code: string): string {
+  return code.replace(/-COPY(-\d+)?$/i, "");
+}
+
 function nextCopyCode(baseCode: string, existingCodes: Set<string>): string {
-  let candidate = `${baseCode}-COPY`;
+  const base = stripCopySuffix(baseCode);
+  const withSuffix = (suffix: string) => `${base.slice(0, Math.max(0, MAX_CODE_LENGTH - suffix.length))}${suffix}`;
+
+  let candidate = withSuffix("-COPY");
   let n = 2;
   while (existingCodes.has(candidate)) {
-    candidate = `${baseCode}-COPY-${n}`;
+    candidate = withSuffix(`-COPY-${n}`);
     n++;
   }
   return candidate;
@@ -343,7 +361,7 @@ export async function duplicateProgramme(id: string) {
     const newProgramme = await tx.programme.create({
       data: {
         code: newCode,
-        title: `${source.title} (Copy)`,
+        title: `${source.title.replace(/ \(Copy\)$/i, "")} (Copy)`,
         categoryId: source.categoryId,
         tier: source.tier,
         status: "DRAFT",
