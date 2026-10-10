@@ -5,12 +5,15 @@ import { useActionState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createCategory } from "@/app/actions/programme";
+import { createPracticeArea } from "@/app/actions/practice-area";
 import { finaliseUpload } from "@/app/actions/uploads";
 import { uploadToStorage, probeMediaDuration } from "@/lib/storage-upload";
+import { generateProgrammeCode } from "@/lib/programme-code";
 import { emptyActionState, type FormActionState } from "@/lib/action-state";
 import { Button, buttonClassName } from "@/components/ui/button";
 import { Label, Input, Textarea, FieldError } from "@/components/ui/field";
 import { Dialog } from "@/components/ui/dialog";
+import type { ProgrammeTier } from "@/generated/prisma/client";
 
 async function uploadCoverVideo(file: File) {
   const durationSeconds = await probeMediaDuration(file);
@@ -23,6 +26,12 @@ export interface CategoryOption {
   name: string;
 }
 
+export interface PracticeAreaOption {
+  id: string;
+  code: string;
+  name: string;
+}
+
 export interface ProgrammeDetailsFormProps {
   mode: "create" | "edit";
   programmeId?: string;
@@ -31,10 +40,16 @@ export interface ProgrammeDetailsFormProps {
   // instead of routing into the course content builder.
   futureMode?: boolean;
   categories: CategoryOption[];
+  practiceAreas: PracticeAreaOption[];
   authors?: string[];
   initialValues?: {
     title: string;
+    // Only meaningful in edit mode — the programme's EXISTING, immutable
+    // code and practice area, shown read-only for reference. In create
+    // mode there is no code yet; it's generated live from the selected
+    // practice area + tier below.
     code: string;
+    practiceAreaId: string | null;
     categoryId: string;
     tier: string;
     summary: string;
@@ -50,7 +65,7 @@ export interface ProgrammeDetailsFormProps {
   action: (prevState: FormActionState, formData: FormData) => Promise<FormActionState>;
 }
 
-const TIERS = [
+const TIERS: { value: ProgrammeTier; label: string }[] = [
   { value: "FOUNDATION", label: "Foundation" },
   { value: "SPECIALIST", label: "Specialist" },
   { value: "ADVANCED_PRACTITIONER", label: "Advanced Practitioner" },
@@ -61,6 +76,7 @@ export function ProgrammeDetailsForm({
   programmeId,
   futureMode = false,
   categories: initialCategories,
+  practiceAreas: initialPracticeAreas,
   authors: initialAuthors,
   initialValues,
   action,
@@ -71,7 +87,13 @@ export function ProgrammeDetailsForm({
   const [categoryId, setCategoryId] = React.useState(initialValues?.categoryId ?? "");
   const [creatingCategory, setCreatingCategory] = React.useState(false);
   const [newCategoryName, setNewCategoryName] = React.useState("");
-  const [tier, setTier] = React.useState(initialValues?.tier ?? "SPECIALIST");
+  const [practiceAreas, setPracticeAreas] = React.useState(initialPracticeAreas);
+  const [practiceAreaId, setPracticeAreaId] = React.useState(initialValues?.practiceAreaId ?? "");
+  const [creatingPracticeArea, setCreatingPracticeArea] = React.useState(false);
+  const [newPracticeAreaName, setNewPracticeAreaName] = React.useState("");
+  const [newPracticeAreaCode, setNewPracticeAreaCode] = React.useState("");
+  const [practiceAreaError, setPracticeAreaError] = React.useState<string | null>(null);
+  const [tier, setTier] = React.useState<ProgrammeTier>((initialValues?.tier as ProgrammeTier) ?? "SPECIALIST");
   const [errors, setErrors] = React.useState<Record<string, string>>({});
   const [prevStateErrors, setPrevStateErrors] = React.useState(state.errors);
   const [prevStateData, setPrevStateData] = React.useState(state.data);
@@ -87,7 +109,6 @@ export function ProgrammeDetailsForm({
   // form action completes, success or not), silently discarding
   // whatever the admin had typed in every OTHER field too.
   const [title, setTitle] = React.useState(initialValues?.title ?? "");
-  const [code, setCode] = React.useState(initialValues?.code ?? "");
   const [weeks, setWeeks] = React.useState(initialValues?.weeks != null ? String(initialValues.weeks) : "");
   const [weeklyHoursLabel, setWeeklyHoursLabel] = React.useState(initialValues?.weeklyHoursLabel ?? "");
   const [feeNaira, setFeeNaira] = React.useState(initialValues?.feeNaira != null ? String(initialValues.feeNaira) : "");
@@ -150,6 +171,34 @@ export function ProgrammeDetailsForm({
     setNewCategoryName("");
   }
 
+  async function handleCreatePracticeArea() {
+    const name = newPracticeAreaName.trim();
+    const code = newPracticeAreaCode.trim();
+    if (!name || !code) {
+      setPracticeAreaError("Enter a name and a short code.");
+      return;
+    }
+    try {
+      const created = await createPracticeArea({ name, code });
+      setPracticeAreas((areas) => (areas.some((a) => a.id === created.id) ? areas : [...areas, created]));
+      setPracticeAreaId(created.id);
+      setCreatingPracticeArea(false);
+      setNewPracticeAreaName("");
+      setNewPracticeAreaCode("");
+      setPracticeAreaError(null);
+    } catch (e) {
+      setPracticeAreaError(e instanceof Error ? e.message : "Could not create practice area.");
+    }
+  }
+
+  // Edit mode never lets this change (practiceAreaId/tier are immutable
+  // post-creation — see validation/programme.ts), so the preview there is
+  // just the row's own already-assigned code, read straight from
+  // initialValues rather than recomputed.
+  const selectedPracticeArea = practiceAreas.find((p) => p.id === practiceAreaId);
+  const previewCode =
+    mode === "edit" ? (initialValues?.code ?? null) : selectedPracticeArea ? generateProgrammeCode(selectedPracticeArea.code, tier) : null;
+
   return (
     <form action={formAction} className="flex max-w-[720px] flex-col gap-4">
       {state.message && (
@@ -158,51 +207,121 @@ export function ProgrammeDetailsForm({
         </div>
       )}
 
-      <div className="grid grid-cols-[2fr_1fr] gap-3">
+      <div>
+        <Label htmlFor="title">Programme title</Label>
+        <Input id="title" name="title" value={title} onChange={(e) => setTitle(e.target.value)} invalid={!!errors.title} />
+        <FieldError>{errors.title}</FieldError>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
         <div>
-          <Label htmlFor="title">Programme title</Label>
-          <Input id="title" name="title" value={title} onChange={(e) => setTitle(e.target.value)} invalid={!!errors.title} />
-          <FieldError>{errors.title}</FieldError>
+          <Label htmlFor="practiceAreaId">Practice area</Label>
+          {mode === "edit" ? (
+            <div className="flex h-11 items-center rounded-md border border-dashed border-neutral-300 bg-neutral-100 px-3 text-sm text-text">
+              {selectedPracticeArea ? `${selectedPracticeArea.name} (${selectedPracticeArea.code})` : "—"}
+            </div>
+          ) : !creatingPracticeArea ? (
+            <div className="flex gap-2">
+              <select
+                id="practiceAreaId"
+                value={practiceAreaId}
+                onChange={(e) => setPracticeAreaId(e.target.value)}
+                className="h-11 flex-1 rounded-md border border-neutral-300 bg-bg px-3 text-sm text-text"
+              >
+                <option value="" disabled>
+                  Choose a practice area
+                </option>
+                {practiceAreas.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name} ({p.code})
+                  </option>
+                ))}
+              </select>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => setCreatingPracticeArea(true)}
+                className="h-11 flex-none px-3 text-[12.5px]"
+              >
+                + New
+              </Button>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2">
+              <Input
+                autoFocus
+                placeholder="e.g. Privacy & Data Protection"
+                value={newPracticeAreaName}
+                onChange={(e) => setNewPracticeAreaName(e.target.value)}
+              />
+              <Input
+                placeholder="Short code, e.g. PDP"
+                value={newPracticeAreaCode}
+                onChange={(e) => setNewPracticeAreaCode(e.target.value.toUpperCase())}
+              />
+              {practiceAreaError && <div className="text-[11.5px] text-[#c0392b]">{practiceAreaError}</div>}
+              <div className="flex gap-2">
+                <Button type="button" onClick={handleCreatePracticeArea} className="h-[38px] flex-none text-[12.5px]">
+                  Create
+                </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => {
+                    setCreatingPracticeArea(false);
+                    setPracticeAreaError(null);
+                  }}
+                  className="h-[38px] flex-none text-[12.5px]"
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          )}
+          {mode === "create" && <input type="hidden" name="practiceAreaId" value={practiceAreaId} />}
+          <FieldError>{errors.practiceAreaId}</FieldError>
         </div>
         <div>
-          <Label htmlFor="code">Programme code</Label>
-          <Input
-            id="code"
-            name="code"
-            placeholder="ELR-201"
-            value={code}
-            onChange={(e) => setCode(e.target.value)}
-            invalid={!!errors.code}
-          />
-          <FieldError>{errors.code}</FieldError>
+          <Label htmlFor="tier">Ladder level</Label>
+          {mode === "edit" ? (
+            <div className="flex h-11 items-center rounded-md border border-dashed border-neutral-300 bg-neutral-100 px-3 text-sm text-text">
+              {TIERS.find((t) => t.value === tier)?.label ?? tier}
+            </div>
+          ) : (
+            <select
+              id="tier"
+              name="tier"
+              value={tier}
+              onChange={(e) => setTier(e.target.value as ProgrammeTier)}
+              className="h-11 w-full rounded-md border border-neutral-300 bg-bg px-3 text-sm text-text"
+            >
+              {TIERS.map((t) => (
+                <option key={t.value} value={t.value}>
+                  {t.label}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
+      </div>
+
+      <div>
+        <Label>Programme code</Label>
+        <div className="flex h-11 items-center rounded-md border border-dashed border-neutral-300 bg-neutral-100 px-3 text-sm font-medium tabular-nums text-text">
+          {previewCode ?? "Choose a practice area and tier"}
+        </div>
+        <div className="mt-1.5 text-[11.5px] text-neutral-600">
+          Generated automatically from the practice area and tier — can&rsquo;t be edited, and never changes once the
+          programme is created.
         </div>
       </div>
 
       <div className="grid grid-cols-3 gap-3">
         <div>
-          <Label htmlFor="tier">Ladder level</Label>
-          <select
-            id="tier"
-            name="tier"
-            value={tier}
-            onChange={(e) => setTier(e.target.value)}
-            className="h-11 w-full rounded-md border border-neutral-300 bg-bg px-3 text-sm text-text"
-          >
-            {TIERS.map((t) => (
-              <option key={t.value} value={t.value}>
-                {t.label}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
           <Label htmlFor="weeks">Weeks</Label>
           <Input id="weeks" name="weeks" type="number" min={1} value={weeks} onChange={(e) => setWeeks(e.target.value)} invalid={!!errors.weeks} />
           <FieldError>{errors.weeks}</FieldError>
         </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-3">
         <div>
           <Label htmlFor="weeklyHoursLabel">Weekly hours</Label>
           <Input

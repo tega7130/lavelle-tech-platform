@@ -507,13 +507,43 @@ model ProgrammeCategory {
   programmes Programme[]
 }
 
+// Structured, admin-managed practice-area metadata — the source of truth
+// for the short, stable code embedded in every Programme's code (format:
+// LAV-[PRACTICE]-[TIER]). Deliberately a real table, not a hard-coded
+// list or a code derived from a programme's own (changeable) title, so
+// new practice areas can be added without touching the generation logic.
+model PracticeArea {
+  id   String @id @default(uuid())
+  code String @unique // short, stable, e.g. "PDP" — immutable once any programme uses it (enforced in practice-area.ts)
+  name String @unique // e.g. "Privacy & Data Protection"
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  programmes Programme[]
+}
+
 model Programme {
   id    String @id @default(uuid())
-  code  String @unique // e.g. ELR-201 — immutable once any enrolment exists (rule 3)
+  // Server-generated, never typed by an admin: LAV-[practiceArea.code]-[tier
+  // number] (see generateProgrammeCode in programme-code.ts) — immutable
+  // once set. Nullable practiceAreaId below is what actually allows this to
+  // stay a plain unique String rather than a generated column: a programme
+  // created before this system existed keeps its historic free-form code
+  // forever, same as any other pre-migration data.
+  code  String @unique
   title String
 
   categoryId String
   category   ProgrammeCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  // Required for every new programme (validation/programme.ts) and
+  // immutable after creation — code is derived from this + tier, so
+  // changing either after the fact would make the code lie about what it
+  // encodes. Nullable only so pre-existing programmes (created before
+  // this field existed) don't need a forced backfill to stay valid rows.
+  practiceAreaId String?
+  practiceArea   PracticeArea? @relation(fields: [practiceAreaId], references: [id], onDelete: Restrict)
 
   tier   ProgrammeTier
   status ProgrammeStatus @default(DRAFT)
@@ -573,6 +603,7 @@ model Programme {
 
   @@index([status, tier])
   @@index([categoryId])
+  @@index([practiceAreaId, tier])
 }
 
 model Module {

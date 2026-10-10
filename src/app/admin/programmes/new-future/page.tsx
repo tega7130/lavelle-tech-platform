@@ -1,9 +1,10 @@
 import { listCategories, listProgrammeAuthors } from "@/lib/programme-reads";
+import { listPracticeAreas } from "@/app/actions/practice-area";
 import { createFutureProgramme } from "@/app/actions/programme";
 import { ProgrammeDetailsForm } from "@/components/admin/programme-details-form";
 
 export default async function NewFutureProgrammePage() {
-  const [categories, authors] = await Promise.all([listCategories(), listProgrammeAuthors()]);
+  const [categories, practiceAreas, authors] = await Promise.all([listCategories(), listPracticeAreas(), listProgrammeAuthors()]);
 
   return (
     <div>
@@ -14,7 +15,14 @@ export default async function NewFutureProgrammePage() {
         title, tier, and fee with a &ldquo;Notify me&rdquo; form instead of a price and enrol button. Build the syllabus
         whenever it&rsquo;s ready, then switch it to open for enrolment from the Website page.
       </p>
-      <ProgrammeDetailsForm mode="create" futureMode categories={categories} authors={authors} action={createFutureProgramme} />
+      <ProgrammeDetailsForm
+        mode="create"
+        futureMode
+        categories={categories}
+        practiceAreas={practiceAreas}
+        authors={authors}
+        action={createFutureProgramme}
+      />
     </div>
   );
 }

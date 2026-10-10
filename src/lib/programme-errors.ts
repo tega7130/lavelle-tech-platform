@@ -9,6 +9,14 @@ export class CodeImmutableError extends Error {
   }
 }
 
+/** A practice area + tier combination already has a programme — codes are derived, never auto-suffixed, so this must be resolved by picking a different tier or practice area (rule: flag, don't silently reuse or overwrite). */
+export class ProgrammeCodeConflictError extends Error {
+  constructor(code: string) {
+    super(`${code} is already in use by another programme. Choose a different tier or practice area.`);
+    this.name = "ProgrammeCodeConflictError";
+  }
+}
+
 /** Carries the specific list of publish-check failures — README: "Return the specific failures, not a generic refusal." */
 export class PublishCheckError extends Error {
   failures: string[];

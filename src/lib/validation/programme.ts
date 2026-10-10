@@ -1,28 +1,17 @@
 import { z } from "zod";
 
-// Free-form — the admin can enter whatever code they want. The only hard
-// rule is "/" (it becomes a URL path segment in candidate-facing routes
-// like /portal/exams/[code], and a slash would split it into two).
-//
-// The `error` option on the base type constructor (not a chained
-// .min()/.positive()) is what catches a field that's MISSING entirely
-// (undefined), not just present-but-empty — zod's base type check runs
-// before any chained refinement, so a message attached only to .min(1,
-// "...") never fires for a field the form omitted altogether (same
-// pattern as validation/payment.ts's offlinePaymentInputSchema).
-export const programmeCodeSchema = z
-  .string({ error: "Enter a programme code" })
-  .trim()
-  .min(1, "Enter a programme code")
-  .max(40, "Keep the code under 40 characters")
-  .refine((v) => !v.includes("/"), { message: "The code cannot contain a slash" });
-
 // Base object kept separate from its .refine()s so updateProgrammeSchema
 // can derive a .partial() version below — .partial() only exists on a
 // plain ZodObject, not on the ZodEffects a chained .refine() produces.
+//
+// No `code` field here at all — it is never client-supplied. The server
+// derives it from practiceAreaId + tier (generateProgrammeCode,
+// programme-code.ts) at creation time and it is immutable from then on;
+// see updateProgrammeSchema below, which omits both practiceAreaId and
+// tier for exactly that reason.
 const programmeObjectSchema = z.object({
   title: z.string({ error: "Enter a programme title" }).trim().min(1, "Enter a programme title").max(200, "Keep the title under 200 characters"),
-  code: programmeCodeSchema,
+  practiceAreaId: z.string({ error: "Choose a practice area" }).min(1, "Choose a practice area"),
   categoryId: z.string().min(1).optional(),
   newCategoryName: z.string().trim().min(1).max(120).optional(),
   tier: z.enum(["FOUNDATION", "SPECIALIST", "ADVANCED_PRACTITIONER"], { error: "Choose a tier" }),
@@ -60,15 +49,23 @@ export const createProgrammeSchema = programmeObjectSchema
 
 export type CreateProgrammeInput = z.infer<typeof createProgrammeSchema>;
 
+// practiceAreaId and tier are immutable after creation (code is derived
+// from both, and must stay meaningful) — omitted entirely rather than
+// merely ignored, so an edit can never carry either even by accident.
 export const updateProgrammeSchema = programmeObjectSchema
+  .omit({ practiceAreaId: true, tier: true })
   .partial()
-  .extend({ status: z.enum(["DRAFT", "ACTIVE", "ARCHIVED"]).optional() })
-  .refine(prerequisiteOnlyForAdvanced, {
-    message: "Only Advanced Practitioner programmes take a prerequisite tier",
-    path: ["prerequisiteTier"],
-  });
+  .extend({ status: z.enum(["DRAFT", "ACTIVE", "ARCHIVED"]).optional() });
 
 export type UpdateProgrammeInput = z.infer<typeof updateProgrammeSchema>;
+
+// Separate from programmeObjectSchema's own prerequisiteOnlyForAdvanced
+// refine above: an edit never carries `tier` (it's omitted, immutable),
+// so that refine can't see it — the action checks this against the
+// EXISTING row's tier instead, after fetching it from the DB.
+export function prerequisiteRequiresAdvancedTier(existingTier: string, prerequisiteTier: string | undefined): boolean {
+  return existingTier === "ADVANCED_PRACTITIONER" || !prerequisiteTier;
+}
 
 export const assessmentWeightsSchema = z
   .object({
