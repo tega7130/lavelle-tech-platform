@@ -544,9 +544,9 @@ function LectureEditor({
       </div>
 
       {tab === "media" && (
-        <MediaTab lecture={lecture} duration={duration} narrationWarning={narrationWarning} onSaved={onSaved} />
+        <MediaTab key={lecture.id} lecture={lecture} duration={duration} narrationWarning={narrationWarning} onSaved={onSaved} />
       )}
-      {tab === "narration" && <NarrationTab lecture={lecture} onSaved={onSaved} />}
+      {tab === "narration" && <NarrationTab key={lecture.id} lecture={lecture} onSaved={onSaved} />}
       {tab === "scenario" && <ScenarioTab lecture={lecture} onSaved={onSaved} />}
       {tab === "drafting" && <DraftingTab lecture={lecture} onSaved={onSaved} />}
     </div>
