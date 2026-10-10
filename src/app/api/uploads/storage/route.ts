@@ -13,7 +13,20 @@ const PERMISSION_BY_PURPOSE = {
 } as const;
 
 const ALLOWED_MIME_TYPES: Record<string, string[]> = {
-  programme: ["video/mp4", "video/webm", "video/quicktime", "image/jpeg", "image/png", "image/webp"],
+  programme: [
+    "video/mp4",
+    "video/webm",
+    "video/quicktime",
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+    "application/pdf",
+    "audio/mpeg",
+    "audio/mp4",
+    "audio/x-m4a",
+    "audio/wav",
+    "audio/x-wav",
+  ],
   blog: ["image/jpeg", "image/png", "image/webp", "image/gif"],
   certificate: ["application/pdf"],
   document_library: ["application/pdf", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/vnd.ms-word.document.macroEnabled.12"],
@@ -33,6 +46,11 @@ const EXTENSION_BY_MIME_TYPE: Record<string, string[]> = {
   "application/msword": ["doc"],
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ["docx"],
   "application/vnd.ms-word.document.macroEnabled.12": ["docm"],
+  "audio/mpeg": ["mp3"],
+  "audio/mp4": ["m4a"],
+  "audio/x-m4a": ["m4a"],
+  "audio/wav": ["wav"],
+  "audio/x-wav": ["wav"],
 };
 
 function getFileExtension(filename: string): string {

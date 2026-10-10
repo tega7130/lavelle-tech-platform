@@ -4,18 +4,32 @@ import { useState, useTransition } from "react";
 import Link from "next/link";
 import { buttonClassName } from "@/components/ui/button";
 import { cn } from "@/lib/cn";
-import { deleteProgramme, duplicateProgrammeAndRedirect, setProgrammeStatus } from "@/app/actions/programme";
-import type { ProgrammeStatus } from "@/generated/prisma/client";
+import { deleteProgramme, setProgrammeStatus } from "@/app/actions/programme";
+import { DuplicateProgrammeDialog, type PracticeAreaOption } from "@/components/admin/duplicate-programme-dialog";
+import type { ProgrammeStatus, ProgrammeTier } from "@/generated/prisma/client";
 
 interface ProgrammeRowActionsProps {
   id: string;
+  title: string;
   status: ProgrammeStatus;
+  tier: ProgrammeTier;
+  practiceAreaId: string | null;
+  practiceAreas: PracticeAreaOption[];
   /** Same permission setProgrammeStatus itself requires (MANAGE_PROGRAMMES) — computed server-side from the signed-in staff's actual grants, not guessed from role name. */
   canManageProgrammes: boolean;
   isSuperAdmin: boolean;
 }
 
-export function ProgrammeRowActions({ id, status, canManageProgrammes, isSuperAdmin }: ProgrammeRowActionsProps) {
+export function ProgrammeRowActions({
+  id,
+  title,
+  status,
+  tier,
+  practiceAreaId,
+  practiceAreas,
+  canManageProgrammes,
+  isSuperAdmin,
+}: ProgrammeRowActionsProps) {
   const [isPending, startTransition] = useTransition();
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -71,11 +85,18 @@ export function ProgrammeRowActions({ id, status, canManageProgrammes, isSuperAd
           an omitted button still reserves its column's width instead of letting the
           row shrink and stagger the whole group leftward. */}
       <div className="grid w-fit grid-cols-[100px_68px_104px_132px] gap-2">
-        <form action={duplicateProgrammeAndRedirect.bind(null, id)}>
-          <button type="submit" className={buttonClassName("secondary", cn(btn, "w-full"))}>
-            Duplicate
-          </button>
-        </form>
+        <DuplicateProgrammeDialog
+          programmeId={id}
+          sourceTitle={title}
+          sourcePracticeAreaId={practiceAreaId}
+          sourceTier={tier}
+          practiceAreas={practiceAreas}
+          trigger={(openDialog) => (
+            <button type="button" onClick={openDialog} className={buttonClassName("secondary", cn(btn, "w-full"))}>
+              Duplicate
+            </button>
+          )}
+        />
 
         <Link href={`/admin/programmes/${id}/edit`} className={buttonClassName("secondary", cn(btn, "w-full"))}>
           Edit

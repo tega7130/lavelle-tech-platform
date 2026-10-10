@@ -1,11 +1,17 @@
 import { notFound } from "next/navigation";
 import { getProgrammeForEdit, listCategories, listProgrammeAuthors } from "@/lib/programme-reads";
+import { listPracticeAreas } from "@/app/actions/practice-area";
 import { updateProgramme } from "@/app/actions/programme";
 import { ProgrammeDetailsForm } from "@/components/admin/programme-details-form";
 
 export default async function EditProgrammePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [programme, categories, authors] = await Promise.all([getProgrammeForEdit(id), listCategories(), listProgrammeAuthors()]);
+  const [programme, categories, practiceAreas, authors] = await Promise.all([
+    getProgrammeForEdit(id),
+    listCategories(),
+    listPracticeAreas(),
+    listProgrammeAuthors(),
+  ]);
   if (!programme) notFound();
 
   const boundUpdate = updateProgramme.bind(null, id);
@@ -20,10 +26,12 @@ export default async function EditProgrammePage({ params }: { params: Promise<{ 
         mode="edit"
         programmeId={id}
         categories={categories}
+        practiceAreas={practiceAreas}
         authors={authors}
         initialValues={{
           title: programme.title,
           code: programme.code,
+          practiceAreaId: programme.practiceAreaId,
           categoryId: programme.categoryId,
           tier: programme.tier,
           summary: programme.summary,

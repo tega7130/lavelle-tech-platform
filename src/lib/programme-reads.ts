@@ -34,6 +34,7 @@ export async function listProgrammes(params: ListProgrammesParams = {}) {
     },
     include: {
       category: true,
+      practiceArea: true,
       _count: { select: { enrolments: true, modules: true } },
     },
     orderBy: { createdAt: "desc" },
@@ -60,6 +61,7 @@ export async function getProgrammeForEdit(id: string) {
     where: { id },
     include: {
       category: true,
+      practiceArea: true,
       assessmentWeightings: true,
       _count: { select: { enrolments: true } },
       coverVideoAsset: { select: { id: true, originalFilename: true } },

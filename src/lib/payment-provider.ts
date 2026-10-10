@@ -19,6 +19,20 @@ function secret() {
   return s;
 }
 
+function getSquadcoConfig() {
+  const secretKey = process.env.SQUADCO_SECRET_KEY;
+  if (!secretKey) {
+    throw new Error("Squadco credentials not configured: SQUADCO_SECRET_KEY required");
+  }
+  return { secretKey };
+}
+
+function squadcoApiUrl(): string {
+  const url = process.env.SQUADCO_API_URL;
+  if (!url) throw new Error("SQUADCO_API_URL is not set");
+  return url.replace(/\/+$/, "");
+}
+
 /**
  * Beta kill switch: while true, initiatePayment/initiateGuestCheckout
  * (payment.ts) skip creating a Nomba checkout order entirely and mark
@@ -116,6 +130,116 @@ export interface ProviderCheckout {
   checkoutUrl: string;
 }
 
+export interface SquadcoWebhookPayload {
+  Event: string;
+  TransactionRef: string;
+  Body: {
+    amount?: number;
+    transaction_ref: string;
+    gateway_ref?: string;
+    transaction_status: string; // "Success" | "Failed" | "Abandoned" | "Pending"
+    email?: string;
+    merchant_id?: string;
+    currency?: string;
+    transaction_type?: string;
+    merchant_amount?: number;
+    created_at?: string;
+  };
+}
+
+/**
+ * Squadco's scheme (docs: "Webhook & Redirect URL" > "Signature validation")
+ * — HMAC-SHA512 over the raw request body (not a field subset, unlike
+ * Nomba's), signed with the same secret key used for API auth (no
+ * separate webhook secret). Squadco's own reference implementations hash
+ * the body as delivered and compare against the `x-squad-encrypted-body`
+ * header as uppercase hex, so the raw body text must be hashed exactly as
+ * received — re-serializing a parsed object could reorder keys/whitespace
+ * and silently break every signature.
+ */
+export function verifySquadcoWebhookSignature(rawBody: string, signature: string | null): boolean {
+  if (!signature) return false;
+  const { secretKey } = getSquadcoConfig();
+  const expected = crypto.createHmac("sha512", secretKey).update(rawBody).digest("hex").toUpperCase();
+  const bufA = Buffer.from(expected);
+  const bufB = Buffer.from(signature.toUpperCase());
+  if (bufA.length !== bufB.length) return false;
+  return crypto.timingSafeEqual(bufA, bufB);
+}
+
+/**
+ * Create a Squadco checkout session and return the hosted payment page URL.
+ * Squadco returns the checkout URL immediately; no token needed like Nomba.
+ */
+async function createSquadcoCheckout(input: {
+  internalReference: string;
+  amountMinor: number;
+  candidateEmail: string;
+  callbackUrl: string;
+}): Promise<ProviderCheckout> {
+  const { secretKey } = getSquadcoConfig();
+
+  console.log(`[squadco] checkout transaction_ref=${input.internalReference} callbackUrl=${input.callbackUrl} apiUrl=${squadcoApiUrl()}`);
+
+  const response = await fetch(`${squadcoApiUrl()}/transaction/initiate`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${secretKey}`,
+    },
+    body: JSON.stringify({
+      amount: input.amountMinor, // Squadco takes amount in the lowest currency unit (kobo) — same unit our own amountMinor already uses, no conversion needed
+      email: input.candidateEmail,
+      currency: "NGN",
+      initiate_type: "inline",
+      transaction_ref: input.internalReference,
+      callback_url: input.callbackUrl,
+    }),
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`Squadco checkout failed: ${response.status} ${error}`);
+  }
+
+  const data = (await response.json()) as { code?: string; data?: { checkout_url?: string }; checkout_url?: string };
+  const checkoutUrl = data.checkout_url || data.data?.checkout_url;
+
+  if (!checkoutUrl) {
+    throw new Error("Squadco API did not return a checkout URL");
+  }
+
+  return { checkoutUrl };
+}
+
+/**
+ * Verify payment status with Squadco's API.
+ */
+async function verifySquadcoPayment(internalReference: string) {
+  const { secretKey } = getSquadcoConfig();
+
+  const response = await fetch(`${squadcoApiUrl()}/transaction/verify/${encodeURIComponent(internalReference)}`, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${secretKey}`,
+    },
+  });
+
+  if (!response.ok) {
+    // If Squadco can't find it, fall back to local DB (might be a webhook that hasn't arrived yet)
+    const { prisma } = await import("@/lib/prisma");
+    const payment = await prisma.payment.findUnique({ where: { internalReference } });
+    if (!payment) return { found: false as const };
+    return { found: true as const, status: payment.status, confirmedAt: payment.confirmedAt };
+  }
+
+  const data = (await response.json()) as { data?: { transaction_status?: string } };
+  // Map Squadco status to our status: Success, Failed, Abandoned, Pending
+  const status = data.data?.transaction_status?.toLowerCase() || "pending";
+
+  return { found: true as const, status, confirmedAt: undefined };
+}
+
 /** Get an access token from Nomba using client credentials. */
 async function getNombaAccessToken(): Promise<string> {
   const { accountId, clientId, clientSecret } = getNombaConfig();
@@ -173,6 +297,10 @@ export async function createProviderCheckout(input: {
     throw new Error(`callbackUrl must be an absolute URL, got "${input.callbackUrl}" — check NEXTAUTH_URL is set for this environment.`);
   }
 
+  if (input.provider === "squadco") {
+    return createSquadcoCheckout(input);
+  }
+
   const { accountId } = getNombaConfig();
   const accessToken = await getNombaAccessToken();
 
@@ -215,8 +343,14 @@ export async function createProviderCheckout(input: {
   return { checkoutUrl };
 }
 
-/** Verify payment status with Nomba's API. */
+/** Verify payment status with the provider recorded on the Payment row (not the currently-active env var — a payment keeps the provider it was created under). */
 export async function verifyPaymentWithProvider(internalReference: string) {
+  const { prisma } = await import("@/lib/prisma");
+  const payment = await prisma.payment.findUnique({ where: { internalReference }, select: { provider: true } });
+  if (payment?.provider === "squadco") {
+    return verifySquadcoPayment(internalReference);
+  }
+
   const { accountId } = getNombaConfig();
   const accessToken = await getNombaAccessToken();
 
@@ -230,10 +364,9 @@ export async function verifyPaymentWithProvider(internalReference: string) {
 
   if (!response.ok) {
     // If Nomba can't find it, fall back to local DB (might be a webhook that hasn't arrived yet)
-    const { prisma } = await import("@/lib/prisma");
-    const payment = await prisma.payment.findUnique({ where: { internalReference } });
-    if (!payment) return { found: false as const };
-    return { found: true as const, status: payment.status, confirmedAt: payment.confirmedAt };
+    const full = await prisma.payment.findUnique({ where: { internalReference } });
+    if (!full) return { found: false as const };
+    return { found: true as const, status: full.status, confirmedAt: full.confirmedAt };
   }
 
   const data = (await response.json()) as { code?: string; data?: { status?: string } };

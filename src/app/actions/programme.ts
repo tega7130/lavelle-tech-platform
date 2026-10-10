@@ -1,17 +1,23 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { Permission, Prisma, ProgrammeStatus } from "@/generated/prisma/client";
+import { Permission, Prisma, ProgrammeStatus, type ProgrammeTier } from "@/generated/prisma/client";
 import { requireStaffPermission } from "@/lib/staff-auth";
 import { getCurrentStaff } from "@/lib/staff-session";
 import { recordAuditEvent } from "@/lib/audit";
 import { PermissionDeniedError } from "@/lib/rbac";
 import { slugify } from "@/lib/slug";
-import { CodeImmutableError, PublishCheckError } from "@/lib/programme-errors";
+import { PublishCheckError, ProgrammeCodeConflictError } from "@/lib/programme-errors";
 import { computePublishFailures } from "@/lib/programme-publish";
-import { createProgrammeSchema, updateProgrammeSchema, fieldErrors, type CreateProgrammeInput } from "@/lib/validation/programme";
+import {
+  createProgrammeSchema,
+  updateProgrammeSchema,
+  fieldErrors,
+  prerequisiteRequiresAdvancedTier,
+  type CreateProgrammeInput,
+} from "@/lib/validation/programme";
+import { generateProgrammeCode } from "@/lib/programme-code";
 import type { FormActionState } from "@/lib/action-state";
 import { publishListingAsComingSoonAction } from "@/app/actions/website-admin";
 
@@ -48,8 +54,21 @@ export async function createCategory(name: string) {
   return created;
 }
 
-/** Shared by createProgramme and createFutureProgramme — the programme row, its category if new, and the three weighting rows in one transaction. */
+/**
+ * Shared by createProgramme and createFutureProgramme — the programme
+ * row, its category if new, and the three weighting rows in one
+ * transaction. The code itself is generated here, server-side, from the
+ * chosen practice area's code + tier (never client-supplied) — the
+ * Programme.code unique constraint is the actual race-safety guarantee
+ * (rule 10): two concurrent requests for the same practice area + tier
+ * can both reach this far, but only one `tx.programme.create` wins; the
+ * loser's P2002 is turned into ProgrammeCodeConflictError by the caller.
+ */
 async function createProgrammeCore(staff: { id: string }, data: CreateProgrammeInput) {
+  const practiceArea = await prisma.practiceArea.findUnique({ where: { id: data.practiceAreaId } });
+  if (!practiceArea) throw new Error("Choose a valid practice area.");
+  const code = generateProgrammeCode(practiceArea.code, data.tier);
+
   return prisma.$transaction(async (tx) => {
     let categoryId = data.categoryId;
     if (!categoryId && data.newCategoryName) {
@@ -64,7 +83,8 @@ async function createProgrammeCore(staff: { id: string }, data: CreateProgrammeI
 
     const created = await tx.programme.create({
       data: {
-        code: data.code,
+        code,
+        practiceAreaId: practiceArea.id,
         title: data.title,
         categoryId,
         tier: data.tier,
@@ -118,7 +138,7 @@ export async function createProgramme(_prev: FormActionState, formData: FormData
     return { ok: true, data: { id: programme.id, code: programme.code } };
   } catch (e) {
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
-      return { errors: { code: "A programme with this code already exists" }, values: raw };
+      return { errors: { practiceAreaId: "A programme already exists for this practice area and tier. Choose a different tier or practice area." }, values: raw };
     }
     throw e;
   }
@@ -145,7 +165,7 @@ export async function createFutureProgramme(_prev: FormActionState, formData: Fo
     programme = await createProgrammeCore(staff, parsed.data);
   } catch (e) {
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
-      return { errors: { code: "A programme with this code already exists" }, values: raw };
+      return { errors: { practiceAreaId: "A programme already exists for this practice area and tier. Choose a different tier or practice area." }, values: raw };
     }
     throw e;
   }
@@ -172,7 +192,12 @@ export async function createFutureProgramme(_prev: FormActionState, formData: Fo
   return { ok: true, data: { id: programme.id, code: programme.code, comingSoon: true } };
 }
 
-/** Rejects a code change once any enrolment exists (rule 3) — code appears on certificates and in candidate correspondence. */
+/**
+ * practiceAreaId, tier and code are never accepted here at all — the
+ * code is derived from the first two at creation and all three are
+ * immutable from then on (updateProgrammeSchema omits practiceAreaId
+ * and tier entirely; code was never a schema field to begin with).
+ */
 export async function updateProgramme(
   id: string,
   _prev: FormActionState,
@@ -194,9 +219,11 @@ export async function updateProgramme(
 
   const existing = await prisma.programme.findUniqueOrThrow({ where: { id } });
 
-  if (data.code && data.code !== existing.code) {
-    const enrolmentCount = await prisma.enrolment.count({ where: { programmeId: id } });
-    if (enrolmentCount > 0) return { errors: { code: new CodeImmutableError().message }, values: raw };
+  // tier isn't in `data` (immutable, omitted from the schema) — this
+  // checks the submitted prerequisiteTier against the EXISTING row's
+  // tier instead, since that's the only one that actually governs it.
+  if (data.prerequisiteTier !== undefined && !prerequisiteRequiresAdvancedTier(existing.tier, data.prerequisiteTier)) {
+    return { errors: { prerequisiteTier: "Only Advanced Practitioner programmes take a prerequisite tier" }, values: raw };
   }
 
   try {
@@ -215,9 +242,7 @@ export async function updateProgramme(
         where: { id },
         data: {
           ...(data.title !== undefined ? { title: data.title } : {}),
-          ...(data.code !== undefined ? { code: data.code } : {}),
           ...(categoryId ? { categoryId } : {}),
-          ...(data.tier !== undefined ? { tier: data.tier } : {}),
           ...(data.summary !== undefined ? { summary: data.summary } : {}),
           ...(authorNameField !== null ? { authorName: authorName || null } : {}),
           ...(data.weeks !== undefined ? { weeks: data.weeks } : {}),
@@ -250,7 +275,7 @@ export async function updateProgramme(
     return { ok: true };
   } catch (e) {
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
-      return { errors: { code: "A programme with this code already exists" }, values: raw };
+      return { message: "That category name is already in use. Try a different one.", values: raw };
     }
     throw e;
   }
@@ -304,18 +329,15 @@ export async function setProgrammeStatus(id: string, status: ProgrammeStatus) {
   return updated;
 }
 
-function nextCopyCode(baseCode: string, existingCodes: Set<string>): string {
-  let candidate = `${baseCode}-COPY`;
-  let n = 2;
-  while (existingCodes.has(candidate)) {
-    candidate = `${baseCode}-COPY-${n}`;
-    n++;
-  }
-  return candidate;
-}
-
-/** Deep copy as a new DRAFT with a new code — saves authoring a sibling programme from nothing. */
-export async function duplicateProgramme(id: string) {
+/**
+ * Deep copy as a new DRAFT, under an explicitly chosen practice area +
+ * tier — never the source's own code (duplicating into the exact same
+ * practice area + tier as the source is impossible by construction,
+ * since the source itself already holds that code). The caller supplies
+ * both; duplicate-programme-dialog.tsx defaults them to the source's own
+ * values only as a starting point, never submits them unconfirmed.
+ */
+export async function duplicateProgramme(id: string, targetPracticeAreaId: string, targetTier: ProgrammeTier) {
   const staff = await requireStaffPermission(Permission.MANAGE_PROGRAMMES);
 
   const source = await prisma.programme.findUniqueOrThrow({
@@ -336,16 +358,27 @@ export async function duplicateProgramme(id: string) {
     },
   });
 
-  const existingCodes = new Set((await prisma.programme.findMany({ select: { code: true } })).map((p) => p.code));
-  const newCode = nextCopyCode(source.code, existingCodes);
+  const practiceArea = await prisma.practiceArea.findUnique({ where: { id: targetPracticeAreaId } });
+  if (!practiceArea) throw new Error("Choose a valid practice area.");
 
-  const copy = await prisma.$transaction(async (tx) => {
+  const newCode = generateProgrammeCode(practiceArea.code, targetTier);
+  // An early, friendly check — the transaction's own P2002 catch below is
+  // the real race-safety guarantee (rule 10), this just avoids running
+  // the whole deep-copy transaction only to fail at the last step for an
+  // obviously-taken combination.
+  const taken = await prisma.programme.findUnique({ where: { code: newCode } });
+  if (taken) throw new ProgrammeCodeConflictError(newCode);
+
+  let copy;
+  try {
+    copy = await prisma.$transaction(async (tx) => {
     const newProgramme = await tx.programme.create({
       data: {
         code: newCode,
-        title: `${source.title} (Copy)`,
+        practiceAreaId: practiceArea.id,
+        title: `${source.title.replace(/ \(Copy\)$/i, "")} (Copy)`,
         categoryId: source.categoryId,
-        tier: source.tier,
+        tier: targetTier,
         status: "DRAFT",
         summary: source.summary,
         weeks: source.weeks,
@@ -462,25 +495,25 @@ export async function duplicateProgramme(id: string) {
       }
     }
 
-    await recordAuditEvent(tx, {
-      actorStaffId: staff.id,
-      subjectType: "programme",
-      subjectId: newProgramme.id,
-      action: "programme.duplicated",
-      description: `Duplicated ${source.code} as ${newCode}`,
-    });
+      await recordAuditEvent(tx, {
+        actorStaffId: staff.id,
+        subjectType: "programme",
+        subjectId: newProgramme.id,
+        action: "programme.duplicated",
+        description: `Duplicated ${source.code} as ${newCode}`,
+      });
 
-    return newProgramme;
-  });
+      return newProgramme;
+    });
+  } catch (e) {
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
+      throw new ProgrammeCodeConflictError(newCode);
+    }
+    throw e;
+  }
 
   revalidatePath("/programmes");
   return copy;
-}
-
-/** Form-action wrapper for the Programmes list row button — duplicates then lands the staff member on the new DRAFT copy's details. */
-export async function duplicateProgrammeAndRedirect(id: string) {
-  const copy = await duplicateProgramme(id);
-  redirect(`/admin/programmes/${copy.id}/edit`);
 }
 
 /**

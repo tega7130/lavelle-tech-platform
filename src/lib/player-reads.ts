@@ -20,6 +20,14 @@ export class LectureLockedError extends Error {
   }
 }
 
+// Progressive playback issues range requests for as long as a video/
+// narration track takes to buffer and play through — the 5-minute default
+// TTL on getSignedAssetUrl (fine for a one-shot document fetch) expires
+// mid-playback on anything longer than that, and DO Spaces then 403s
+// further chunk requests, stalling the player with no way to recover short
+// of a reload. Give time-based media room to play all the way through.
+const MEDIA_URL_TTL_SECONDS = 6 * 60 * 60;
+
 async function loadOwnedEnrolment(candidateId: string, enrolmentId: string) {
   const enrolment = await prisma.enrolment.findUnique({
     where: { id: enrolmentId },
@@ -187,8 +195,9 @@ export async function getLecturePlayer(candidateId: string, enrolmentId: string,
       id: s.id,
       title: s.title,
       body: s.body,
-      imageUrl: s.imageAsset ? await getSignedAssetUrl(s.imageAsset.storageKey) : null,
-      narrationUrl: s.narrationAsset ? await getSignedAssetUrl(s.narrationAsset.storageKey) : null,
+      imageUrl: s.imageAsset ? await getSignedAssetUrl(s.imageAsset.storageKey, MEDIA_URL_TTL_SECONDS) : null,
+      imageMimeType: s.imageAsset?.mimeType ?? null,
+      narrationUrl: s.narrationAsset ? await getSignedAssetUrl(s.narrationAsset.storageKey, MEDIA_URL_TTL_SECONDS) : null,
     }))
   );
 
@@ -227,11 +236,13 @@ export async function getLecturePlayer(candidateId: string, enrolmentId: string,
       id: lecture.id,
       title: lecture.title,
       mediaKind: lecture.mediaKind,
-      videoUrl: lecture.videoAsset ? await getSignedAssetUrl(lecture.videoAsset.storageKey) : lecture.videoUrl,
+      videoUrl: lecture.videoAsset ? await getSignedAssetUrl(lecture.videoAsset.storageKey, MEDIA_URL_TTL_SECONDS) : lecture.videoUrl,
       narrationMode: lecture.narrationMode,
       narrationAutoAdvance: lecture.narrationAutoAdvance,
       narrationRequireFull: lecture.narrationRequireFull,
-      fullNarrationUrl: lecture.fullNarrationAsset ? await getSignedAssetUrl(lecture.fullNarrationAsset.storageKey) : null,
+      fullNarrationUrl: lecture.fullNarrationAsset
+        ? await getSignedAssetUrl(lecture.fullNarrationAsset.storageKey, MEDIA_URL_TTL_SECONDS)
+        : null,
       scenarioPrompt: lecture.scenarioPrompt,
       scenarioGuidance: lecture.scenarioGuidance,
       draftingPrompt: lecture.draftingPrompt,

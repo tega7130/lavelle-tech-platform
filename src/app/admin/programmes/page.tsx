@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { listProgrammes } from "@/lib/programme-reads";
+import { listPracticeAreas } from "@/app/actions/practice-area";
 import { getCurrentStaff } from "@/lib/staff-session";
 import { formatNaira, tierLabel, statusLabel } from "@/lib/format";
 import { Tag } from "@/components/ui/tag";
@@ -20,12 +21,13 @@ export default async function ProgrammesListPage({
   searchParams: Promise<{ q?: string; tier?: string; status?: string }>;
 }) {
   const sp = await searchParams;
-  const [programmes, currentStaff] = await Promise.all([
+  const [programmes, practiceAreas, currentStaff] = await Promise.all([
     listProgrammes({
       q: sp.q,
       tier: (sp.tier as ProgrammeTier) || undefined,
       status: (sp.status as ProgrammeStatus) || undefined,
     }),
+    listPracticeAreas(),
     getCurrentStaff(),
   ]);
   const canManageProgrammes = currentStaff?.permissions.includes("MANAGE_PROGRAMMES") ?? false;
@@ -97,7 +99,11 @@ export default async function ProgrammesListPage({
                 <td className="border-b border-dashed border-neutral-300 py-[10px] pr-[var(--space-4)] text-right">
                   <ProgrammeRowActions
                     id={p.id}
+                    title={p.title}
                     status={p.status}
+                    tier={p.tier}
+                    practiceAreaId={p.practiceAreaId}
+                    practiceAreas={practiceAreas}
                     canManageProgrammes={canManageProgrammes}
                     isSuperAdmin={isSuperAdmin}
                   />

@@ -174,6 +174,19 @@ export const BackIcon = (p: IconProps) => (
   </Svg>
 );
 
+export const PlayIcon = (p: IconProps) => (
+  <Svg {...p} fill="currentColor" stroke="none">
+    <path d="M5.5 3.3v11.4a.9.9 0 0 0 1.37.76l9-5.7a.9.9 0 0 0 0-1.52l-9-5.7A.9.9 0 0 0 5.5 3.3Z" />
+  </Svg>
+);
+
+export const PauseIcon = (p: IconProps) => (
+  <Svg {...p} fill="currentColor" stroke="none">
+    <rect x="4.5" y="3" width="3.3" height="12" rx="1" />
+    <rect x="10.2" y="3" width="3.3" height="12" rx="1" />
+  </Svg>
+);
+
 /** Admin rail icons — each is a single compound path, per the source design's NAV_ICONS table. */
 export const ADMIN_NAV_PATHS: Record<string, string> = {
   overview: "M2.5 2.5h5v5h-5zM10.5 2.5h5v5h-5zM2.5 10.5h5v5h-5zM10.5 10.5h5v5h-5z",

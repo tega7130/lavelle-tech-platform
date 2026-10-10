@@ -2,7 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { Prisma, PaymentStatus, type Payment } from "@/generated/prisma/client";
-import { verifyWebhookSignature, verifyNombaWebhookSignature, type NombaWebhookPayload } from "@/lib/payment-provider";
+import {
+  verifyWebhookSignature,
+  verifyNombaWebhookSignature,
+  verifySquadcoWebhookSignature,
+  type NombaWebhookPayload,
+  type SquadcoWebhookPayload,
+} from "@/lib/payment-provider";
 import { handlePaymentSuccess } from "@/lib/payment-success";
 import { recordAuditEvent } from "@/lib/audit";
 
@@ -12,6 +18,19 @@ const stubWebhookBodySchema = z.object({
     reference: z.string().min(1), // our internalReference
     providerEventId: z.string().min(1),
     failureReason: z.string().optional(),
+  }),
+});
+
+const squadcoWebhookBodySchema = z.object({
+  Event: z.string().min(1),
+  TransactionRef: z.string().min(1),
+  Body: z.object({
+    transaction_ref: z.string().min(1),
+    gateway_ref: z.string().optional(),
+    transaction_status: z.string().min(1),
+    amount: z.number().optional(),
+    email: z.string().optional(),
+    currency: z.string().optional(),
   }),
 });
 
@@ -75,6 +94,53 @@ async function handlePaymentFailure(payment: Payment, provider: string, failureR
 export async function POST(request: NextRequest, { params }: { params: Promise<{ provider: string }> }) {
   const { provider } = await params;
   const rawBody = await request.text();
+
+  if (provider === "squadco") {
+    let json: unknown;
+    try {
+      json = JSON.parse(rawBody);
+    } catch {
+      return NextResponse.json({ error: "invalid_json" }, { status: 400 });
+    }
+
+    const parsed = squadcoWebhookBodySchema.safeParse(json);
+    if (!parsed.success) {
+      return NextResponse.json({ error: "invalid_body", issues: parsed.error.issues }, { status: 400 });
+    }
+    const payload = parsed.data as SquadcoWebhookPayload;
+
+    const signature = request.headers.get("x-squad-encrypted-body");
+    if (!verifySquadcoWebhookSignature(rawBody, signature)) {
+      return NextResponse.json({ error: "invalid_signature" }, { status: 401 });
+    }
+
+    let webhookEvent;
+    try {
+      webhookEvent = await prisma.webhookEvent.create({
+        data: { provider, providerEventId: payload.Body.transaction_ref, payload: json as Prisma.InputJsonValue, signatureValid: true },
+      });
+    } catch (e) {
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
+        return NextResponse.json({ ok: true, duplicate: true });
+      }
+      throw e;
+    }
+
+    const payment = await prisma.payment.findUnique({ where: { internalReference: payload.Body.transaction_ref } });
+
+    if (payment) {
+      const status = payload.Body.transaction_status.toLowerCase();
+      if (status === "success") {
+        await handlePaymentSuccess(payment);
+      } else if (status === "failed" || status === "abandoned") {
+        await handlePaymentFailure(payment, provider, `Squadco status: ${payload.Body.transaction_status}`);
+      }
+      // "Pending" — no state change; a later delivery or the verify-transaction poll will resolve it.
+    }
+
+    await prisma.webhookEvent.update({ where: { id: webhookEvent.id }, data: { processedAt: new Date() } });
+    return NextResponse.json({ ok: true });
+  }
 
   if (provider === "nomba") {
     let json: unknown;

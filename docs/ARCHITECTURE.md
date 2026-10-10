@@ -53,7 +53,7 @@ The application is a **monolithic Next.js application** with:
 │ - recordVideoProgress()     - suspendCandidate()             │
 │                                                               │
 │ Route Handlers (APIs)                                        │
-│ - POST /api/webhooks/[provider]  (Nomba, Paystack)          │
+│ - POST /api/webhooks/[provider]  (Nomba, Squadco)           │
 │ - POST /api/sitting/answer       (Exam answer submission)    │
 │ - POST /api/uploads/sign         (Presigned URL generation)  │
 │ - POST /api/progress/draft       (Drafting autosave)         │
@@ -629,6 +629,13 @@ export async function suspendCandidateAction(candidateId: string) {
 
 ## External Integrations
 
+Two payment providers are wired up side by side — `PAYMENT_PROVIDER`
+(env var, default `"nomba"`) picks which one *new* payments use. A
+`Payment` row remembers the provider it was created under, so switching
+this only affects new checkouts; existing payments keep using whichever
+provider they started with for verification. See
+`src/lib/payment-provider.ts`.
+
 ### Payment Webhooks (Nomba)
 ```
 1. Candidate completes payment on Nomba gateway
@@ -655,6 +662,41 @@ export async function suspendCandidateAction(candidateId: string) {
    │
 5. Return 200 OK (async email queued)
 ```
+
+### Payment Webhooks (Squadco)
+```
+1. Candidate completes payment on Squadco's hosted checkout
+   ↓
+2. Squadco sends POST to /api/webhooks/squadco
+   ├─ Body: { Event, TransactionRef, Body: { transaction_ref,
+   │          transaction_status, amount, gateway_ref, ... } }
+   ├─ Header x-squad-encrypted-body: HMAC-SHA512(raw body, SQUADCO_SECRET_KEY)
+   │   (no separate webhook secret — same key used for API auth)
+   │
+3. Webhook handler verifies signature
+   ├─ Compute HMAC-SHA512 over the RAW body (not a re-serialized object —
+   │  re-serializing can reorder keys/whitespace and break the signature)
+   ├─ Compare with header, uppercase hex
+   ├─ Return 401 if mismatch
+   │
+4. Process payment event
+   ├─ Check WebhookEvent table for idempotency, keyed on
+   │  (provider, Body.transaction_ref)
+   ├─ If already processed → return 200 (idempotent)
+   ├─ Look up Payment by internalReference == Body.transaction_ref
+   ├─ Body.transaction_status "Success" → handlePaymentSuccess
+   │  (same shared function the Nomba branch calls)
+   ├─ "Failed" / "Abandoned" → handlePaymentFailure
+   ├─ "Pending" → no change (later delivery or verify-transaction
+   │  poll resolves it)
+   ├─ Mark WebhookEvent as processed
+   │
+5. Return 200 OK
+```
+
+Amounts sent to Squadco are in kobo (its lowest-unit convention) — unlike
+Nomba, which wants a naira decimal string, so there's no `/100`
+conversion on the Squadco side.
 
 ### Email Delivery (Brevo SMTP)
 ```

@@ -53,9 +53,46 @@ Behavior:
 
 ---
 
-**POST /api/webhooks/paystack**
+**POST /api/webhooks/squadco**
 
-Similar to Nomba (alternative payment provider).
+Purpose: Squadco payment provider webhook handler — a second payment
+provider alongside Nomba (switch between them per environment with the
+`PAYMENT_PROVIDER` env var; see `src/lib/payment-provider.ts`).
+
+Authentication:
+- `x-squad-encrypted-body` header — HMAC-SHA512 of the raw request body,
+  signed with `SQUADCO_SECRET_KEY` (the same key used for API auth; unlike
+  Nomba, there's no separate webhook-signing secret)
+
+Request Body:
+```json
+{
+  "Event": "charge_successful",
+  "TransactionRef": "SQTEST6389164239897900003",
+  "Body": {
+    "amount": 10000,
+    "transaction_ref": "LVL-PAY-2026-14941",
+    "gateway_ref": "SQTEST6389164239897900003_1_18_1",
+    "transaction_status": "Success",
+    "email": "candidate@example.com",
+    "currency": "NGN",
+    "transaction_type": "Card"
+  }
+}
+```
+
+Response: `{ "ok": true }` (or `{ "ok": true, "duplicate": true }` on a redelivered event)
+
+Behavior:
+- Verifies the HMAC-SHA512 signature against the raw body
+- Checks `WebhookEvent` table for idempotency, keyed on
+  `(provider, Body.transaction_ref)` — a redelivery of the same
+  transaction is acknowledged with 200 and no further action
+- Looks up the `Payment` row by `Body.transaction_ref` (our own
+  `internalReference`, sent as `transaction_ref` on `/transaction/initiate`)
+- `transaction_status`: `"Success"` → `handlePaymentSuccess`;
+  `"Failed"` / `"Abandoned"` → `handlePaymentFailure`; `"Pending"` → no
+  change (a later delivery or the verify-transaction poll resolves it)
 
 ---
 

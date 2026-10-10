@@ -12,6 +12,7 @@ import { Dialog } from "@/components/ui/dialog";
 import { LectureStateDot } from "@/components/portal/lecture-state-dot";
 import { QuizPlayer } from "@/components/portal/quiz-player";
 import { LectureNotesPanel } from "@/components/portal/lecture-notes-panel";
+import { SlidePlayer } from "@/components/portal/slide-player";
 import { ChevronLeftIcon, LockIcon, MenuIcon } from "@/components/icons";
 import { computePercent } from "@/lib/progress";
 import { renderMarkupToReact } from "@/lib/rich-text";
@@ -80,9 +81,13 @@ export function LecturePlayer({ enrolmentId, data }: { enrolmentId: string; data
   // ── Media state ──
   const [slideIndex, setSlideIndex] = React.useState(resumePosition.slideIndex);
   const [mediaBuffering, setMediaBuffering] = React.useState(lecture.mediaKind === "VIDEO");
+  // Distinct from mediaBuffering: a missing/expired/broken video source
+  // never fires onCanPlay/onWaiting/onPlaying at all, so mediaBuffering
+  // alone would stay stuck true forever with no way out — this gives
+  // that case its own terminal state instead of an infinite spinner.
+  const [videoError, setVideoError] = React.useState(false);
   const videoRef = React.useRef<HTMLVideoElement>(null);
   const hasSeekedToResumeRef = React.useRef(false);
-  const narrationRef = React.useRef<HTMLAudioElement>(null);
   const [narrationPlayed, setNarrationPlayed] = React.useState(false);
 
   const currentSlide = lecture.slides[slideIndex];
@@ -446,6 +451,15 @@ export function LecturePlayer({ enrolmentId, data }: { enrolmentId: string; data
                     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                     allowFullScreen
                   />
+                ) : !lecture.videoUrl || videoError ? (
+                  <div className="aspect-video flex flex-col items-center justify-center text-white bg-black text-[13px] text-center px-6">
+                    <div className="w-9 h-9 rounded-full bg-white/10 border border-white/20 flex items-center justify-center text-base">!</div>
+                    <div className="font-heading font-semibold text-[14px] mt-3">This video isn&apos;t available right now</div>
+                    <div className="text-white/60 text-[11.5px] mt-1 max-w-[42ch]">
+                      It may still be processing, or something went wrong loading it. Your progress is saved — please contact support if this
+                      continues.
+                    </div>
+                  </div>
                 ) : (
                   <>
                     {mediaBuffering && (
@@ -456,7 +470,8 @@ export function LecturePlayer({ enrolmentId, data }: { enrolmentId: string; data
                     )}
                     <video
                       ref={videoRef}
-                      src={lecture.videoUrl ?? undefined}
+                      src={lecture.videoUrl}
+                      preload="auto"
                       controls
                       controlsList="nodownload noremoteplayback"
                       disablePictureInPicture
@@ -465,6 +480,10 @@ export function LecturePlayer({ enrolmentId, data }: { enrolmentId: string; data
                       onCanPlay={() => setMediaBuffering(false)}
                       onWaiting={() => setMediaBuffering(true)}
                       onPlaying={() => setMediaBuffering(false)}
+                      onError={() => {
+                        setMediaBuffering(false);
+                        setVideoError(true);
+                      }}
                       onTimeUpdate={(e) => {
                         positionRef.current.mediaPositionSeconds = Math.floor(e.currentTarget.currentTime);
                       }}
@@ -491,7 +510,7 @@ export function LecturePlayer({ enrolmentId, data }: { enrolmentId: string; data
               // API wired up here) — the candidate confirms manually,
               // same manual-complete pattern as the scenario step below.
               <div className="mt-3 flex items-center gap-4">
-                <div className="flex-1 text-[12px] text-neutral-600">Done watching? Click 'Mark as watched' below, then 'Next' to continue.</div>
+                <div className="flex-1 text-[12px] text-neutral-600">Done watching? Click &lsquo;Mark as watched&rsquo; below, then &lsquo;Next&rsquo; to continue.</div>
                 <Button onClick={() => markStepComplete("content")} disabled={completed.has("content")} className="flex-shrink-0">
                   {completed.has("content") ? "Marked as watched" : "Mark as watched"}
                 </Button>
@@ -499,66 +518,60 @@ export function LecturePlayer({ enrolmentId, data }: { enrolmentId: string; data
             )}
             {lecture.mediaKind !== "VIDEO" && (
               <div>
-                {mediaBuffering && currentSlide?.narrationUrl && (
-                  <div className="rounded-md p-[var(--space-6)] text-center mb-3" style={{ background: "#0b1020" }}>
-                    <div className="w-8 h-8 mx-auto rounded-full border-2 border-white/15 border-t-accent-2 animate-spin" />
-                    <div className="font-heading font-semibold text-[13.5px] text-white mt-3">
-                      Preparing {mod.title}, {lecture.title}
+                {lecture.narrationMode === "FULL_LECTURE" ? (
+                  <>
+                    {currentSlide?.imageUrl && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={currentSlide.imageUrl} alt={currentSlide.title ?? ""} className="w-full rounded-md" />
+                    )}
+                    {currentSlide?.title && <div className="font-heading font-semibold text-[15px] mt-3">{currentSlide.title}</div>}
+                    {currentSlide?.body && <p className="text-[13px] text-neutral-700 mt-1.5">{currentSlide.body}</p>}
+                    {lecture.fullNarrationUrl && slideIndex === 0 && (
+                      <audio src={lecture.fullNarrationUrl} controls className="w-full mt-3" />
+                    )}
+                    <div className="flex items-center justify-between mt-4">
+                      <Button
+                        variant="secondary"
+                        onClick={() => setSlideIndex((i) => Math.max(0, i - 1))}
+                        disabled={slideIndex === 0}
+                      >
+                        Previous slide
+                      </Button>
+                      <span className="text-[12px] text-neutral-500">
+                        Slide {slideIndex + 1} of {lecture.slides.length || 1}
+                      </span>
+                      <Button
+                        variant="secondary"
+                        onClick={() => {
+                          if (slideIndex < lecture.slides.length - 1) setSlideIndex((i) => i + 1);
+                          else markStepComplete("content");
+                        }}
+                      >
+                        {slideIndex < lecture.slides.length - 1 ? "Next slide" : "Finish content"}
+                      </Button>
                     </div>
-                    <div className="text-[11.5px] text-white/55 mt-1">Narration is loading. Your progress is saved.</div>
-                  </div>
-                )}
-                {currentSlide?.imageUrl && (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={currentSlide.imageUrl} alt={currentSlide.title ?? ""} className="w-full rounded-md" />
-                )}
-                {currentSlide?.title && <div className="font-heading font-semibold text-[15px] mt-3">{currentSlide.title}</div>}
-                {currentSlide?.body && <p className="text-[13px] text-neutral-700 mt-1.5">{currentSlide.body}</p>}
-                {currentSlide?.narrationUrl && (
-                  <audio
-                    key={currentSlide.id}
-                    ref={narrationRef}
-                    src={currentSlide.narrationUrl}
-                    controls
-                    autoPlay={lecture.narrationMode === "PER_SLIDE"}
-                    className="w-full mt-3"
-                    onWaiting={() => setMediaBuffering(true)}
-                    onPlaying={() => setMediaBuffering(false)}
-                    onEnded={() => {
-                      setNarrationPlayed(true);
-                      if (lecture.narrationMode === "PER_SLIDE" && lecture.narrationAutoAdvance) {
-                        if (slideIndex < lecture.slides.length - 1) setSlideIndex((i) => i + 1);
-                        else markStepComplete("content");
-                      }
+                  </>
+                ) : (
+                  <SlidePlayer
+                    slides={lecture.slides}
+                    slideIndex={slideIndex}
+                    setSlideIndex={setSlideIndex}
+                    autoPlayNarration={lecture.narrationMode === "PER_SLIDE"}
+                    autoAdvance={lecture.narrationMode === "PER_SLIDE" && lecture.narrationAutoAdvance}
+                    requireFull={lecture.narrationRequireFull}
+                    narrationPlayed={narrationPlayed}
+                    setNarrationPlayed={setNarrationPlayed}
+                    mediaBuffering={mediaBuffering}
+                    setMediaBuffering={setMediaBuffering}
+                    bufferingLabel={`Preparing ${mod.title}, ${lecture.title}`}
+                    onFinishContent={() => markStepComplete("content")}
+                    resumeSlideIndex={resumePosition.slideIndex}
+                    resumeMediaPositionSeconds={resumePosition.mediaPositionSeconds}
+                    onPositionUpdate={(seconds) => {
+                      positionRef.current.mediaPositionSeconds = seconds;
                     }}
                   />
                 )}
-                {lecture.narrationMode === "FULL_LECTURE" && lecture.fullNarrationUrl && slideIndex === 0 && (
-                  <audio src={lecture.fullNarrationUrl} controls className="w-full mt-3" />
-                )}
-                <div className="flex items-center justify-between mt-4">
-                  <Button
-                    variant="secondary"
-                    onClick={() => setSlideIndex((i) => Math.max(0, i - 1))}
-                    disabled={slideIndex === 0}
-                  >
-                    Previous slide
-                  </Button>
-                  <span className="text-[12px] text-neutral-500">
-                    Slide {slideIndex + 1} of {lecture.slides.length || 1}
-                  </span>
-                  <Button
-                    variant="secondary"
-                    disabled={lecture.narrationRequireFull && !!currentSlide?.narrationUrl && !narrationPlayed}
-                    onClick={() => {
-                      setNarrationPlayed(false);
-                      if (slideIndex < lecture.slides.length - 1) setSlideIndex((i) => i + 1);
-                      else markStepComplete("content");
-                    }}
-                  >
-                    {slideIndex < lecture.slides.length - 1 ? "Next slide" : "Finish content"}
-                  </Button>
-                </div>
               </div>
             )}
             <LectureNotesPanel enrolmentId={enrolmentId} lectureId={lecture.id} initialBody={data.lectureNote?.body ?? ""} />
