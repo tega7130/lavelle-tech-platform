@@ -25,7 +25,7 @@ import {
 } from "@/app/actions/programme-content";
 import { setProgrammeStatus } from "@/app/actions/programme";
 import { finaliseUpload } from "@/app/actions/uploads";
-import { uploadToStorage, probeMediaDuration, rasterizePdfFirstPage } from "@/lib/storage-upload";
+import { uploadToStorage, probeMediaDuration, rasterizePdfFirstPage, checkVideoFaststart } from "@/lib/storage-upload";
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import { formatNaira, statusLabel } from "@/lib/format";
 
@@ -570,6 +570,7 @@ function MediaTab({
   const [videoMode, setVideoMode] = React.useState<"url" | "upload">(lecture.videoAsset ? "upload" : "url");
   const [videoUrl, setVideoUrl] = React.useState(lecture.videoUrl ?? "");
   const [videoError, setVideoError] = React.useState<string | null>(null);
+  const [videoNotFaststart, setVideoNotFaststart] = React.useState(false);
   const [mediaKind, setMediaKind] = React.useState(lecture.mediaKind);
   const [savingKind, setSavingKind] = React.useState(false);
 
@@ -591,13 +592,17 @@ function MediaTab({
   async function handleVideoUpload(file: File) {
     setUploading(true);
     setVideoError(null);
+    setVideoNotFaststart(false);
     try {
+      // Warn only, never block: an index-at-the-end video still plays, just slowly.
+      const faststart = await checkVideoFaststart(file);
       const asset = await uploadFile(file, "video");
       // videoUrl cleared explicitly — a lecture carries at most one video
       // source. mediaKind forced to VIDEO — attaching a video is a clear
       // signal of intent; leaving it on SLIDES would hide it from candidates.
       await updateLecture(lecture.id, { videoAssetId: asset.id, videoUrl: null, mediaKind: "VIDEO" });
       setMediaKind("VIDEO");
+      setVideoNotFaststart(faststart === false);
       onSaved();
     } catch (e) {
       setVideoError(e instanceof Error ? e.message : "Upload failed.");
@@ -728,6 +733,13 @@ function MediaTab({
             </div>
           )}
           {videoError && <div className="mt-1.5 text-[11px] text-[#c0392b]">{videoError}</div>}
+          {videoNotFaststart && (
+            <div className="mt-1.5 text-[11px] text-[#9a6700]">
+              Uploaded, but this video isn&apos;t optimised for streaming, so candidates will wait for much of the file to download
+              before it plays. Re-export it with &quot;Web optimized&quot; / &quot;Fast start&quot; enabled (HandBrake, Premiere,
+              DaVinci) or run <code>ffmpeg -i in.mp4 -c copy -movflags +faststart out.mp4</code>, then upload it again.
+            </div>
+          )}
         </div>
         <div>
           <label className="mb-1.5 block text-xs font-medium text-neutral-700">Lecture duration</label>
