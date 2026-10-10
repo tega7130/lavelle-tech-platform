@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { Permission, ContentStatus } from "@/generated/prisma/client";
 import { requireStaffPermission } from "@/lib/staff-auth";
 import { recordAuditEvent } from "@/lib/audit";
+import { getSignedAssetUrl } from "@/lib/storage";
 import { QuizValidationError } from "@/lib/programme-errors";
 import { validateOneCorrectOptionPerQuestion } from "@/lib/programme-publish";
 import {
@@ -246,6 +247,12 @@ export async function setNarration(lectureId: string, config: unknown) {
 }
 
 // ── Slides ─────────────────────────────────────────────────────────────
+
+/** A fresh signed URL so the content editor's Preview controls can show a slide image/PDF or narration clip before leaving the page. */
+export async function getSlideAssetPreviewUrlAction(storageKey: string) {
+  await requireStaffPermission(Permission.MANAGE_PROGRAMMES);
+  return getSignedAssetUrl(storageKey);
+}
 
 export async function addSlide(lectureId: string, input: unknown) {
   const staff = await requireStaffPermission(Permission.MANAGE_PROGRAMMES);

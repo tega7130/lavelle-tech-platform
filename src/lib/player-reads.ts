@@ -195,8 +195,9 @@ export async function getLecturePlayer(candidateId: string, enrolmentId: string,
       id: s.id,
       title: s.title,
       body: s.body,
-      imageUrl: s.imageAsset ? await getSignedAssetUrl(s.imageAsset.storageKey) : null,
-      narrationUrl: s.narrationAsset ? await getSignedAssetUrl(s.narrationAsset.storageKey) : null,
+      imageUrl: s.imageAsset ? await getSignedAssetUrl(s.imageAsset.storageKey, MEDIA_URL_TTL_SECONDS) : null,
+      imageMimeType: s.imageAsset?.mimeType ?? null,
+      narrationUrl: s.narrationAsset ? await getSignedAssetUrl(s.narrationAsset.storageKey, MEDIA_URL_TTL_SECONDS) : null,
     }))
   );
 

@@ -174,6 +174,47 @@ export const BackIcon = (p: IconProps) => (
   </Svg>
 );
 
+export const PlayIcon = (p: IconProps) => (
+  <Svg {...p} fill="currentColor" stroke="none">
+    <path d="M5.5 3.3v11.4a.9.9 0 0 0 1.37.76l9-5.7a.9.9 0 0 0 0-1.52l-9-5.7A.9.9 0 0 0 5.5 3.3Z" />
+  </Svg>
+);
+
+export const PauseIcon = (p: IconProps) => (
+  <Svg {...p} fill="currentColor" stroke="none">
+    <rect x="4.5" y="3" width="3.3" height="12" rx="1" />
+    <rect x="10.2" y="3" width="3.3" height="12" rx="1" />
+  </Svg>
+);
+
+export const VolumeIcon = ({ muted, ...p }: IconProps & { muted?: boolean }) => (
+  <Svg {...p}>
+    <path d="M2.5 7v4h2.8l3.7 3V4l-3.7 3Z" fill="currentColor" stroke="none" />
+    {muted ? (
+      <>
+        <line x1="12" y1="7" x2="16" y2="11" />
+        <line x1="16" y1="7" x2="12" y2="11" />
+      </>
+    ) : (
+      <>
+        <path d="M11.3 6.2a4 4 0 0 1 0 5.6" />
+        <path d="M13.3 4.2a7 7 0 0 1 0 9.6" />
+      </>
+    )}
+  </Svg>
+);
+
+export const FullscreenIcon = ({ active, ...p }: IconProps & { active?: boolean }) =>
+  active ? (
+    <Svg {...p}>
+      <path d="M7 3H3.5v3.5M11 3h3.5v3.5M7 15H3.5v-3.5M11 15h3.5v-3.5" />
+    </Svg>
+  ) : (
+    <Svg {...p}>
+      <path d="M3.5 6.5V3.5h3M14.5 6.5V3.5h-3M3.5 11.5v3h3M14.5 11.5v3h-3" />
+    </Svg>
+  );
+
 /** Admin rail icons — each is a single compound path, per the source design's NAV_ICONS table. */
 export const ADMIN_NAV_PATHS: Record<string, string> = {
   overview: "M2.5 2.5h5v5h-5zM10.5 2.5h5v5h-5zM2.5 10.5h5v5h-5zM10.5 10.5h5v5h-5z",

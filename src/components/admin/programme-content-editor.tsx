@@ -17,6 +17,7 @@ import {
   updateSlide,
   reorderSlides,
   deleteSlide,
+  getSlideAssetPreviewUrlAction,
   upsertQuiz,
   setLectureStatus,
   setQuizStatus,
@@ -877,6 +878,11 @@ function NarrationTab({ lecture, onSaved }: { lecture: LectureData; onSaved: () 
 
 function SlideNarrationList({ lecture, onSaved }: { lecture: LectureData; onSaved: () => void }) {
   const [busySlideId, setBusySlideId] = React.useState<string | null>(null);
+  // assetId -> signed preview URL, fetched lazily on "Preview" click (no
+  // signed-URL plumbing exists in the admin content read path, unlike the
+  // candidate player — fetching on demand avoids signing every asset on
+  // every page load for previews that may never be opened).
+  const [previewUrls, setPreviewUrls] = React.useState<Record<string, string>>({});
 
   async function handleAddSlide() {
     await addSlide(lecture.id, { title: `Slide ${lecture.slides.length + 1}` });
@@ -893,7 +899,18 @@ function SlideNarrationList({ lecture, onSaved }: { lecture: LectureData; onSave
     onSaved();
   }
 
-  async function handleUpload(slideId: string, file: File) {
+  async function handleSlideFileUpload(slideId: string, file: File) {
+    setBusySlideId(slideId);
+    try {
+      const asset = await uploadFile(file, "image");
+      await updateSlide(slideId, { imageAssetId: asset.id });
+      onSaved();
+    } finally {
+      setBusySlideId(null);
+    }
+  }
+
+  async function handleNarrationUpload(slideId: string, file: File) {
     setBusySlideId(slideId);
     try {
       const asset = await uploadFile(file, "audio");
@@ -904,52 +921,181 @@ function SlideNarrationList({ lecture, onSaved }: { lecture: LectureData; onSave
     }
   }
 
+  async function handleRemoveNarration(slideId: string) {
+    setBusySlideId(slideId);
+    try {
+      await updateSlide(slideId, { narrationAssetId: null });
+      onSaved();
+    } finally {
+      setBusySlideId(null);
+    }
+  }
+
+  async function togglePreview(asset: AssetRef) {
+    setPreviewUrls((prev) => {
+      if (prev[asset.id]) {
+        const next = { ...prev };
+        delete next[asset.id];
+        return next;
+      }
+      return prev;
+    });
+    if (previewUrls[asset.id]) return;
+    const url = await getSlideAssetPreviewUrlAction(asset.storageKey);
+    setPreviewUrls((prev) => ({ ...prev, [asset.id]: url }));
+  }
+
+  const missingSlideFileCount = lecture.slides.filter((s) => !s.imageAsset).length;
+
   return (
     <div className="mt-3">
       <div className="mb-1.5 flex items-center justify-between text-[10.5px] tracking-[0.1em] text-neutral-500 uppercase">
-        <span>Narration per slide</span>
-        <span>{lecture.slides.filter((s) => s.narrationAsset).length} of {lecture.slides.length} recorded</span>
+        <span>Slides</span>
+        <span>
+          {lecture.slides.filter((s) => s.narrationAsset).length} of {lecture.slides.length} narrated
+        </span>
       </div>
-      <div className="overflow-hidden rounded-md border border-divider bg-bg">
+      {lecture.slides.length > 0 && missingSlideFileCount > 0 && (
+        <div className="mb-1.5 rounded-md border border-warning-border bg-warning-bg px-3 py-2 text-xs text-warning-text">
+          {missingSlideFileCount} slide{missingSlideFileCount === 1 ? "" : "s"} {missingSlideFileCount === 1 ? "is" : "are"} missing a slide
+          file — authorable, not blocking.
+        </div>
+      )}
+      <div className="flex flex-col gap-2">
         {lecture.slides.length === 0 && (
-          <div className="p-3 text-center text-xs text-neutral-500">No slides yet.</div>
+          <div className="rounded-md border border-divider bg-bg p-3 text-center text-xs text-neutral-500">No slides yet.</div>
         )}
-        {lecture.slides.map((slide, i) => (
-          <div key={slide.id} className="flex items-center gap-3 border-b border-dashed border-neutral-300 px-3 py-2 last:border-b-0">
-            <span className="flex flex-none flex-col gap-0.5">
-              <button onClick={() => moveSlide(slide.id, -1)} className="text-[9px] text-neutral-500" aria-label="Move up">
-                ▲
-              </button>
-              <button onClick={() => moveSlide(slide.id, 1)} className="text-[9px] text-neutral-500" aria-label="Move down">
-                ▼
-              </button>
-            </span>
-            <span className="w-14 flex-none text-[11.5px] text-neutral-500">Slide {i + 1}</span>
-            <span className="flex-1 truncate text-[12.5px]">{slide.title || "Untitled"}</span>
-            <span className="w-12 flex-none text-right text-[11.5px] text-neutral-500">
-              {slide.narrationAsset?.durationSeconds ? fmt(slide.narrationAsset.durationSeconds) : "—"}
-            </span>
-            <label className="flex-none cursor-pointer text-[11.5px] font-medium text-accent">
-              {busySlideId === slide.id ? "Uploading…" : slide.narrationAsset ? "Replace" : "Upload"}
-              <input
-                type="file"
-                accept="audio/*"
-                hidden
-                disabled={busySlideId === slide.id}
-                onChange={(e) => e.target.files?.[0] && handleUpload(slide.id, e.target.files[0])}
-              />
-            </label>
-            <button
-              onClick={async () => {
-                await deleteSlide(slide.id);
-                onSaved();
-              }}
-              className="flex-none text-[11.5px] text-neutral-500"
-            >
-              Delete
-            </button>
-          </div>
-        ))}
+        {lecture.slides.map((slide, i) => {
+          const busy = busySlideId === slide.id;
+          return (
+            <div key={slide.id} className="rounded-md border border-divider bg-bg p-3">
+              <div className="flex items-center gap-2">
+                <span className="flex flex-none flex-col gap-0.5">
+                  <button onClick={() => moveSlide(slide.id, -1)} className="text-[9px] text-neutral-500" aria-label="Move up">
+                    ▲
+                  </button>
+                  <button onClick={() => moveSlide(slide.id, 1)} className="text-[9px] text-neutral-500" aria-label="Move down">
+                    ▼
+                  </button>
+                </span>
+                <span className="w-14 flex-none text-[11.5px] text-neutral-500">Slide {i + 1}</span>
+                <span className="flex-1 truncate text-[12.5px]">{slide.title || "Untitled"}</span>
+                <button
+                  onClick={async () => {
+                    await deleteSlide(slide.id);
+                    onSaved();
+                  }}
+                  className="flex-none text-[11.5px] text-neutral-500"
+                >
+                  Delete slide
+                </button>
+              </div>
+
+              <div className="mt-2.5 grid grid-cols-2 gap-3">
+                {/* Slide file — required, but never blocks save/publish */}
+                <div>
+                  <div className="mb-1 text-[11px] font-medium text-neutral-700">
+                    Slide file <span className="font-normal text-neutral-500">— Required</span>
+                  </div>
+                  {slide.imageAsset ? (
+                    <div className="flex items-center gap-2 rounded border border-neutral-300 bg-neutral-100 px-2 py-1.5">
+                      {slide.imageAsset.mimeType === "application/pdf" ? (
+                        <span className="flex-1 truncate text-[11.5px]">{slide.imageAsset.originalFilename}</span>
+                      ) : previewUrls[slide.imageAsset.id] ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={previewUrls[slide.imageAsset.id]} alt="" className="h-10 w-16 flex-none rounded object-cover" />
+                      ) : (
+                        <span className="flex-1 truncate text-[11.5px]">{slide.imageAsset.originalFilename}</span>
+                      )}
+                      <button
+                        onClick={() => togglePreview(slide.imageAsset!)}
+                        className="flex-none text-[11px] font-medium text-accent"
+                      >
+                        {previewUrls[slide.imageAsset.id] ? "Hide" : "Preview"}
+                      </button>
+                      <label className="flex-none cursor-pointer text-[11px] font-medium text-accent">
+                        {busy ? "…" : "Replace"}
+                        <input
+                          type="file"
+                          accept="image/*,application/pdf"
+                          hidden
+                          disabled={busy}
+                          onChange={(e) => e.target.files?.[0] && handleSlideFileUpload(slide.id, e.target.files[0])}
+                        />
+                      </label>
+                    </div>
+                  ) : (
+                    <label className="flex h-9 cursor-pointer items-center justify-center rounded border-[1.5px] border-dashed border-neutral-300 text-[11.5px] font-medium text-accent">
+                      {busy ? "Uploading…" : "Upload slide file"}
+                      <input
+                        type="file"
+                        accept="image/*,application/pdf"
+                        hidden
+                        disabled={busy}
+                        onChange={(e) => e.target.files?.[0] && handleSlideFileUpload(slide.id, e.target.files[0])}
+                      />
+                    </label>
+                  )}
+                </div>
+
+                {/* Audio narration — optional, never required to save */}
+                <div>
+                  <div className="mb-1 text-[11px] font-medium text-neutral-700">
+                    Audio narration <span className="font-normal text-neutral-500">— Optional</span>
+                  </div>
+                  {slide.narrationAsset ? (
+                    <div className="flex flex-col gap-1.5 rounded border border-neutral-300 bg-neutral-100 px-2 py-1.5">
+                      <div className="flex items-center gap-2">
+                        <span className="flex-1 truncate text-[11.5px]">
+                          {slide.narrationAsset.originalFilename}
+                          {slide.narrationAsset.durationSeconds ? ` · ${fmt(slide.narrationAsset.durationSeconds)}` : ""}
+                        </span>
+                        <label className="flex-none cursor-pointer text-[11px] font-medium text-accent">
+                          {busy ? "…" : "Replace"}
+                          <input
+                            type="file"
+                            accept="audio/*"
+                            hidden
+                            disabled={busy}
+                            onChange={(e) => e.target.files?.[0] && handleNarrationUpload(slide.id, e.target.files[0])}
+                          />
+                        </label>
+                        <button
+                          onClick={() => handleRemoveNarration(slide.id)}
+                          disabled={busy}
+                          className="flex-none text-[11px] text-neutral-500"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                      {previewUrls[slide.narrationAsset.id] ? (
+                        <audio src={previewUrls[slide.narrationAsset.id]} controls className="h-8 w-full" />
+                      ) : (
+                        <button
+                          onClick={() => togglePreview(slide.narrationAsset!)}
+                          className="self-start text-[11px] font-medium text-accent"
+                        >
+                          Preview audio
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <label className="flex h-9 cursor-pointer items-center justify-center rounded border-[1.5px] border-dashed border-neutral-300 text-[11.5px] font-medium text-accent">
+                      {busy ? "Uploading…" : "Upload audio narration"}
+                      <input
+                        type="file"
+                        accept="audio/*"
+                        hidden
+                        disabled={busy}
+                        onChange={(e) => e.target.files?.[0] && handleNarrationUpload(slide.id, e.target.files[0])}
+                      />
+                    </label>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })}
       </div>
       <Button variant="secondary" onClick={handleAddSlide} className="mt-2 px-[11px] py-[5px] text-xs">
         + Add slide
