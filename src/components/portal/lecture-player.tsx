@@ -565,6 +565,11 @@ export function LecturePlayer({ enrolmentId, data }: { enrolmentId: string; data
                     setMediaBuffering={setMediaBuffering}
                     bufferingLabel={`Preparing ${mod.title}, ${lecture.title}`}
                     onFinishContent={() => markStepComplete("content")}
+                    resumeSlideIndex={resumePosition.slideIndex}
+                    resumeMediaPositionSeconds={resumePosition.mediaPositionSeconds}
+                    onPositionUpdate={(seconds) => {
+                      positionRef.current.mediaPositionSeconds = seconds;
+                    }}
                   />
                 )}
               </div>
