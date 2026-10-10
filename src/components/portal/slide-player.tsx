@@ -61,7 +61,6 @@ export function SlidePlayer({
   const hasNarration = !!currentSlide?.narrationUrl;
   const isLastSlide = slideIndex >= slides.length - 1;
   const nextDisabled = requireFull && hasNarration && !narrationPlayed;
-  const pdfSrc = currentSlide?.imageUrl ? `${currentSlide.imageUrl}#toolbar=0&navpanes=0&scrollbar=0` : null;
 
   return (
     <div className="overflow-hidden rounded-md border border-divider bg-neutral-950">
@@ -75,7 +74,14 @@ export function SlidePlayer({
         )}
         {currentSlide?.imageUrl ? (
           currentSlide.imageMimeType === "application/pdf" ? (
-            <iframe src={pdfSrc!} title={currentSlide.title ?? "Slide"} className="h-full w-full bg-white" />
+            // Slides are converted to images at upload time (see
+            // rasterizePdfFirstPage) specifically so a candidate never
+            // sees a PDF — this branch should be unreachable, but a
+            // calm fallback here is better than silently falling through
+            // to an iframe that would re-expose the browser's PDF chrome.
+            <div className="px-6 text-center text-[13px] text-white/60">
+              This slide can&apos;t be displayed. Contact support if this continues.
+            </div>
           ) : (
             // eslint-disable-next-line @next/next/no-img-element
             <img

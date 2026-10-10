@@ -25,7 +25,7 @@ import {
 } from "@/app/actions/programme-content";
 import { setProgrammeStatus } from "@/app/actions/programme";
 import { finaliseUpload } from "@/app/actions/uploads";
-import { uploadToStorage, probeMediaDuration } from "@/lib/storage-upload";
+import { uploadToStorage, probeMediaDuration, rasterizePdfFirstPage } from "@/lib/storage-upload";
 import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import { formatNaira, statusLabel } from "@/lib/format";
 
@@ -878,6 +878,11 @@ function NarrationTab({ lecture, onSaved }: { lecture: LectureData; onSaved: () 
 
 function SlideNarrationList({ lecture, onSaved }: { lecture: LectureData; onSaved: () => void }) {
   const [busySlideId, setBusySlideId] = React.useState<string | null>(null);
+  // Separate from busySlideId so the slide-file button can show "Converting
+  // PDF…" before "Uploading…" — rasterizing a PDF page can take a moment
+  // on a large file, and that's a distinct wait from the network upload.
+  const [convertingSlideId, setConvertingSlideId] = React.useState<string | null>(null);
+  const [slideFileError, setSlideFileError] = React.useState<{ slideId: string; message: string } | null>(null);
   // assetId -> signed preview URL, fetched lazily on "Preview" click (no
   // signed-URL plumbing exists in the admin content read path, unlike the
   // candidate player — fetching on demand avoids signing every asset on
@@ -900,11 +905,31 @@ function SlideNarrationList({ lecture, onSaved }: { lecture: LectureData; onSave
   }
 
   async function handleSlideFileUpload(slideId: string, file: File) {
+    setSlideFileError(null);
+    let toUpload = file;
+    // Converted to an image before it ever reaches storage — candidates
+    // must never be handed a raw PDF, since the browser's native PDF
+    // viewer can't be stripped of its own toolbar/download/print chrome
+    // (see rasterizePdfFirstPage's comment). Only the first page becomes
+    // the slide, matching one-slide-per-upload everywhere else here.
+    if (file.type === "application/pdf") {
+      setConvertingSlideId(slideId);
+      try {
+        toUpload = await rasterizePdfFirstPage(file);
+      } catch {
+        setSlideFileError({ slideId, message: "Could not read that PDF — try exporting the slide as an image instead." });
+        setConvertingSlideId(null);
+        return;
+      }
+      setConvertingSlideId(null);
+    }
     setBusySlideId(slideId);
     try {
-      const asset = await uploadFile(file, "image");
+      const asset = await uploadFile(toUpload, "image");
       await updateSlide(slideId, { imageAssetId: asset.id });
       onSaved();
+    } catch {
+      setSlideFileError({ slideId, message: "Could not upload that file — try again." });
     } finally {
       setBusySlideId(null);
     }
@@ -967,6 +992,8 @@ function SlideNarrationList({ lecture, onSaved }: { lecture: LectureData; onSave
         )}
         {lecture.slides.map((slide, i) => {
           const busy = busySlideId === slide.id;
+          const converting = convertingSlideId === slide.id;
+          const slideFileBusy = busy || converting;
           return (
             <div key={slide.id} className="rounded-md border border-divider bg-bg p-3">
               <div className="flex items-center gap-2">
@@ -1014,27 +1041,30 @@ function SlideNarrationList({ lecture, onSaved }: { lecture: LectureData; onSave
                         {previewUrls[slide.imageAsset.id] ? "Hide" : "Preview"}
                       </button>
                       <label className="flex-none cursor-pointer text-[11px] font-medium text-accent">
-                        {busy ? "…" : "Replace"}
+                        {converting ? "Converting…" : busy ? "…" : "Replace"}
                         <input
                           type="file"
                           accept="image/*,application/pdf"
                           hidden
-                          disabled={busy}
+                          disabled={slideFileBusy}
                           onChange={(e) => e.target.files?.[0] && handleSlideFileUpload(slide.id, e.target.files[0])}
                         />
                       </label>
                     </div>
                   ) : (
                     <label className="flex h-9 cursor-pointer items-center justify-center rounded border-[1.5px] border-dashed border-neutral-300 text-[11.5px] font-medium text-accent">
-                      {busy ? "Uploading…" : "Upload slide file"}
+                      {converting ? "Converting PDF…" : busy ? "Uploading…" : "Upload slide file"}
                       <input
                         type="file"
                         accept="image/*,application/pdf"
                         hidden
-                        disabled={busy}
+                        disabled={slideFileBusy}
                         onChange={(e) => e.target.files?.[0] && handleSlideFileUpload(slide.id, e.target.files[0])}
                       />
                     </label>
+                  )}
+                  {slideFileError?.slideId === slide.id && !slideFileBusy && (
+                    <div className="mt-1 text-[11px] text-[#c0392b]">{slideFileError.message}</div>
                   )}
                 </div>
 

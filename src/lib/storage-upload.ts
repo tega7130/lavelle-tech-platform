@@ -69,3 +69,57 @@ export function probeMediaDuration(file: File): Promise<number | null> {
     el.src = URL.createObjectURL(file);
   });
 }
+
+const PDF_RASTER_TARGET_WIDTH = 1600;
+
+/**
+ * Renders a PDF's first page to a PNG File, entirely in the browser — the
+ * only reliable way to show a candidate a slide's PDF content without the
+ * browser's own PDF-viewer chrome (toolbar, zoom, download, print). Modern
+ * Chrome no longer honours the classic `#toolbar=0` open-parameter trick for
+ * an iframe-embedded PDF (it was deprecated for phishing-safety reasons), so
+ * suppressing that chrome client-side isn't possible — converting to an
+ * image upstream, once, at upload time, sidesteps the native viewer
+ * entirely and reuses the image-slide path that already renders edge-to-
+ * edge with no chrome of any kind.
+ */
+export async function rasterizePdfFirstPage(file: File): Promise<File> {
+  const pdfjsLib = await import("pdfjs-dist");
+  pdfjsLib.GlobalWorkerOptions.workerSrc = new URL("pdfjs-dist/build/pdf.worker.min.mjs", import.meta.url).toString();
+
+  const data = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data }).promise;
+  const page = await pdf.getPage(1);
+
+  const unscaledViewport = page.getViewport({ scale: 1 });
+  const scale = PDF_RASTER_TARGET_WIDTH / unscaledViewport.width;
+  const viewport = page.getViewport({ scale });
+
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(viewport.width);
+  canvas.height = Math.round(viewport.height);
+  const context = canvas.getContext("2d");
+  if (!context) throw new Error("Could not prepare the PDF for conversion.");
+
+  const renderTask = page.render({ canvasContext: context, viewport, canvas });
+  // pdf.js's render loop is tied to the page actually painting — a
+  // backgrounded/minimized tab (or a throttled browser context) can leave
+  // this promise pending indefinitely with no error of its own. Surfacing
+  // a clear, actionable failure beats leaving an admin staring at
+  // "Converting PDF…" forever with no way out.
+  await Promise.race([
+    renderTask.promise,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => {
+        renderTask.cancel();
+        reject(new Error("Converting that PDF took too long — try exporting the slide as an image instead."));
+      }, 20_000)
+    ),
+  ]);
+
+  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
+  if (!blob) throw new Error("Could not convert the PDF page to an image.");
+
+  const name = file.name.replace(/\.pdf$/i, "") + ".png";
+  return new File([blob], name, { type: "image/png" });
+}
