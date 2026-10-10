@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { createPortal } from "react-dom";
+import { createPortal, preconnect } from "react-dom";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import confetti from "canvas-confetti";
@@ -58,6 +58,28 @@ const POSITION_SAVE_INTERVAL_MS = 10_000;
 
 function draftLocalStorageKey(enrolmentId: string, lectureId: string) {
   return `lavelle:draft-offline:${enrolmentId}:${lectureId}`;
+}
+
+function videoPositionLocalStorageKey(enrolmentId: string, lectureId: string) {
+  return `lavelle:video-position:${enrolmentId}:${lectureId}`;
+}
+
+// Browser copy of the video position, so a refresh between server saves doesn't rewind the candidate.
+function readLocalVideoPosition(key: string): { seconds: number; at: number } | null {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(key) ?? "null");
+    return typeof parsed?.seconds === "number" && typeof parsed?.at === "number" ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeLocalVideoPosition(key: string, seconds: number) {
+  try {
+    localStorage.setItem(key, JSON.stringify({ seconds, at: Date.now() }));
+  } catch {
+    // Storage unavailable; the server save still runs.
+  }
 }
 
 export function LecturePlayer({ enrolmentId, data }: { enrolmentId: string; data: PlayerData }) {
@@ -178,6 +200,73 @@ export function LecturePlayer({ enrolmentId, data }: { enrolmentId: string; data
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [embedUrl, youtubePlayerElementId]);
+
+  // Pinned so router.refresh() (which re-signs the URL) doesn't restart the video.
+  const [videoSrc, setVideoSrc] = React.useState(lecture.videoUrl);
+  const awaitingFreshVideoUrlRef = React.useRef(false);
+  const videoRecoveryPositionRef = React.useRef<number | null>(null);
+  React.useEffect(() => {
+    if (awaitingFreshVideoUrlRef.current && lecture.videoUrl !== videoSrc) {
+      awaitingFreshVideoUrlRef.current = false;
+      setVideoSrc(lecture.videoUrl);
+    }
+  }, [lecture.videoUrl, videoSrc]);
+
+  const videoPositionKey = videoPositionLocalStorageKey(enrolmentId, lecture.id);
+  const lastLocalSecondRef = React.useRef(-1);
+  // Warm up the connection to storage before the video starts loading.
+  if (videoSrc && !embedUrl) {
+    try {
+      preconnect(new URL(videoSrc).origin);
+    } catch {
+      // Not an absolute URL.
+    }
+  }
+
+  function recoverVideoSource() {
+    // Retry once with a fresh URL; a second failure means the file itself is broken.
+    if (awaitingFreshVideoUrlRef.current || videoRecoveryPositionRef.current !== null) {
+      awaitingFreshVideoUrlRef.current = false;
+      setMediaBuffering(false);
+      setVideoError(true);
+      return;
+    }
+    awaitingFreshVideoUrlRef.current = true;
+    videoRecoveryPositionRef.current = positionRef.current.mediaPositionSeconds;
+    router.refresh();
+  }
+
+  function handleVideoMetadata(el: HTMLVideoElement) {
+    const d = el.duration;
+    if (Number.isFinite(d) && d > 0) positionRef.current.mediaDurationSeconds = Math.floor(d);
+    // Resume once per load, from whichever saved position is newer.
+    if (!hasSeekedToResumeRef.current) {
+      hasSeekedToResumeRef.current = true;
+      const local = readLocalVideoPosition(videoPositionKey);
+      const serverAt = resumePosition.savedAt ? Date.parse(resumePosition.savedAt) : 0;
+      const target = local && local.at > serverAt ? local.seconds : resumePosition.mediaPositionSeconds;
+      // Skip resuming onto the very end, or the video would just end again.
+      if (target > 0 && (!Number.isFinite(d) || target < d - 1)) {
+        el.currentTime = target;
+        positionRef.current.mediaPositionSeconds = target;
+      }
+    }
+    // After a retry, continue from where playback stopped.
+    if (videoRecoveryPositionRef.current !== null && videoRecoveryPositionRef.current > 0) {
+      el.currentTime = videoRecoveryPositionRef.current;
+      el.play().catch(() => {});
+    }
+    videoRecoveryPositionRef.current = null;
+  }
+
+  // Media events can fire before hydration and get lost, so catch up on mount.
+  React.useEffect(() => {
+    const el = videoRef.current;
+    if (!el) return;
+    if (el.readyState >= HTMLMediaElement.HAVE_METADATA) handleVideoMetadata(el);
+    if (el.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) setMediaBuffering(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function markStepComplete(step: LectureStep) {
     if (completed.has(step)) return;
@@ -470,7 +559,7 @@ export function LecturePlayer({ enrolmentId, data }: { enrolmentId: string; data
                     )}
                     <video
                       ref={videoRef}
-                      src={lecture.videoUrl}
+                      src={videoSrc ?? undefined}
                       preload="auto"
                       controls
                       controlsList="nodownload noremoteplayback"
@@ -478,27 +567,19 @@ export function LecturePlayer({ enrolmentId, data }: { enrolmentId: string; data
                       onContextMenu={(e) => e.preventDefault()}
                       className="w-full aspect-video"
                       onCanPlay={() => setMediaBuffering(false)}
+                      onError={recoverVideoSource}
                       onWaiting={() => setMediaBuffering(true)}
                       onPlaying={() => setMediaBuffering(false)}
-                      onError={() => {
-                        setMediaBuffering(false);
-                        setVideoError(true);
-                      }}
                       onTimeUpdate={(e) => {
-                        positionRef.current.mediaPositionSeconds = Math.floor(e.currentTarget.currentTime);
-                      }}
-                      onLoadedMetadata={(e) => {
-                        const d = e.currentTarget.duration;
-                        if (Number.isFinite(d) && d > 0) positionRef.current.mediaDurationSeconds = Math.floor(d);
-                        // Resume where the candidate left off — once per
-                        // load, and only if there's meaningfully somewhere
-                        // to resume to (a fresh lecture starts at 0 same as
-                        // always).
-                        if (!hasSeekedToResumeRef.current && resumePosition.mediaPositionSeconds > 0) {
-                          hasSeekedToResumeRef.current = true;
-                          e.currentTarget.currentTime = resumePosition.mediaPositionSeconds;
+                        const t = Math.floor(e.currentTarget.currentTime);
+                        positionRef.current.mediaPositionSeconds = t;
+                        // Only after resuming, so the initial 0 doesn't overwrite the saved spot.
+                        if (hasSeekedToResumeRef.current && t !== lastLocalSecondRef.current) {
+                          lastLocalSecondRef.current = t;
+                          writeLocalVideoPosition(videoPositionKey, t);
                         }
                       }}
+                      onLoadedMetadata={(e) => handleVideoMetadata(e.currentTarget)}
                       onEnded={() => markStepComplete("content")}
                     />
                   </>

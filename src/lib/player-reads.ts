@@ -252,7 +252,12 @@ export async function getLecturePlayer(candidateId: string, enrolmentId: string,
     steps: currentLecture.steps,
     lectureState: currentLecture.state,
     stepsCompleted: currentLecture.stepsCompleted,
-    resumePosition: { slideIndex: progress?.slideIndex ?? 0, mediaPositionSeconds: progress?.mediaPositionSeconds ?? 0 },
+    resumePosition: {
+      slideIndex: progress?.slideIndex ?? 0,
+      mediaPositionSeconds: progress?.mediaPositionSeconds ?? 0,
+      // Lets the player pick whichever of this and its browser-local copy is newer.
+      savedAt: progress?.lastSeenAt?.toISOString() ?? null,
+    },
     draftingSubmission,
     lectureNote,
     quiz,
