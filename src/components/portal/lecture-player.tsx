@@ -491,7 +491,7 @@ export function LecturePlayer({ enrolmentId, data }: { enrolmentId: string; data
               // API wired up here) — the candidate confirms manually,
               // same manual-complete pattern as the scenario step below.
               <div className="mt-3 flex items-center gap-4">
-                <div className="flex-1 text-[12px] text-neutral-600">Done watching? Click 'Mark as watched' below, then 'Next' to continue.</div>
+                <div className="flex-1 text-[12px] text-neutral-600">Done watching? Click &lsquo;Mark as watched&rsquo; below, then &lsquo;Next&rsquo; to continue.</div>
                 <Button onClick={() => markStepComplete("content")} disabled={completed.has("content")} className="flex-shrink-0">
                   {completed.has("content") ? "Marked as watched" : "Mark as watched"}
                 </Button>
