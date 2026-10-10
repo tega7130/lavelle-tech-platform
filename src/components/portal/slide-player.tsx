@@ -12,6 +12,13 @@ export interface SlidePlayerSlide {
   narrationUrl: string | null;
 }
 
+function fmtTime(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds < 0) return "0:00";
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
 /**
  * Minimal, locked-down player for PER_SLIDE (and NONE) narration lectures —
  * just the slide and Previous / Play-Pause / Next. No scrubber, volume, or
@@ -182,6 +189,8 @@ function SlideControlBar({
   const audioRef = React.useRef<HTMLAudioElement | null>(null);
   const [isPlaying, setIsPlaying] = React.useState(false);
   const [audioError, setAudioError] = React.useState(false);
+  const [currentTime, setCurrentTime] = React.useState(resumeSeconds);
+  const [duration, setDuration] = React.useState(0);
 
   if (!slide.narrationUrl) {
     return (
@@ -218,9 +227,13 @@ function SlideControlBar({
             onPause={() => setIsPlaying(false)}
             onWaiting={() => setMediaBuffering(true)}
             onPlaying={() => setMediaBuffering(false)}
-            onTimeUpdate={(e) => onPositionUpdate(e.currentTarget.currentTime)}
+            onTimeUpdate={(e) => {
+              setCurrentTime(e.currentTarget.currentTime);
+              onPositionUpdate(e.currentTarget.currentTime);
+            }}
             onLoadedMetadata={(e) => {
               if (resumeSeconds > 0) e.currentTarget.currentTime = resumeSeconds;
+              setDuration(e.currentTarget.duration);
             }}
             onError={() => {
               setMediaBuffering(false);
@@ -242,7 +255,22 @@ function SlideControlBar({
           >
             {isPlaying ? <PauseIcon width={15} height={15} /> : <PlayIcon width={15} height={15} />}
           </button>
-          <span className="text-[11.5px] text-white/50">{isPlaying ? "Playing narration" : "Paused"}</span>
+          <span className="w-9 flex-none text-right text-[11px] text-white/60">{fmtTime(currentTime)}</span>
+          <input
+            type="range"
+            min={0}
+            max={duration || 0}
+            step={0.1}
+            value={Math.min(currentTime, duration || 0)}
+            onChange={(e) => {
+              const t = Number(e.target.value);
+              setCurrentTime(t);
+              if (audioRef.current) audioRef.current.currentTime = t;
+            }}
+            aria-label="Narration progress"
+            className="h-1 flex-1 accent-accent-2"
+          />
+          <span className="w-9 flex-none text-[11px] text-white/60">{fmtTime(duration)}</span>
         </>
       )}
     </div>
