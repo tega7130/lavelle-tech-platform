@@ -1,3 +1,5 @@
+import { detectFaststart, blobRangeReader } from "@/lib/mp4-boxes";
+
 export const MAX_UPLOAD_BYTES = 2 * 1024 ** 3; // 2GB
 
 export interface StorageUploadResult {
@@ -122,4 +124,14 @@ export async function rasterizePdfFirstPage(file: File): Promise<File> {
 
   const name = file.name.replace(/\.pdf$/i, "") + ".png";
   return new File([blob], name, { type: "image/png" });
+}
+
+/** False when an MP4/MOV's index sits after its media data, which makes playback slow to start. */
+export async function checkVideoFaststart(file: File): Promise<boolean | null> {
+  if (file.type !== "video/mp4" && file.type !== "video/quicktime") return null;
+  try {
+    return (await detectFaststart(blobRangeReader(file), file.size)).faststart;
+  } catch {
+    return null;
+  }
 }
