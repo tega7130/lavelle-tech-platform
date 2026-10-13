@@ -26,7 +26,6 @@ export async function verifyRecaptcha(token: string | null | undefined, expected
       body: new URLSearchParams({ secret, response: token }),
     });
     const data = (await res.json()) as { success?: boolean; score?: number; action?: string; "error-codes"?: string[] };
-    console.log("[recaptcha debug]", JSON.stringify(data), "expected action:", expectedAction);
     return data.success === true && (data.score ?? 0) >= MIN_SCORE && data.action === expectedAction;
   } catch (error) {
     console.error("reCAPTCHA verification request failed:", error);

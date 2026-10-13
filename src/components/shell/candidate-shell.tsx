@@ -333,7 +333,7 @@ export function CandidateShell({
                 )}
               </button>
               {inboxOpen && (
-                <div className="absolute top-[calc(100%+8px)] right-0 z-[60] w-[min(390px,calc(100vw-32px))] max-h-[440px] overflow-y-auto rounded-md bg-bg border border-divider shadow-lg">
+                <div className="fixed left-4 right-4 top-[78px] md:absolute md:left-auto md:right-0 md:top-[calc(100%+8px)] z-[60] md:w-[390px] max-h-[min(440px,calc(100vh-96px))] overflow-y-auto rounded-md bg-bg border border-divider shadow-lg">
                   <div className="flex justify-between items-center gap-3 px-4 pt-4 pb-3 border-b border-dashed border-neutral-300 sticky top-0 bg-bg">
                     <div className="font-heading font-semibold text-[13.5px]">Your notifications</div>
                     <button onClick={markAllRead} className="text-[11.5px] font-medium text-accent hover:underline cursor-pointer">
