@@ -4,7 +4,7 @@ import { SITE_URL, SITE_HOST } from "@/lib/site-url";
 
 const PAGE_TITLE = "Terms of Use | Lavelle Institute";
 const PAGE_DESCRIPTION =
-  "The terms that govern use of Lavelle Professional Development Limited's platform — programmes, examinations, credentials, the document library, and public credential verification.";
+  "The terms that govern use of the Lavelle Institute platform, a product of Lavelle Development Technologies Limited — programmes, examinations, credentials, the document library, and public credential verification.";
 
 export const metadata: Metadata = {
   title: PAGE_TITLE,
@@ -24,10 +24,10 @@ export default function TermsOfUsePage() {
   return (
     <LegalPage title="Terms of Use" lastUpdated="13 September 2026">
       <p>
-        These Terms of Use (&ldquo;Terms&rdquo;) govern your use of the Lavelle Professional Development Limited
-        platform and services, accessible at {SITE_HOST} (the &ldquo;Platform&rdquo;). Lavelle Professional
-        Development Limited (&ldquo;Lavelle&rdquo;, &ldquo;we&rdquo;, &ldquo;our&rdquo;, &ldquo;us&rdquo;) is a
-        company incorporated under the laws of the Federal Republic of Nigeria.
+        These Terms of Use (&ldquo;Terms&rdquo;) govern your use of the Lavelle Institute platform and services,
+        accessible at {SITE_HOST} (the &ldquo;Platform&rdquo;). Lavelle Institute is a product of Lavelle
+        Development Technologies Limited (&ldquo;Lavelle&rdquo;, &ldquo;we&rdquo;, &ldquo;our&rdquo;,
+        &ldquo;us&rdquo;), a company incorporated under the laws of the Federal Republic of Nigeria.
       </p>
       <p>
         By registering for an account, accessing the Platform, enrolling in any programme, purchasing templates, or
