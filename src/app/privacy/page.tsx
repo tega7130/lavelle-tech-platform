@@ -4,7 +4,7 @@ import { SITE_URL, SITE_HOST } from "@/lib/site-url";
 
 const PAGE_TITLE = "Privacy Policy | Lavelle Institute";
 const PAGE_DESCRIPTION =
-  "How Lavelle Professional Development Limited collects, uses, and protects your personal data across the platform, in compliance with the Nigeria Data Protection Act 2023.";
+  "How Lavelle Development Technologies Limited collects, uses, and protects your personal data across the platform, in compliance with the Nigeria Data Protection Act 2023.";
 
 export const metadata: Metadata = {
   title: PAGE_TITLE,
@@ -33,11 +33,11 @@ export default function PrivacyPolicyPage() {
   return (
     <LegalPage title="Privacy Policy" lastUpdated="13 September 2026">
       <p>
-        Lavelle Professional Development Limited (&ldquo;Lavelle&rdquo;, &ldquo;we&rdquo;, &ldquo;our&rdquo;,
-        &ldquo;us&rdquo;) is committed to protecting your privacy. This Privacy Policy explains how we collect, use,
-        process, share, and protect your personal data when you use our platform at {SITE_HOST} (the
-        &ldquo;Platform&rdquo;), enrol in programmes, purchase templates, take examinations, or interact with our
-        services.
+        Lavelle Development Technologies Limited (&ldquo;Lavelle&rdquo;, &ldquo;we&rdquo;, &ldquo;our&rdquo;,
+        &ldquo;us&rdquo;) is committed to protecting your privacy. Lavelle Institute is a product of Lavelle
+        Development Technologies Limited. This Privacy Policy explains how we collect, use, process, share, and
+        protect your personal data when you use our platform at {SITE_HOST} (the &ldquo;Platform&rdquo;), enrol in
+        programmes, purchase templates, take examinations, or interact with our services.
       </p>
       <p>
         This Privacy Policy is incorporated by reference into our <a href="/terms">Terms of Use</a>. If there is any
@@ -63,7 +63,7 @@ export default function PrivacyPolicyPage() {
       </p>
       <p><strong>Data subject</strong> means you — the person whose personal data is being processed.</p>
       <p>
-        <strong>Data controller</strong> means Lavelle Professional Development Limited — the entity that determines
+        <strong>Data controller</strong> means Lavelle Development Technologies Limited — the entity that determines
         the purposes and means of processing personal data.
       </p>
       <p>
