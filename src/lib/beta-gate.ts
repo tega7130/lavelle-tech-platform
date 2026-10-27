@@ -12,20 +12,8 @@ import { BetaFeature, BetaSignupStatus, BetaFeedbackKind, NotificationCategory }
 
 const SLOTS_PER_FEATURE = 10;
 
-async function countGranted(feature: BetaFeature): Promise<number> {
-  return prisma.betaFeatureSignup.count({ where: { feature, status: BetaSignupStatus.GRANTED } });
-}
-
 async function getSignup(candidateId: string, feature: BetaFeature) {
   return prisma.betaFeatureSignup.findUnique({ where: { candidateId_feature: { candidateId, feature } } });
-}
-
-async function ensureWaitlisted(candidateId: string, feature: BetaFeature) {
-  await prisma.betaFeatureSignup.upsert({
-    where: { candidateId_feature: { candidateId, feature } },
-    create: { candidateId, feature, status: BetaSignupStatus.WAITLISTED },
-    update: {},
-  });
 }
 
 async function ensureGranted(candidateId: string, feature: BetaFeature, source: "AUTO" | "MANUAL") {
@@ -37,32 +25,20 @@ async function ensureGranted(candidateId: string, feature: BetaFeature, source: 
 }
 
 /**
- * Call before checkout is ever created. Returns `false` when the
- * candidate should be blocked and shown the waitlist screen instead of
- * proceeding — waitlists them as a side effect. When `grantImmediately`
- * is true (Document Library — online payment only, no multi-day
- * confirmation window) an available slot is claimed right here. When
- * false (Programme — offline payment methods can take days to confirm),
- * this only blocks obviously-full signups early; the real grant happens
- * in recordConfirmedPayment below, so nobody who actually pays is ever
- * told afterward that they've been waitlisted.
+ * Beta ended — checkout is open to everyone now, hardcoded, no slot
+ * count or waitlist check runs. The historical BetaFeatureSignup /
+ * BetaFeedback rows and the admin beta-access page are untouched and
+ * still readable; this just stops the gate from ever blocking a new
+ * candidate again. Callers (initiatePayment, initiateDocumentPurchaseAction)
+ * are unchanged — `waitlisted` in their response can simply never be
+ * true anymore.
  */
 export async function gateBeforeCheckout(
-  candidateId: string,
-  feature: BetaFeature,
-  opts: { grantImmediately: boolean }
+  _candidateId: string,
+  _feature: BetaFeature,
+  _opts: { grantImmediately: boolean }
 ): Promise<boolean> {
-  const existing = await getSignup(candidateId, feature);
-  if (existing?.status === BetaSignupStatus.GRANTED) return true;
-
-  const granted = await countGranted(feature);
-  if (granted < SLOTS_PER_FEATURE) {
-    if (opts.grantImmediately) await ensureGranted(candidateId, feature, "AUTO");
-    return true;
-  }
-
-  await ensureWaitlisted(candidateId, feature);
-  return false;
+  return true;
 }
 
 /**
