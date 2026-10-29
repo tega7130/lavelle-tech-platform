@@ -14,6 +14,7 @@ const NAV_LINKS = [
   { label: "Library", href: "/library" },
   { label: "How it works", href: "/#how" },
   { label: "FAQ", href: "/#faq" },
+  { label: "Azubi Foundation", href: "/azubi" },
 ];
 
 // A transparent, white-bordered skin for the dark hero — the shared

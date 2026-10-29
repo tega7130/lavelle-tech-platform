@@ -25,6 +25,7 @@ const FOOTER_COLS = [
       { label: "Library", href: "/library" },
       { label: "Blog", href: "/blog" },
       { label: "Public verification", href: "/verify" },
+      { label: "Azubi Foundation", href: "/azubi" },
     ],
   },
   {

@@ -24,7 +24,7 @@ export interface StorageUploadResult {
  */
 export async function uploadToStorage(
   file: File,
-  purpose: "programme" | "finance" | "certificate" | "blog" | "candidate_photo" | "document_library",
+  purpose: "programme" | "finance" | "certificate" | "blog" | "candidate_photo" | "document_library" | "lawyer_website",
   kind?: "audio" | "video" | "image" | "document"
 ): Promise<StorageUploadResult> {
   const signRes = await fetch("/api/uploads/storage", {

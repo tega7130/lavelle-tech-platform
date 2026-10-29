@@ -24,6 +24,7 @@ import {
   ExamsIcon,
   CredentialsIcon,
   AiIcon,
+  WebsiteIcon,
   ProfileIcon,
   SupportIcon,
   SignOutIcon,
@@ -56,6 +57,7 @@ const NAV_ICONS: Record<string, React.ComponentType<React.SVGAttributes<SVGSVGEl
   exams: ExamsIcon,
   credentials: CredentialsIcon,
   ai: AiIcon,
+  website: WebsiteIcon,
   profile: ProfileIcon,
   support: SupportIcon,
 };

@@ -115,6 +115,7 @@ model Candidate {
   programmeNotificationSubscriptions ProgrammeNotificationSubscription[]
   betaSignups                        BetaFeatureSignup[]
   betaFeedback                       BetaFeedback[]
+  lawyerWebsite                      LawyerWebsite?
 
   @@index([accountStatus])
 }
@@ -308,6 +309,8 @@ enum Permission {
   RESPOND_SUPPORT
   MANAGE_STAFF
   VIEW_AUDIT_LOG
+  MANAGE_LAWYER_WEBSITES
+  MANAGE_AZUBI
 }
 
 model Staff {
@@ -401,6 +404,12 @@ model Staff {
   blogPostsCreated          BlogPost[]               @relation("BlogPostCreatedBy")
   loginOtpChallenges        StaffLoginOtpChallenge[]
   uploadedDocumentTemplates DocumentTemplate[]       @relation("DocumentTemplateUploadedBy")
+
+  lawyerWebsitesTakenDown            LawyerWebsite[]             @relation("LawyerWebsiteTakenDownBy")
+  lawyerWebsiteVerificationsReviewed LawyerWebsiteVerification[] @relation("LawyerWebsiteVerificationReviewedBy")
+
+  azubiApplicationsAssigned AzubiApplication[] @relation("AzubiApplicationAssignedTo")
+  azubiEnquiriesAssigned    AzubiEnquiry[]     @relation("AzubiEnquiryAssignedTo")
 
   @@index([role])
   @@index([status])
@@ -790,6 +799,10 @@ model MediaAsset {
   listingVideos           ProgrammeListing[]    @relation("ListingVideo")
   coverVideoForProgrammes Programme[]           @relation("ProgrammeCoverVideo")
   blogPostHeroes          BlogPost[]
+
+  lawyerWebsiteCvFor             LawyerWebsite[]             @relation("LawyerWebsiteCv")
+  lawyerWebsiteIdCardEvidenceFor LawyerWebsiteVerification[] @relation("LawyerWebsiteIdCardEvidence")
+  lawyerWebsiteFirmEvidenceFor   LawyerWebsiteVerification[] @relation("LawyerWebsiteFirmEvidence")
 }
 
 // Module-close quizzes — auto-marked and formative. NOT the examination
@@ -1997,7 +2010,8 @@ model Certificate {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  verificationLookups VerificationLookup[]
+  verificationLookups  VerificationLookup[]
+  lawyerQualifications LawyerQualification[]
 
   @@index([candidateId, status])
   @@index([programmeId, issuedAt])
@@ -2851,4 +2865,420 @@ model BetaFeedback {
   createdAt DateTime @default(now())
 
   @@index([feature, kind, createdAt(sort: Desc)])
+}
+
+// ─── Lawyer Website Builder (Phase 0: foundation schema only — no UI, no
+// Server Actions yet) ────────────────────────────────────────────────
+//
+// A lawyer's own personal/firm professional website, built from
+// templates. Deliberately NOT a directory, marketplace or
+// client-solicitation tool — see LawyerWebsiteSectionKey and
+// LawyerPublication below for the shape that boundary takes in the
+// schema. Open to any registered candidate: there is no course-
+// completion or payment requirement to build one — only PUBLISHING is
+// gated, by LawyerWebsiteVerification below, not by anything on this
+// model itself.
+
+enum LawyerEntityType {
+  INDIVIDUAL
+  LAW_FIRM
+}
+
+enum LawyerWebsiteVerificationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+// One row per site per key, seeded at site creation — lets a lawyer
+// hide/reorder sections without the section's content rows ever moving.
+enum LawyerWebsiteSectionKey {
+  ABOUT
+  PRACTICE_AREAS
+  QUALIFICATIONS
+  EXPERIENCE
+  PUBLICATIONS
+  ACTIVITIES
+  SOCIAL_CONTACT
+  CV
+}
+
+enum LawyerQualificationSource {
+  MANUAL
+  LAVELLE_CERTIFICATE
+}
+
+enum LawyerPublicationKind {
+  EXTERNAL_LINK
+  NATIVE_ARTICLE
+}
+
+model LawyerWebsite {
+  id String @id @default(uuid())
+
+  candidateId String    @unique @db.Uuid
+  candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  entityType LawyerEntityType
+
+  // Only meaningful when entityType = LAW_FIRM — the handle is built from
+  // this instead of the candidate's name (src/lib/slug.ts).
+  firmName String?
+
+  // Public URL segment: learnlavelle.com/<handle>. Auto-suggested from
+  // firstName+lastName (INDIVIDUAL) or firmName (LAW_FIRM), editable by
+  // the owner, with a numeric suffix on collision — same slugify
+  // convention used everywhere else in this codebase.
+  handle String @unique
+
+  // Set when startLawyerWebsite had to fall back to a numeric suffix
+  // because another lawyer already has this exact name — the signal the
+  // builder UI uses to show "this address was already taken" and invite
+  // a customised one, rather than leaving the fallback silent. Cleared
+  // the moment updateLawyerWebsiteHandle succeeds, whatever the new
+  // value — once they've acted on it, it's resolved.
+  handleAutoSuffixedAt DateTime?
+
+  templateKey    String? // Phase 5 defines the real registry (free vs. paid tiers)
+  colorThemeKey  String? // one theme for the whole site, never per-section
+  fontPairingKey String? // always free, regardless of template tier
+
+  // Each independently optional (product requirement) — rich markup per
+  // src/lib/rich-text.ts, never HTML, same rule as BlogPost.body /
+  // LectureNote.content.
+  introText             String?
+  biographyText         String?
+  personalStatementText String?
+  careerJourneyText     String?
+  personalInterestsText String?
+
+  // "Practice Area" tags — deliberately not "Specialist"/"Specialty"
+  // (conduct-rule risk: Nigerian legal practice has no formal specialist-
+  // certification body). string[] via Json, same convention as
+  // BlogPost.tags / ProgrammeListing.outcomes — no default, callers pass
+  // [] explicitly on create.
+  practiceAreas Json // string[]
+
+  // [{ platform, url }][], same Json-array convention as above. Links
+  // only — deliberately no inquiry/consultation-booking form fields
+  // anywhere on this model (product boundary: personal branding, not
+  // lead generation).
+  socialLinks Json
+
+  cvAssetId String?
+  cvAsset   MediaAsset? @relation("LawyerWebsiteCv", fields: [cvAssetId], references: [id])
+
+  // Re-confirmed on every Publish click, not just once — the Server
+  // Action layer (Phase 4) checks this against the current disclaimer
+  // version, not this model.
+  conductDisclaimerAcknowledgedAt DateTime?
+  conductDisclaimerVersion        Int?
+
+  isPublished   Boolean   @default(false)
+  publishedAt   DateTime?
+  unpublishedAt DateTime?
+
+  // Set when the candidate clicks Publish while verification is still
+  // PENDING — lets the admin review queue prioritize sites that are
+  // actually finished and waiting, not just started (Phase 4).
+  publishRequestedAt DateTime?
+
+  // One mechanism covers two cases (see the requirements register):
+  // takenDownByStaffId set = a deliberate admin action against this site
+  // specifically; null = the automatic cascade from the owning
+  // candidate's course account being suspended.
+  takenDownAt        DateTime?
+  takenDownReason    String?
+  takenDownByStaffId String?
+  takenDownByStaff   Staff?    @relation("LawyerWebsiteTakenDownBy", fields: [takenDownByStaffId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  verification   LawyerWebsiteVerification?
+  sections       LawyerWebsiteSection[]
+  qualifications LawyerQualification[]
+  experiences    LawyerExperience[]
+  publications   LawyerPublication[]
+  activities     LawyerActivity[]
+
+  @@index([isPublished])
+}
+
+model LawyerWebsiteVerification {
+  id String @id @default(uuid())
+
+  lawyerWebsiteId String        @unique
+  lawyerWebsite   LawyerWebsite @relation(fields: [lawyerWebsiteId], references: [id], onDelete: Cascade)
+
+  // INDIVIDUAL path — pre-filled from CandidateProfile.scnNumber when
+  // present; editable either way. idCardEvidenceAssetId is the
+  // alternative when there's no scnNumber on file. At least one of the
+  // two is required — enforced in the Zod schema at the Server Action
+  // boundary, not here, same convention as BetaFeedback.rating's
+  // conditional requirement.
+  scnNumber             String?
+  idCardEvidenceAssetId String?
+  idCardEvidenceAsset   MediaAsset? @relation("LawyerWebsiteIdCardEvidence", fields: [idCardEvidenceAssetId], references: [id])
+
+  // LAW_FIRM path — cacNumber required, firmEvidenceAssetId an optional
+  // supporting document (e.g. certificate of incorporation).
+  cacNumber           String?
+  firmEvidenceAssetId String?
+  firmEvidenceAsset   MediaAsset? @relation("LawyerWebsiteFirmEvidence", fields: [firmEvidenceAssetId], references: [id])
+
+  status LawyerWebsiteVerificationStatus @default(PENDING)
+
+  submittedAt DateTime?
+
+  reviewedByStaffId String?
+  reviewedByStaff   Staff?    @relation("LawyerWebsiteVerificationReviewedBy", fields: [reviewedByStaffId], references: [id])
+  reviewedAt        DateTime?
+
+  // Mandatory on reject at the action layer — same convention as
+  // Certificate.revokedReason / Staff.suspendedReason.
+  rejectionReason String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+}
+
+model LawyerWebsiteSection {
+  id String @id @default(uuid())
+
+  lawyerWebsiteId String
+  lawyerWebsite   LawyerWebsite @relation(fields: [lawyerWebsiteId], references: [id], onDelete: Cascade)
+
+  sectionKey LawyerWebsiteSectionKey
+  isVisible  Boolean                 @default(true)
+  orderIndex Int
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([lawyerWebsiteId, sectionKey])
+}
+
+model LawyerQualification {
+  id String @id @default(uuid())
+
+  lawyerWebsiteId String
+  lawyerWebsite   LawyerWebsite @relation(fields: [lawyerWebsiteId], references: [id], onDelete: Cascade)
+
+  source LawyerQualificationSource
+
+  // Display title — for a connected certificate this is a snapshot taken
+  // at connect time (same snapshot convention as Certificate's own
+  // holderName/programmeTitle), never re-read from Programme live.
+  title  String
+  issuer String? // manual entries only — null/ignored for a connected certificate
+  year   Int?
+
+  // Set only when source = LAVELLE_CERTIFICATE — the real, verified
+  // credential this entry is showing. Never set for a MANUAL entry.
+  certificateId String?
+  certificate   Certificate? @relation(fields: [certificateId], references: [id])
+
+  orderIndex Int
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model LawyerExperience {
+  id String @id @default(uuid())
+
+  lawyerWebsiteId String
+  lawyerWebsite   LawyerWebsite @relation(fields: [lawyerWebsiteId], references: [id], onDelete: Cascade)
+
+  organisation String
+  roleTitle    String
+
+  startYear Int
+  endYear   Int? // null + isCurrent = their present role
+  isCurrent Boolean @default(false)
+
+  description String? // rich markup, same rule as LawyerWebsite's text fields
+
+  orderIndex Int
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Covers both: a link to a publication hosted elsewhere, or an article
+// written and published directly on Lavelle with its own shareable URL.
+// Books are listed here as EXTERNAL_LINK only (externalUrl points at a
+// bookstore/publisher) — deliberately no in-platform sale, no
+// commission to Lavelle (see requirements register).
+model LawyerPublication {
+  id String @id @default(uuid())
+
+  lawyerWebsiteId String
+  lawyerWebsite   LawyerWebsite @relation(fields: [lawyerWebsiteId], references: [id], onDelete: Cascade)
+
+  kind  LawyerPublicationKind
+  title String
+
+  externalUrl String? // EXTERNAL_LINK only
+
+  // NATIVE_ARTICLE only — each gets its own shareable URL
+  // (learnlavelle.com/<handle>/publications/<slug>). A native article's
+  // page is only actually servable when BOTH this is true AND the parent
+  // LawyerWebsite.isPublished is true — enforced in the read path
+  // (Phase 3), not here.
+  slug        String?   @unique
+  excerpt     String?
+  body        String? // rich markup, same rule as above
+  isPublished Boolean   @default(false)
+  publishedAt DateTime?
+
+  orderIndex Int
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([slug])
+}
+
+model LawyerActivity {
+  id String @id @default(uuid())
+
+  lawyerWebsiteId String
+  lawyerWebsite   LawyerWebsite @relation(fields: [lawyerWebsiteId], references: [id], onDelete: Cascade)
+
+  title       String // e.g. "Member, Nigerian Bar Association"
+  description String? // rich markup, optional
+  year        Int?
+
+  orderIndex Int
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ─── Azubi Foundation ────────────────────────────────────────────────────
+//
+// A nonprofit sub-brand hosted at /azubi (see AZUBI_BUILD_BRIEF.md). Access
+// control is app-layer via requireStaffPermission(Permission.MANAGE_AZUBI),
+// the same pattern as every other admin feature — this repo has no Supabase
+// RLS anywhere, so Azubi doesn't introduce one either. Auditing reuses the
+// existing AuditEvent table (recordAuditEvent) rather than a bespoke log.
+
+enum AzubiApplicationStatusKind {
+  STUDENT
+  AWAITING_CALL
+  CALLED
+}
+
+enum AzubiWorkingMode {
+  ONSITE
+  HYBRID
+  ONLINE
+}
+
+// new -> under_review -> shortlisted -> status_confirmed -> matched -> placed,
+// with declined/withdrawn reachable from any non-terminal state.
+enum AzubiPipelineStatus {
+  NEW
+  UNDER_REVIEW
+  SHORTLISTED
+  STATUS_CONFIRMED
+  MATCHED
+  PLACED
+  DECLINED
+  WITHDRAWN
+}
+
+model AzubiApplication {
+  id String @id @default(uuid())
+
+  fullName String
+  email    String
+  phone    String
+  state    String
+
+  statusKind  AzubiApplicationStatusKind
+  institution String
+
+  workingMode AzubiWorkingMode
+  // corporate_commercial | litigation_dispute | property_land | research_policy | other
+  areas       String[]
+
+  statement String
+
+  // Timestamp + the privacy notice version string the applicant agreed to
+  // (build brief section 6) — never just a boolean.
+  consentAt      DateTime
+  privacyVersion String
+
+  pipelineStatus AzubiPipelineStatus @default(NEW)
+
+  assignedToStaffId String?
+  assignedToStaff   Staff?  @relation("AzubiApplicationAssignedTo", fields: [assignedToStaffId], references: [id], onDelete: SetNull)
+  internalNotes     String?
+
+  // Verified (student ID / law school ID / call certificate) only after
+  // shortlisting, outside this form — we record only that it happened and
+  // when, never a document or an ID number (build brief section 5).
+  statusConfirmedAt DateTime?
+
+  // Set when anonymising/deleting for a data-subject request (build brief
+  // section 7); a background job or admin action purges rows past this.
+  deleteAfter DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([pipelineStatus, createdAt(sort: Desc)])
+  @@index([createdAt(sort: Desc)])
+}
+
+enum AzubiWritingAs {
+  FELLOW
+  HOST
+  OTHER_ORG
+  OTHER
+}
+
+enum AzubiEnquiryStatus {
+  NEW
+  REPLIED
+  CLOSED
+}
+
+enum AzubiEnquirySource {
+  CONTACT_PAGE
+  HOME_FORM
+}
+
+model AzubiEnquiry {
+  id String @id @default(uuid())
+
+  fullName     String
+  email        String
+  organisation String?
+  writingAs    AzubiWritingAs
+  message      String
+
+  consentAt      DateTime
+  privacyVersion String
+
+  status AzubiEnquiryStatus @default(NEW)
+
+  assignedToStaffId String?
+  assignedToStaff   Staff?  @relation("AzubiEnquiryAssignedTo", fields: [assignedToStaffId], references: [id], onDelete: SetNull)
+  internalNotes     String?
+
+  source AzubiEnquirySource
+
+  deleteAfter DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, createdAt(sort: Desc)])
+  @@index([writingAs, createdAt(sort: Desc)])
 }

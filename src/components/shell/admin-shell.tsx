@@ -65,6 +65,8 @@ export const ADMIN_NAV: AdminNavGroup[] = [
       { key: "website", label: "Website", href: "/admin/website" },
       { key: "blog", label: "Blog", href: "/admin/blog" },
       { key: "reviews", label: "Reviews", href: "/admin/reviews" },
+      { key: "lawyerwebsites", label: "Lawyer Websites", href: "/admin/lawyer-websites" },
+      { key: "azubi", label: "Azubi Foundation", href: "/admin/azubi" },
     ],
   },
   {

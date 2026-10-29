@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { revokeAllSessions } from "@/lib/candidate-session";
 import { recordAuditEvent } from "@/lib/audit";
 import { extendDeadlinesForSuspension } from "@/lib/deadline-generation";
+import { takeDownLawyerWebsiteForSuspension } from "@/lib/lawyer-website";
 
 /**
  * Suspend/reactivate has no Server Action anywhere in the codebase yet —
@@ -24,6 +25,10 @@ export async function suspendCandidate(candidateId: string, staffId: string, rea
     data: { accountStatus: "SUSPENDED", suspendedAt: new Date(), suspendedReason: reason, reactivatedAt: null },
   });
   await revokeAllSessions(candidateId);
+  // A suspended candidate's lawyer website (if any) comes down with
+  // them — nobody's public page stays live, unattended, after their
+  // course account is suspended (requirements register).
+  await takeDownLawyerWebsiteForSuspension(candidateId);
   await recordAuditEvent(prisma, {
     actorStaffId: staffId,
     subjectType: "candidate",

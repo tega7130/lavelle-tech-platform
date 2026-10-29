@@ -3,6 +3,8 @@ import { requireStaffPermission } from "@/lib/staff-auth";
 import { getCurrentCandidate } from "@/lib/candidate-session";
 import { createUploadUrl } from "@/lib/storage";
 import { Permission } from "@/generated/prisma/client";
+import { enforceRateLimit, RateLimitError } from "@/lib/rate-limit";
+import { getClientIp } from "@/lib/request-info";
 
 const PERMISSION_BY_PURPOSE = {
   programme: Permission.MANAGE_PROGRAMMES,
@@ -32,6 +34,11 @@ const ALLOWED_MIME_TYPES: Record<string, string[]> = {
   document_library: ["application/pdf", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/vnd.ms-word.document.macroEnabled.12"],
   finance: ["image/jpeg", "image/png", "image/webp", "application/pdf"],
   candidate_photo: ["image/jpeg", "image/png", "image/webp"],
+  // Candidate-authenticated, same as candidate_photo below — an ID card
+  // photo, a firm's supporting evidence document, or a CV. One purpose
+  // covers all three since they're all uploaded by the owning candidate
+  // for their own lawyer website.
+  lawyer_website: ["image/jpeg", "image/png", "image/webp", "application/pdf"],
 };
 
 const EXTENSION_BY_MIME_TYPE: Record<string, string[]> = {
@@ -85,9 +92,22 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "invalid_request" }, { status: 400 });
   }
 
-  if (purpose === "candidate_photo") {
+  if (purpose === "candidate_photo" || purpose === "lawyer_website") {
     const candidate = await getCurrentCandidate();
     if (!candidate) return NextResponse.json({ error: "forbidden" }, { status: 403 });
+
+    // Requirements register: rate limiting on lawyer-website uploads
+    // specifically, to prevent abuse of the identity-evidence/CV upload
+    // flow — not extended to the other purposes here, which is a
+    // separate, pre-existing surface out of scope for this change.
+    if (purpose === "lawyer_website") {
+      try {
+        await enforceRateLimit("lawyer_website_upload", { email: candidate.email, ip: await getClientIp() }, { limit: 20, windowSeconds: 3600 });
+      } catch (e) {
+        if (e instanceof RateLimitError) return NextResponse.json({ error: "rate_limited", message: e.message }, { status: 429 });
+        throw e;
+      }
+    }
   } else {
     if (!(purpose in PERMISSION_BY_PURPOSE)) {
       return NextResponse.json({ error: "invalid_request" }, { status: 400 });

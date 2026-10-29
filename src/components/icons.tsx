@@ -118,6 +118,13 @@ export const AiIcon = (p: IconProps) => (
   </Svg>
 );
 
+export const WebsiteIcon = (p: IconProps) => (
+  <Svg {...p}>
+    <circle cx="9" cy="9" r="6.5" />
+    <path d="M2.5 9h13M9 2.5c2 2 3 4.3 3 6.5s-1 4.5-3 6.5c-2-2-3-4.3-3-6.5s1-4.5 3-6.5Z" />
+  </Svg>
+);
+
 export const ProfileIcon = (p: IconProps) => (
   <Svg {...p}>
     <circle cx="9" cy="6.5" r="3" />

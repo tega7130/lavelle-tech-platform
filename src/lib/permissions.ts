@@ -43,6 +43,7 @@ export const PERMISSIONS: PermissionMeta[] = [
   { key: "RESPOND_SUPPORT" as Permission, category: "Support", description: "View and respond to candidate support requests" },
   { key: "MANAGE_STAFF" as Permission, category: "Platform", description: "Create staff accounts and assign or revoke permissions" },
   { key: "VIEW_AUDIT_LOG" as Permission, category: "Platform", description: "Read the admin audit log" },
+  { key: "MANAGE_LAWYER_WEBSITES" as Permission, category: "Marketing", description: "Review lawyer website identity verification and publish requests" },
 ];
 
 export const PERMISSION_CATEGORIES = [...new Set(PERMISSIONS.map((p) => p.category))];
@@ -94,6 +95,7 @@ const MANAGE_BLOG = "MANAGE_BLOG" as Permission;
 const MANAGE_DOCUMENT_LIBRARY = "MANAGE_DOCUMENT_LIBRARY" as Permission;
 const RESPOND_SUPPORT = "RESPOND_SUPPORT" as Permission;
 const VIEW_AUDIT_LOG = "VIEW_AUDIT_LOG" as Permission;
+const MANAGE_LAWYER_WEBSITES = "MANAGE_LAWYER_WEBSITES" as Permission;
 
 // Applying a preset replaces the current permission set — README.
 export const ROLE_PRESETS: Record<StaffRole, Permission[]> = {
@@ -112,7 +114,7 @@ export const ROLE_PRESETS: Record<StaffRole, Permission[]> = {
   FINANCE: [VIEW_CANDIDATES, VIEW_FINANCE, CONFIRM_PAYMENTS, MANAGE_FINANCE, VIEW_AUDIT_LOG],
   SUPPORT: [VIEW_CANDIDATES, RESPOND_SUPPORT],
   READ_ONLY: [VIEW_CANDIDATES, VIEW_FINANCE, VIEW_AUDIT_LOG],
-  CONTENT_MANAGER: [MANAGE_BLOG, MANAGE_DOCUMENT_LIBRARY],
+  CONTENT_MANAGER: [MANAGE_BLOG, MANAGE_DOCUMENT_LIBRARY, MANAGE_LAWYER_WEBSITES],
 } as Record<StaffRole, Permission[]>;
 
 /**

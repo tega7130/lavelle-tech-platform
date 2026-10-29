@@ -42,6 +42,10 @@ export const CANDIDATE_NAV_ITEMS: CandidateNavItemMeta[] = [
   // (CredentialPathway.EXAMINATION_ONLY), so must be able to see it here.
   { key: "credentials", label: "Credentials", href: "/portal/credentials" },
   { key: "ai", label: "Lavelle AI", href: "/portal/ai", gated: true },
+  // Not gated — open to any registered candidate regardless of
+  // enrolment or course completion (requirements register: no course
+  // requirement to build one, only publishing is ever gated).
+  { key: "website", label: "My Website", href: "/portal/website" },
   { key: "profile", label: "Profile & ID", href: "/portal/profile" },
   { key: "support", label: "Contact us", href: "/portal/support" },
 ];
