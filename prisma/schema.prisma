@@ -3198,14 +3198,18 @@ model AzubiApplication {
   fullName String
   email    String
   phone    String
+  country  String
   state    String
 
   statusKind  AzubiApplicationStatusKind
   institution String
 
-  workingMode AzubiWorkingMode
+  workingMode     AzubiWorkingMode
   // corporate_commercial | litigation_dispute | property_land | research_policy | other
-  areas       String[]
+  areas           String[]
+  // Free-text detail when "other" is among `areas` — shown separately in
+  // admin rather than folded into the areas array, so it reads cleanly.
+  otherAreaDetail String?
 
   statement String
 
@@ -3259,6 +3263,7 @@ model AzubiEnquiry {
 
   fullName     String
   email        String
+  phone        String
   organisation String?
   writingAs    AzubiWritingAs
   message      String

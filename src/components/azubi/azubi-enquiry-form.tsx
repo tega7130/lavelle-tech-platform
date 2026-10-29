@@ -6,6 +6,7 @@ import Link from "next/link";
 import { submitAzubiEnquiryAction } from "@/app/actions/azubi";
 import { emptyActionState } from "@/lib/action-state";
 import { AzubiSubmitButton } from "./azubi-button";
+import { AzubiPhoneField } from "./azubi-phone-field";
 
 const inputClass =
   "font-azubi text-[17px] px-[14px] py-[13px] border-2 border-azubi-sage rounded-[12px] bg-white text-azubi-ink min-h-[50px] w-full focus:border-azubi-green-900 focus:outline-none";
@@ -102,6 +103,24 @@ export function AzubiEnquiryForm({
             </p>
           )}
         </div>
+      </div>
+
+      <div className="flex-1 min-w-[240px] flex flex-col gap-[7px]">
+        <label htmlFor={id("phone-number")} className="text-[16px] font-bold text-azubi-green-900">
+          Phone number
+        </label>
+        <AzubiPhoneField
+          idPrefix={id("phone")}
+          dialDefault={values.phoneDialCode}
+          numberDefault={values.phoneNumber}
+          required
+          invalid={!!errors.phoneNumber}
+        />
+        {errors.phoneNumber && (
+          <p id={id("phone-err")} className="text-[14px] text-[#b42318]">
+            {errors.phoneNumber}
+          </p>
+        )}
       </div>
 
       <div className="flex flex-wrap gap-[18px]">

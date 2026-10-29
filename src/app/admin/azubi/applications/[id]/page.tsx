@@ -31,11 +31,13 @@ export default async function AzubiApplicationDetailPage({ params }: PageProps<"
           <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-[var(--space-4)] gap-y-[var(--space-3)] text-[13px]">
             <Row label="Email" value={application.email} />
             <Row label="Phone" value={application.phone} />
+            <Row label="Country" value={application.country} />
             <Row label="State of residence" value={application.state} />
             <Row label="Current status" value={application.statusKind.replace("_", " ")} />
             <Row label="University / law school" value={application.institution} />
             <Row label="Working mode" value={application.workingMode} />
             <Row label="Areas of interest" value={application.areas.join(", ") || "—"} />
+            {application.otherAreaDetail && <Row label="Other area (detail)" value={application.otherAreaDetail} />}
             <Row label="Submitted" value={application.createdAt.toLocaleString()} />
           </dl>
           <div className="mt-[var(--space-4)]">

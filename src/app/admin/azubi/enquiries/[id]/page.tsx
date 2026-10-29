@@ -24,6 +24,7 @@ export default async function AzubiEnquiryDetailPage({ params }: PageProps<"/adm
           <h2 className="font-heading text-base mb-[var(--space-3)]">Submitted details</h2>
           <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-[var(--space-4)] gap-y-[var(--space-3)] text-[13px]">
             <Row label="Email" value={enquiry.email} />
+            <Row label="Phone" value={enquiry.phone} />
             <Row label="Organisation" value={enquiry.organisation ?? "—"} />
             <Row label="Writing as" value={enquiry.writingAs.replace("_", " ")} />
             <Row label="Source" value={enquiry.source === "HOME_FORM" ? "Home page form" : "Contact page"} />

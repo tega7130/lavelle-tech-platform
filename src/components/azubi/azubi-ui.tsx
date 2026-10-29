@@ -33,6 +33,7 @@ export function AzubiChoice({
   value,
   required,
   defaultChecked,
+  onChange,
   children,
   className,
 }: {
@@ -42,6 +43,7 @@ export function AzubiChoice({
   value: string;
   required?: boolean;
   defaultChecked?: boolean;
+  onChange?: (checked: boolean) => void;
   children: React.ReactNode;
   className?: string;
 }) {
@@ -61,6 +63,7 @@ export function AzubiChoice({
         value={value}
         required={required}
         defaultChecked={defaultChecked}
+        onChange={onChange ? (e) => onChange(e.target.checked) : undefined}
         className="w-[22px] h-[22px] m-0 accent-azubi-green-900 flex-none"
       />
       {children}
