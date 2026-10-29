@@ -17,7 +17,10 @@ function MenuGlyph() {
 }
 
 function isCurrent(pathname: string, href: string) {
-  const [path] = href.split(/[?#]/);
+  // A same-page anchor (e.g. /azubi#how) is never "the current page" —
+  // only compare items that point at a distinct route.
+  if (href.includes("#")) return false;
+  const [path] = href.split("?");
   return pathname === path;
 }
 
