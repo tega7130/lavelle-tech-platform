@@ -30,7 +30,23 @@ export function AzubiApplyForm() {
   const errors = state.errors ?? {};
   const values = state.values ?? {};
   const [country, setCountry] = React.useState(values.country ?? "Nigeria");
-  const [otherChecked, setOtherChecked] = React.useState(() => (values.areas ?? "").split(",").includes("other"));
+  // Controlled, not defaultValue: React's form-action reset reverts a native
+  // <select> to its first <option> (no attribute for it to restore to, unlike
+  // <input defaultValue>), wiping a chosen state on every failed submission.
+  // A controlled value survives that reset since React re-asserts it on render.
+  const [stateValue, setStateValue] = React.useState(values.state ?? "");
+  const stateFieldRef = React.useRef<HTMLSelectElement | HTMLInputElement>(null);
+  // Being controlled isn't quite enough on its own: React only re-asserts
+  // the controlled value when IT re-renders, but the browser's post-action
+  // form reset can land after that render with nothing left to trigger
+  // another one. This effect re-runs on every server round trip (`state`
+  // changes identity each dispatch) and forces the DOM back in sync.
+  React.useEffect(() => {
+    if (stateFieldRef.current) stateFieldRef.current.value = stateValue;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state]);
+  const selectedAreas = (values.areas ?? "").split(",");
+  const [otherChecked, setOtherChecked] = React.useState(() => selectedAreas.includes("other"));
 
   if (state.ok) {
     return (
@@ -110,6 +126,7 @@ export function AzubiApplyForm() {
               numberDefault={values.phoneNumber}
               required
               invalid={!!errors.phoneNumber}
+              resyncKey={state}
             />
             <FieldError id="a-phone-err" message={errors.phoneNumber} />
           </div>
@@ -131,7 +148,9 @@ export function AzubiApplyForm() {
                 id="a-state"
                 name="state"
                 required
-                defaultValue={values.state ?? ""}
+                ref={stateFieldRef as React.RefObject<HTMLSelectElement>}
+                value={stateValue}
+                onChange={(e) => setStateValue(e.target.value)}
                 aria-invalid={!!errors.state}
                 className={`${inputClass} ${errors.state ? errorInputClass : ""}`}
               >
@@ -151,7 +170,9 @@ export function AzubiApplyForm() {
                 type="text"
                 autoComplete="address-level1"
                 required
-                defaultValue={values.state}
+                ref={stateFieldRef as React.RefObject<HTMLInputElement>}
+                value={stateValue}
+                onChange={(e) => setStateValue(e.target.value)}
                 aria-invalid={!!errors.state}
                 placeholder="State, province or region"
                 className={`${inputClass} ${errors.state ? errorInputClass : ""}`}
@@ -167,13 +188,13 @@ export function AzubiApplyForm() {
         <fieldset className="flex flex-col gap-[10px]">
           <legend className={legendClass}>Your current status</legend>
           <div className="flex flex-wrap gap-[10px] mt-[10px]">
-            <AzubiChoice id="a-st1" name="statusKind" type="radio" value="student" required>
+            <AzubiChoice id="a-st1" name="statusKind" type="radio" value="student" required defaultChecked={values.statusKind === "student"}>
               Law student
             </AzubiChoice>
-            <AzubiChoice id="a-st2" name="statusKind" type="radio" value="awaiting_call">
+            <AzubiChoice id="a-st2" name="statusKind" type="radio" value="awaiting_call" defaultChecked={values.statusKind === "awaiting_call"}>
               Completed law school, awaiting call to the Bar
             </AzubiChoice>
-            <AzubiChoice id="a-st3" name="statusKind" type="radio" value="called">
+            <AzubiChoice id="a-st3" name="statusKind" type="radio" value="called" defaultChecked={values.statusKind === "called"}>
               Called to the Nigerian Bar
             </AzubiChoice>
           </div>
@@ -201,13 +222,21 @@ export function AzubiApplyForm() {
         <fieldset className="flex flex-col gap-[10px]">
           <legend className={legendClass}>Working mode</legend>
           <div className="flex flex-wrap gap-[10px] mt-[10px]">
-            <AzubiChoice id="a-w1" name="workingMode" type="radio" value="onsite" required className="basis-[120px]">
+            <AzubiChoice
+              id="a-w1"
+              name="workingMode"
+              type="radio"
+              value="onsite"
+              required
+              className="basis-[120px]"
+              defaultChecked={values.workingMode === "onsite"}
+            >
               Onsite
             </AzubiChoice>
-            <AzubiChoice id="a-w2" name="workingMode" type="radio" value="hybrid" className="basis-[120px]">
+            <AzubiChoice id="a-w2" name="workingMode" type="radio" value="hybrid" className="basis-[120px]" defaultChecked={values.workingMode === "hybrid"}>
               Hybrid
             </AzubiChoice>
-            <AzubiChoice id="a-w3" name="workingMode" type="radio" value="online" className="basis-[120px]">
+            <AzubiChoice id="a-w3" name="workingMode" type="radio" value="online" className="basis-[120px]" defaultChecked={values.workingMode === "online"}>
               Online
             </AzubiChoice>
           </div>
@@ -216,19 +245,19 @@ export function AzubiApplyForm() {
         <fieldset className="flex flex-col gap-[10px]">
           <legend className={legendClass}>Areas you would like exposure to</legend>
           <div className="flex flex-wrap gap-[10px] mt-[10px]">
-            <AzubiChoice id="a-i1" name="areas" type="checkbox" value="corporate_commercial">
+            <AzubiChoice id="a-i1" name="areas" type="checkbox" value="corporate_commercial" defaultChecked={selectedAreas.includes("corporate_commercial")}>
               Corporate and commercial
             </AzubiChoice>
-            <AzubiChoice id="a-i2" name="areas" type="checkbox" value="litigation_dispute">
+            <AzubiChoice id="a-i2" name="areas" type="checkbox" value="litigation_dispute" defaultChecked={selectedAreas.includes("litigation_dispute")}>
               Litigation and dispute resolution
             </AzubiChoice>
-            <AzubiChoice id="a-i3" name="areas" type="checkbox" value="property_land">
+            <AzubiChoice id="a-i3" name="areas" type="checkbox" value="property_land" defaultChecked={selectedAreas.includes("property_land")}>
               Property and land
             </AzubiChoice>
-            <AzubiChoice id="a-i4" name="areas" type="checkbox" value="research_policy">
+            <AzubiChoice id="a-i4" name="areas" type="checkbox" value="research_policy" defaultChecked={selectedAreas.includes("research_policy")}>
               Research and policy
             </AzubiChoice>
-            <AzubiChoice id="a-i5" name="areas" type="checkbox" value="other" onChange={setOtherChecked}>
+            <AzubiChoice id="a-i5" name="areas" type="checkbox" value="other" defaultChecked={otherChecked} onChange={setOtherChecked}>
               Other
             </AzubiChoice>
           </div>
@@ -280,7 +309,14 @@ export function AzubiApplyForm() {
         </div>
 
         <label htmlFor="a-consent" className="flex gap-3 items-start text-[16px] text-azubi-muted">
-          <input id="a-consent" name="consent" type="checkbox" required className="w-[22px] h-[22px] mt-[1px] accent-azubi-green-900 flex-none" />
+          <input
+            id="a-consent"
+            name="consent"
+            type="checkbox"
+            required
+            defaultChecked={values.consent === "on" || values.consent === "true"}
+            className="w-[22px] h-[22px] mt-[1px] accent-azubi-green-900 flex-none"
+          />
           <span>
             I confirm that the information above is accurate and I agree that Azubi Foundation may use it to assess
             my application. Read the{" "}

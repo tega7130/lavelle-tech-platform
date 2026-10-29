@@ -37,6 +37,17 @@ export function AzubiEnquiryForm({
   const id = (name: string) => `${idPrefix}-${name}`;
   const errors = state.errors ?? {};
   const values = state.values ?? {};
+  // Controlled, not defaultValue — see AzubiPhoneField for why a native
+  // <select> needs this to survive React's post-submission form reset. The
+  // effect re-asserts the DOM value on every dispatch (state changes
+  // identity each time), since controlled alone can still lose the race
+  // against the reset landing after React's own render.
+  const [writingAs, setWritingAs] = React.useState(values.writingAs ?? defaultWritingAs ?? WRITING_AS_OPTIONS[0]);
+  const writingAsRef = React.useRef<HTMLSelectElement>(null);
+  React.useEffect(() => {
+    if (writingAsRef.current) writingAsRef.current.value = writingAs;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state]);
 
   if (state.ok) {
     return (
@@ -115,6 +126,7 @@ export function AzubiEnquiryForm({
           numberDefault={values.phoneNumber}
           required
           invalid={!!errors.phoneNumber}
+          resyncKey={state}
         />
         {errors.phoneNumber && (
           <p id={id("phone-err")} className="text-[14px] text-[#b42318]">
@@ -134,7 +146,14 @@ export function AzubiEnquiryForm({
           <label htmlFor={id("role")} className="text-[16px] font-bold text-azubi-green-900">
             I am writing as
           </label>
-          <select id={id("role")} name="writingAs" defaultValue={values.writingAs ?? defaultWritingAs ?? WRITING_AS_OPTIONS[0]} className={inputClass}>
+          <select
+            id={id("role")}
+            name="writingAs"
+            ref={writingAsRef}
+            value={writingAs}
+            onChange={(e) => setWritingAs(e.target.value)}
+            className={inputClass}
+          >
             {WRITING_AS_OPTIONS.map((o) => (
               <option key={o} value={o}>
                 {o}
@@ -173,7 +192,14 @@ export function AzubiEnquiryForm({
       </div>
 
       <label htmlFor={id("consent")} className="flex gap-3 items-start text-[16px] text-azubi-muted">
-        <input id={id("consent")} name="consent" type="checkbox" required className="w-[22px] h-[22px] mt-[1px] accent-azubi-green-900 flex-none" />
+        <input
+          id={id("consent")}
+          name="consent"
+          type="checkbox"
+          required
+          defaultChecked={values.consent === "on" || values.consent === "true"}
+          className="w-[22px] h-[22px] mt-[1px] accent-azubi-green-900 flex-none"
+        />
         <span>
           I agree that Azubi Foundation may use these details to reply to me. Read the{" "}
           <Link href="/azubi/privacy" className="text-azubi-green-700 underline">
