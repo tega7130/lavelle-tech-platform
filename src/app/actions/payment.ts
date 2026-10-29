@@ -342,6 +342,46 @@ export async function confirmPaymentManually(paymentId: string, _prev: FormActio
   }
 }
 
+/**
+ * The counterpart to confirmPaymentManually — for a PENDING payment that
+ * genuinely never completed (the candidate abandoned checkout, or the
+ * provider never returned a success response), not one staff is
+ * verifying against a bank statement. Never issues a candidate number or
+ * touches an enrolment; only moves the Payment itself to FAILED, same
+ * terminal state a provider's own "declined" webhook would produce, so
+ * it reads identically in the ledger (and the candidate can simply try
+ * again from the catalogue).
+ */
+export async function markPaymentFailed(paymentId: string, reason: string) {
+  const staff = await requireStaffPermission(Permission.CONFIRM_PAYMENTS);
+  const trimmedReason = reason.trim();
+  if (!trimmedReason) throw new Error("A reason is required.");
+
+  const payment = await prisma.payment.findUniqueOrThrow({ where: { id: paymentId } });
+  if (payment.status !== PaymentStatus.PENDING) throw new PaymentNotPendingError();
+
+  const ip = await getClientIp();
+  const updated = await prisma.$transaction(async (tx) => {
+    const updated = await tx.payment.update({
+      where: { id: paymentId },
+      data: { status: PaymentStatus.FAILED, failedAt: new Date(), failureReason: trimmedReason },
+    });
+    await recordAuditEvent(tx, {
+      actorStaffId: staff.id,
+      subjectType: "payment",
+      subjectId: paymentId,
+      action: "payment.marked_failed",
+      description: "Payment manually marked as not completed",
+      reason: trimmedReason,
+      ipAddress: ip,
+    });
+    return updated;
+  });
+
+  revalidatePath("/admin/finance");
+  return updated;
+}
+
 /** Candidate record entry point for someone who transferred before ever starting checkout — no pending payment row exists yet. */
 export async function recordOfflinePayment(_prev: FormActionState, formData: FormData): Promise<FormActionState> {
   const staff = await requireStaffPermission(Permission.CONFIRM_PAYMENTS);
