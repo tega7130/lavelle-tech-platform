@@ -5,7 +5,10 @@ import { useRouter } from "next/navigation";
 import { Table, Thead, Tbody, Tr, Th, Td } from "@/components/ui/table";
 import { Tag } from "@/components/ui/tag";
 import { Button } from "@/components/ui/button";
+import { Dialog } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/field";
 import { RecordPaymentDialog } from "@/components/admin/record-payment-dialog";
+import { markPaymentFailed } from "@/app/actions/payment";
 import { formatNaira } from "@/lib/format";
 
 export interface LedgerRow {
@@ -31,6 +34,22 @@ const STATUS_TAG: Record<LedgerRow["status"], { variant: "success" | "warning" |
 export function FinanceLedger({ rows, stalePending }: { rows: LedgerRow[]; stalePending: number }) {
   const router = useRouter();
   const [recording, setRecording] = React.useState<LedgerRow | null>(null);
+  const [failing, setFailing] = React.useState<LedgerRow | null>(null);
+  const [failReason, setFailReason] = React.useState("");
+  const [failBusy, setFailBusy] = React.useState(false);
+
+  async function submitMarkFailed() {
+    if (!failing || !failReason.trim()) return;
+    setFailBusy(true);
+    try {
+      await markPaymentFailed(failing.id, failReason);
+      setFailing(null);
+      setFailReason("");
+      router.refresh();
+    } finally {
+      setFailBusy(false);
+    }
+  }
 
   return (
     <div>
@@ -44,8 +63,10 @@ export function FinanceLedger({ rows, stalePending }: { rows: LedgerRow[]; stale
               {stalePending} {stalePending === 1 ? "payment has" : "payments have"} been pending over 48 hours
             </div>
             <div className="text-[12.5px] text-[#8a6013] mt-0.5">
-              These candidates report having paid but the provider has not confirmed. Verify each against the bank
-              statement before recording it — recording a payment issues a candidate number and cannot be undone.
+              If a candidate genuinely paid and the provider just hasn&rsquo;t confirmed yet, verify it against the
+              bank statement before recording it — that issues a candidate number and can&rsquo;t be undone. If the
+              attempt never actually completed, mark it as not completed instead — it won&rsquo;t show up as a real
+              payment anywhere.
             </div>
           </div>
         </div>
@@ -97,17 +118,22 @@ export function FinanceLedger({ rows, stalePending }: { rows: LedgerRow[]; stale
                   </Td>
                   <Td className="text-right pr-[var(--space-4)]">
                     {r.status === "PENDING" && (
-                      <Button
-                        variant="primary"
-                        className="h-[30px] px-[11px] text-[11.5px]"
-                        onClick={() =>
-                          setRecording({
-                            ...r,
-                          })
-                        }
-                      >
-                        Record payment
-                      </Button>
+                      <div className="flex justify-end gap-1.5">
+                        <Button variant="secondary" className="h-[30px] px-[11px] text-[11.5px]" onClick={() => setFailing({ ...r })}>
+                          Not completed
+                        </Button>
+                        <Button
+                          variant="primary"
+                          className="h-[30px] px-[11px] text-[11.5px]"
+                          onClick={() =>
+                            setRecording({
+                              ...r,
+                            })
+                          }
+                        >
+                          Record payment
+                        </Button>
+                      </div>
                     )}
                     {r.status === "SUCCESS" && r.confirmedByName && (
                       <span className="text-neutral-500 text-[11px]">Recorded by {r.confirmedByName}</span>
@@ -134,6 +160,45 @@ export function FinanceLedger({ rows, stalePending }: { rows: LedgerRow[]; stale
             expectedLabel: formatNaira(recording.amountMinor),
           }}
         />
+      )}
+
+      {failing && (
+        <Dialog
+          open
+          onClose={() => {
+            setFailing(null);
+            setFailReason("");
+          }}
+          title="Mark this payment as not completed?"
+        >
+          <p className="text-[13px] text-neutral-700">
+            {failing.candidateName} · {failing.programmeName} · {formatNaira(failing.amountMinor)}. Use this when the
+            attempt never actually finished — abandoned at checkout, or {failing.channel} never returned a success
+            response. It stays visible here as a declined attempt, written to the audit log; no candidate number or
+            enrolment is created.
+          </p>
+          <Textarea
+            value={failReason}
+            onChange={(e) => setFailReason(e.target.value)}
+            placeholder="e.g. Candidate confirms they abandoned checkout; provider shows no completed transaction"
+            rows={2}
+            className="mt-3"
+          />
+          <div className="flex justify-end gap-2 mt-4">
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setFailing(null);
+                setFailReason("");
+              }}
+            >
+              Cancel
+            </Button>
+            <Button variant="danger" disabled={failBusy || !failReason.trim()} onClick={submitMarkFailed}>
+              Mark as not completed
+            </Button>
+          </div>
+        </Dialog>
       )}
     </div>
   );
