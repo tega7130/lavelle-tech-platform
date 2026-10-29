@@ -7,6 +7,9 @@ import { submitAzubiApplicationAction } from "@/app/actions/azubi";
 import { emptyActionState } from "@/lib/action-state";
 import { AzubiKicker, AzubiChoice } from "./azubi-ui";
 import { AzubiSubmitButton } from "./azubi-button";
+import { AzubiPhoneField } from "./azubi-phone-field";
+import { AzubiCountrySelect } from "./azubi-country-select";
+import { NIGERIA_STATES } from "@/lib/azubi/nigeria-states";
 
 const inputClass =
   "font-azubi text-[17px] px-[14px] py-[13px] border-2 border-azubi-sage rounded-[12px] bg-white text-azubi-ink min-h-[50px] w-full focus:border-azubi-green-900 focus:outline-none";
@@ -26,6 +29,8 @@ export function AzubiApplyForm() {
   const [state, formAction, pending] = useActionState(submitAzubiApplicationAction, emptyActionState);
   const errors = state.errors ?? {};
   const values = state.values ?? {};
+  const [country, setCountry] = React.useState(values.country ?? "Nigeria");
+  const [otherChecked, setOtherChecked] = React.useState(() => (values.areas ?? "").split(",").includes("other"));
 
   if (state.ok) {
     return (
@@ -96,35 +101,62 @@ export function AzubiApplyForm() {
         </div>
         <div className="flex flex-wrap gap-[18px]">
           <div className="flex-1 min-w-[240px] flex flex-col gap-[7px]">
-            <label htmlFor="a-phone" className="text-[16px] font-bold text-azubi-green-900">
+            <label htmlFor="a-phone-number" className="text-[16px] font-bold text-azubi-green-900">
               Phone number
             </label>
-            <input
-              id="a-phone"
-              name="phone"
-              type="tel"
-              autoComplete="tel"
+            <AzubiPhoneField
+              idPrefix="a-phone"
+              dialDefault={values.phoneDialCode}
+              numberDefault={values.phoneNumber}
               required
-              defaultValue={values.phone}
-              aria-invalid={!!errors.phone}
-              className={`${inputClass} ${errors.phone ? errorInputClass : ""}`}
+              invalid={!!errors.phoneNumber}
             />
-            <FieldError id="a-phone-err" message={errors.phone} />
+            <FieldError id="a-phone-err" message={errors.phoneNumber} />
           </div>
+          <div className="flex-1 min-w-[240px] flex flex-col gap-[7px]">
+            <label htmlFor="a-country" className="text-[16px] font-bold text-azubi-green-900">
+              Country
+            </label>
+            <AzubiCountrySelect id="a-country" name="country" defaultValue={country} required onSelectCountry={setCountry} />
+            <FieldError id="a-country-err" message={errors.country} />
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-[18px]">
           <div className="flex-1 min-w-[240px] flex flex-col gap-[7px]">
             <label htmlFor="a-state" className="text-[16px] font-bold text-azubi-green-900">
               State of residence
             </label>
-            <input
-              id="a-state"
-              name="state"
-              type="text"
-              autoComplete="address-level1"
-              required
-              defaultValue={values.state}
-              aria-invalid={!!errors.state}
-              className={`${inputClass} ${errors.state ? errorInputClass : ""}`}
-            />
+            {country === "Nigeria" ? (
+              <select
+                id="a-state"
+                name="state"
+                required
+                defaultValue={values.state ?? ""}
+                aria-invalid={!!errors.state}
+                className={`${inputClass} ${errors.state ? errorInputClass : ""}`}
+              >
+                <option value="" disabled>
+                  Choose a state
+                </option>
+                {NIGERIA_STATES.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <input
+                id="a-state"
+                name="state"
+                type="text"
+                autoComplete="address-level1"
+                required
+                defaultValue={values.state}
+                aria-invalid={!!errors.state}
+                placeholder="State, province or region"
+                className={`${inputClass} ${errors.state ? errorInputClass : ""}`}
+              />
+            )}
             <FieldError id="a-state-err" message={errors.state} />
           </div>
         </div>
@@ -196,11 +228,29 @@ export function AzubiApplyForm() {
             <AzubiChoice id="a-i4" name="areas" type="checkbox" value="research_policy">
               Research and policy
             </AzubiChoice>
-            <AzubiChoice id="a-i5" name="areas" type="checkbox" value="other">
+            <AzubiChoice id="a-i5" name="areas" type="checkbox" value="other" onChange={setOtherChecked}>
               Other
             </AzubiChoice>
           </div>
           <FieldError id="a-areas-err" message={errors.areas} />
+          {otherChecked && (
+            <div className="flex flex-col gap-[7px] mt-[4px]">
+              <label htmlFor="a-other-area" className="text-[16px] font-bold text-azubi-green-900">
+                Tell us what other area you mean
+              </label>
+              <input
+                id="a-other-area"
+                name="otherAreaDetail"
+                type="text"
+                required
+                maxLength={200}
+                defaultValue={values.otherAreaDetail}
+                aria-invalid={!!errors.otherAreaDetail}
+                className={`${inputClass} ${errors.otherAreaDetail ? errorInputClass : ""}`}
+              />
+              <FieldError id="a-other-area-err" message={errors.otherAreaDetail} />
+            </div>
+          )}
         </fieldset>
       </div>
 
@@ -210,7 +260,6 @@ export function AzubiApplyForm() {
           <label htmlFor="a-stmt" className="text-[16px] font-bold text-azubi-green-900">
             Why do you want to join the fellowship?
           </label>
-          <span className="text-[15px] text-azubi-muted">About 150 words is plenty.</span>
           <textarea
             id="a-stmt"
             name="statement"

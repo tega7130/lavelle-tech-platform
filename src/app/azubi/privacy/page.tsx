@@ -48,13 +48,13 @@ export default function AzubiPrivacyPage() {
       <p>We collect only what you choose to give us through our forms, plus basic technical information.</p>
       <ul>
         <li>
-          <b>Application form:</b> your name, email address, phone number, state of residence, current status, the
-          university or law school you attended, how you would like to work, the areas of law you want exposure to,
-          and your written statement.
+          <b>Application form:</b> your name, email address, phone number, country and state of residence, current
+          status, the university or law school you attended, how you would like to work, the areas of law you want
+          exposure to, and your written statement.
         </li>
         <li>
-          <b>Contact form:</b> your name, email address, organisation (optional), who you are writing as, and your
-          message.
+          <b>Contact form:</b> your name, email address, phone number, organisation (optional), who you are writing
+          as, and your message.
         </li>
         <li>
           <b>Technical information:</b> such as your browser and device type, which our hosting provider receives

@@ -4,7 +4,9 @@ import { azubiApplicationSchema, azubiEnquirySchema } from "@/lib/validation/azu
 const validApplication = {
   fullName: "Ada Eze",
   email: "ada@example.com",
-  phone: "08012345678",
+  phoneDialCode: "+234",
+  phoneNumber: "08012345678",
+  country: "Nigeria",
   state: "Lagos",
   statusKind: "student",
   institution: "University of Lagos",
@@ -18,6 +20,8 @@ const validApplication = {
 const validEnquiry = {
   fullName: "Chidi Okafor",
   email: "chidi@example.com",
+  phoneDialCode: "+234",
+  phoneNumber: "08012345678",
   organisation: "",
   writingAs: "A prospective fellow",
   message: "I have a question about eligibility.",
@@ -27,13 +31,15 @@ const validEnquiry = {
 };
 
 describe("azubiApplicationSchema", () => {
-  it("accepts a valid submission and normalises enum slugs", () => {
+  it("accepts a valid submission, normalises enum slugs and combines the phone", () => {
     const result = azubiApplicationSchema.safeParse(validApplication);
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.statusKind).toBe("STUDENT");
       expect(result.data.workingMode).toBe("HYBRID");
       expect(result.data.areas).toEqual(["corporate_commercial", "litigation_dispute"]);
+      expect(result.data.phone).toBe("+234 08012345678");
+      expect(result.data.country).toBe("Nigeria");
     }
   });
 
@@ -72,13 +78,48 @@ describe("azubiApplicationSchema", () => {
     const result = azubiApplicationSchema.safeParse({ ...validApplication, statusKind: "called_to_the_moon" });
     expect(result.success).toBe(false);
   });
+
+  it("rejects an unknown country", () => {
+    const result = azubiApplicationSchema.safeParse({ ...validApplication, country: "Narnia" });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects an invalid dial code", () => {
+    const result = azubiApplicationSchema.safeParse({ ...validApplication, phoneDialCode: "+999999" });
+    expect(result.success).toBe(false);
+  });
+
+  it("strips non-digits from the phone number before combining", () => {
+    const result = azubiApplicationSchema.safeParse({ ...validApplication, phoneNumber: "080 123 456 78" });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.phone).toBe("+234 08012345678");
+  });
+
+  it("requires otherAreaDetail when 'other' is a selected area", () => {
+    const result = azubiApplicationSchema.safeParse({ ...validApplication, areas: ["other"], otherAreaDetail: "" });
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts 'other' with a detail provided", () => {
+    const result = azubiApplicationSchema.safeParse({ ...validApplication, areas: ["other"], otherAreaDetail: "Family law" });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.otherAreaDetail).toBe("Family law");
+  });
+
+  it("does not require otherAreaDetail when 'other' is not selected", () => {
+    const result = azubiApplicationSchema.safeParse(validApplication);
+    expect(result.success).toBe(true);
+  });
 });
 
 describe("azubiEnquirySchema", () => {
-  it("accepts a valid submission and maps writingAs to its enum value", () => {
+  it("accepts a valid submission, maps writingAs and combines the phone", () => {
     const result = azubiEnquirySchema.safeParse(validEnquiry);
     expect(result.success).toBe(true);
-    if (result.success) expect(result.data.writingAs).toBe("FELLOW");
+    if (result.success) {
+      expect(result.data.writingAs).toBe("FELLOW");
+      expect(result.data.phone).toBe("+234 08012345678");
+    }
   });
 
   it("maps every writingAs label to its enum value", () => {
@@ -102,6 +143,11 @@ describe("azubiEnquirySchema", () => {
 
   it("rejects when consent is not given", () => {
     const result = azubiEnquirySchema.safeParse({ ...validEnquiry, consent: "false" });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects a missing phone number", () => {
+    const result = azubiEnquirySchema.safeParse({ ...validEnquiry, phoneNumber: "" });
     expect(result.success).toBe(false);
   });
 

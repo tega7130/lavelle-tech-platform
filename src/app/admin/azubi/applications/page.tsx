@@ -96,7 +96,9 @@ export default async function AzubiApplicationsPage({
                   <Link href={`/admin/azubi/applications/${a.id}`} className="text-text no-underline hover:underline">
                     {a.fullName}
                   </Link>
-                  <div className="text-[11.5px] text-neutral-600">{a.email}</div>
+                  <div className="text-[11.5px] text-neutral-600">
+                    {a.email} · {a.phone}
+                  </div>
                 </Td>
                 <Td className="text-[12.5px]">{a.statusKind.replace("_", " ")}</Td>
                 <Td className="text-[12.5px]">{a.workingMode}</Td>

@@ -23,10 +23,11 @@ export async function GET() {
     include: { assignedToStaff: { select: { name: true } } },
   });
 
-  const header = ["Full name", "Email", "Organisation", "Writing as", "Message", "Status", "Source", "Assigned to", "Submitted at"];
+  const header = ["Full name", "Email", "Phone", "Organisation", "Writing as", "Message", "Status", "Source", "Assigned to", "Submitted at"];
   const csvRows = rows.map((r) => [
     r.fullName,
     r.email,
+    r.phone,
     r.organisation ?? "",
     r.writingAs,
     r.message,

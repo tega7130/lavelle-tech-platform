@@ -8,7 +8,9 @@ function applicationInput(overrides: Partial<Record<string, unknown>> = {}) {
   const parsed = azubiApplicationSchema.parse({
     fullName: "Test Fellow",
     email: `fellow-${crypto.randomUUID()}@example.com`,
-    phone: "08012345678",
+    phoneDialCode: "+234",
+    phoneNumber: "08012345678",
+    country: "Nigeria",
     state: "Lagos",
     statusKind: "student",
     institution: "University of Lagos",
@@ -26,6 +28,8 @@ function enquiryInput(overrides: Partial<Record<string, unknown>> = {}) {
   return azubiEnquirySchema.parse({
     fullName: "Test Enquirer",
     email: `enquirer-${crypto.randomUUID()}@example.com`,
+    phoneDialCode: "+234",
+    phoneNumber: "08012345678",
     organisation: "",
     writingAs: "A prospective fellow",
     message: "A message.",

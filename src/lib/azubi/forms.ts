@@ -26,11 +26,13 @@ export async function submitAzubiApplicationCore(input: AzubiApplicationInput, i
       fullName: input.fullName,
       email: input.email,
       phone: input.phone,
+      country: input.country,
       state: input.state,
       statusKind: input.statusKind,
       institution: input.institution,
       workingMode: input.workingMode,
       areas: input.areas,
+      otherAreaDetail: input.otherAreaDetail?.trim() ? input.otherAreaDetail.trim() : null,
       statement: input.statement,
       consentAt: new Date(),
       privacyVersion: AZUBI_PRIVACY_VERSION,
@@ -39,8 +41,8 @@ export async function submitAzubiApplicationCore(input: AzubiApplicationInput, i
 
   notifyAzubiTeam(
     `New fellowship application — ${input.fullName}`,
-    `<p>New fellowship application from <b>${input.fullName}</b> (${input.email}).</p><p>Status: ${input.statusKind}. Working mode: ${input.workingMode}.</p><p>Review it in the admin portal under Azubi &rsaquo; Applications.</p>`,
-    `New fellowship application from ${input.fullName} (${input.email}). Status: ${input.statusKind}. Working mode: ${input.workingMode}. Review it in the admin portal under Azubi > Applications.`
+    `<p>New fellowship application from <b>${input.fullName}</b> (${input.email}, ${input.phone}).</p><p>Status: ${input.statusKind}. Working mode: ${input.workingMode}. Country: ${input.country}.</p><p>Review it in the admin portal under Azubi &rsaquo; Applications.</p>`,
+    `New fellowship application from ${input.fullName} (${input.email}, ${input.phone}). Status: ${input.statusKind}. Working mode: ${input.workingMode}. Country: ${input.country}. Review it in the admin portal under Azubi > Applications.`
   );
 
   return { ok: true };
@@ -59,6 +61,7 @@ export async function submitAzubiEnquiryCore(input: AzubiEnquiryInput, ip: strin
     data: {
       fullName: input.fullName,
       email: input.email,
+      phone: input.phone,
       organisation: input.organisation?.trim() ? input.organisation.trim() : null,
       writingAs: input.writingAs,
       message: input.message,
@@ -70,8 +73,8 @@ export async function submitAzubiEnquiryCore(input: AzubiEnquiryInput, ip: strin
 
   notifyAzubiTeam(
     `New Azubi enquiry — ${input.fullName}`,
-    `<p>New enquiry from <b>${input.fullName}</b> (${input.email}), writing as ${input.writingAs}.</p><p>Review it in the admin portal under Azubi &rsaquo; Enquiries.</p>`,
-    `New enquiry from ${input.fullName} (${input.email}), writing as ${input.writingAs}. Review it in the admin portal under Azubi > Enquiries.`
+    `<p>New enquiry from <b>${input.fullName}</b> (${input.email}, ${input.phone}), writing as ${input.writingAs}.</p><p>Review it in the admin portal under Azubi &rsaquo; Enquiries.</p>`,
+    `New enquiry from ${input.fullName} (${input.email}, ${input.phone}), writing as ${input.writingAs}. Review it in the admin portal under Azubi > Enquiries.`
   );
 
   return { ok: true };

@@ -120,7 +120,9 @@ export default async function AzubiEnquiriesPage({
                   <Link href={`/admin/azubi/enquiries/${e.id}`} className="text-text no-underline hover:underline">
                     {e.fullName}
                   </Link>
-                  <div className="text-[11.5px] text-neutral-600">{e.email}</div>
+                  <div className="text-[11.5px] text-neutral-600">
+                    {e.email} · {e.phone}
+                  </div>
                 </Td>
                 <Td className="text-[12.5px]">{e.writingAs.replace("_", " ")}</Td>
                 <Td className="text-[12.5px]">{e.source === "HOME_FORM" ? "Home page" : "Contact page"}</Td>
