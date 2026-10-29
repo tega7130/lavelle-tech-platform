@@ -1,3 +1,6 @@
+"use client";
+
+import * as React from "react";
 import { AZUBI_COUNTRIES } from "@/lib/azubi/countries";
 
 const inputClass =
@@ -10,19 +13,42 @@ export function AzubiPhoneField({
   numberDefault,
   required,
   invalid,
+  resyncKey,
 }: {
   idPrefix: string;
   dialDefault?: string;
   numberDefault?: string;
   required?: boolean;
   invalid?: boolean;
+  /** The parent's useActionState `state` object — changes identity on every
+   *  dispatch (even if field values repeat), so it reliably re-triggers the
+   *  resync effect below on every submission, not just ones with new values. */
+  resyncKey?: unknown;
 }) {
+  // Controlled, not defaultValue: a native <select> doesn't keep a
+  // resettable default the way <input defaultValue> does, so React's
+  // form-action reset (fired after every submission, success or not)
+  // reverts it to the first option — wiping the chosen dial code on any
+  // validation error. Controlled alone isn't quite enough either (the
+  // reset can land after React's own render with nothing left to
+  // trigger another one), so the effect below re-asserts the DOM value
+  // imperatively every time a fresh value arrives from the parent.
+  const [dial, setDial] = React.useState(dialDefault ?? "+234");
+  const selectRef = React.useRef<HTMLSelectElement>(null);
+
+  React.useEffect(() => {
+    if (selectRef.current) selectRef.current.value = dial;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resyncKey]);
+
   return (
     <div className="flex gap-[8px]">
       <select
         id={`${idPrefix}-dial`}
         name="phoneDialCode"
-        defaultValue={dialDefault ?? "+234"}
+        ref={selectRef}
+        value={dial}
+        onChange={(e) => setDial(e.target.value)}
         aria-label="Country code"
         className={`${inputClass} w-[110px] flex-none px-[8px]`}
       >
