@@ -158,6 +158,16 @@ export async function listAzubiOrganizationOptions() {
   return prisma.azubiOrganization.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } });
 }
 
+/** For the "Add fellow" picker on an organization's own page — fellows with no organization yet. */
+export async function listAzubiUnassignedFellowOptions() {
+  await requireStaffPermission(Permission.MANAGE_AZUBI);
+  return prisma.azubiApplication.findMany({
+    where: { assignedOrganizationId: null, suspended: false },
+    orderBy: { fullName: "asc" },
+    select: { id: true, fullName: true, email: true },
+  });
+}
+
 // ─── Supervisors (Azubi-side, distinct from an org's own contact) ──────
 
 export async function listAzubiSupervisors() {

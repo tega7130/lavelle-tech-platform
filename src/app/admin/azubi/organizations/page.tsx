@@ -40,12 +40,13 @@ export default async function AzubiOrganizationsPage({ searchParams }: { searchP
               <Th>Org supervisor</Th>
               <Th>Capacity</Th>
               <Th>Fellows assigned</Th>
+              <Th></Th>
             </Tr>
           </Thead>
           <Tbody>
             {organizations.length === 0 && (
               <Tr>
-                <Td colSpan={4} className="text-center text-neutral-600 py-[var(--space-5)]">
+                <Td colSpan={5} className="text-center text-neutral-600 py-[var(--space-5)]">
                   No organizations yet.
                 </Td>
               </Tr>
@@ -69,6 +70,11 @@ export default async function AzubiOrganizationsPage({ searchParams }: { searchP
                 </Td>
                 <Td className="text-[12.5px]">{o.capacity ?? <span className="text-neutral-500">—</span>}</Td>
                 <Td className="text-[12.5px]">{o._count.fellows}</Td>
+                <Td className="text-right pr-[var(--space-4)]">
+                  <Link href={`/admin/azubi/organizations/${o.id}`} className={buttonClassName("secondary")}>
+                    View
+                  </Link>
+                </Td>
               </Tr>
             ))}
           </Tbody>
