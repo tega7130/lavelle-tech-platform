@@ -20,7 +20,11 @@ export async function GET() {
 
   const rows = await prisma.azubiApplication.findMany({
     orderBy: { createdAt: "desc" },
-    include: { assignedToStaff: { select: { name: true } } },
+    include: {
+      assignedToStaff: { select: { name: true } },
+      assignedOrganization: { select: { name: true } },
+      assignedSupervisor: { select: { name: true } },
+    },
   });
 
   const header = [
@@ -36,7 +40,10 @@ export async function GET() {
     "Other area (detail)",
     "Pipeline status",
     "Status confirmed",
-    "Assigned to",
+    "Case handled by",
+    "Organization",
+    "Azubi supervisor",
+    "Suspended",
     "Submitted at",
   ];
   const csvRows = rows.map((r) => [
@@ -53,6 +60,9 @@ export async function GET() {
     r.pipelineStatus,
     r.statusConfirmedAt ? "Yes" : "No",
     r.assignedToStaff?.name ?? "",
+    r.assignedOrganization?.name ?? "",
+    r.assignedSupervisor?.name ?? "",
+    r.suspended ? "Yes" : "No",
     r.createdAt.toISOString(),
   ]);
 

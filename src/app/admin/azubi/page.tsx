@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getAzubiOverview } from "@/lib/azubi-reads";
+import { AzubiAdminTabs } from "@/components/admin/azubi/azubi-admin-tabs";
 
 export default async function AzubiOverviewPage() {
   const { newApplications, newEnquiries, latestApplications, latestEnquiries } = await getAzubiOverview();
@@ -8,6 +9,7 @@ export default async function AzubiOverviewPage() {
     <div className="max-w-[1100px]">
       <div className="text-[11px] tracking-[0.08em] uppercase text-neutral-500">Azubi Foundation</div>
       <h1 className="font-heading text-2xl mt-0.5 mb-[var(--space-4)]">Overview</h1>
+      <AzubiAdminTabs />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-[var(--space-4)] mb-[var(--space-6)]">
         <Link
