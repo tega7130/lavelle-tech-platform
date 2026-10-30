@@ -141,7 +141,7 @@ export async function listAzubiOrganizations(q?: string) {
 
 export async function getAzubiOrganization(id: string) {
   await requireStaffPermission(Permission.MANAGE_AZUBI);
-  return prisma.azubiOrganization.findUnique({
+  const organization = await prisma.azubiOrganization.findUnique({
     where: { id },
     include: {
       fellows: {
@@ -150,6 +150,26 @@ export async function getAzubiOrganization(id: string) {
       },
     },
   });
+  if (!organization) return null;
+
+  // "Date assigned" isn't a stored column — it's the most recent
+  // organization-assignment event logged for each fellow, read back from
+  // the shared AuditEvent trail rather than adding a redundant timestamp.
+  const fellowIds = organization.fellows.map((f) => f.id);
+  const assignedDates =
+    fellowIds.length === 0
+      ? []
+      : await prisma.auditEvent.groupBy({
+          by: ["subjectId"],
+          where: { subjectType: "AzubiApplication", action: "azubi_application.organization_assigned", subjectId: { in: fellowIds } },
+          _max: { createdAt: true },
+        });
+  const assignedAtById = new Map(assignedDates.map((row) => [row.subjectId, row._max.createdAt]));
+
+  return {
+    ...organization,
+    fellows: organization.fellows.map((f) => ({ ...f, assignedAt: assignedAtById.get(f.id) ?? null })),
+  };
 }
 
 /** For the "Assign organization" picker — every org, lightest shape. */

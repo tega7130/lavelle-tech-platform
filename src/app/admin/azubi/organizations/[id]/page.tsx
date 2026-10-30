@@ -11,6 +11,8 @@ import { Field, Label, Input, Textarea } from "@/components/ui/field";
 import { buttonClassName } from "@/components/ui/button";
 import { Table, Thead, Tbody, Tr, Th, Td } from "@/components/ui/table";
 import { AzubiActivityTimeline } from "@/components/admin/azubi/azubi-activity-timeline";
+import { AzubiBarList } from "@/components/admin/azubi/azubi-charts";
+import { AZUBI_AREA_LABELS, AZUBI_PIPELINE_LABELS, AZUBI_STATUS_KIND_LABELS, AZUBI_WORKING_MODE_LABELS } from "@/lib/azubi/labels";
 
 const selectClass =
   "h-[38px] font-body text-sm text-text bg-bg border border-neutral-300 rounded-md px-3 outline-none hover:border-neutral-400 focus-visible:border-accent";
@@ -23,6 +25,22 @@ export default async function AzubiOrganizationDetailPage({ params }: PageProps<
     listAzubiUnassignedFellowOptions(),
   ]);
   if (!organization) notFound();
+
+  const areaCounts: Record<string, number> = {};
+  const statusKindCounts: Record<string, number> = {};
+  const workingModeCounts: Record<string, number> = {};
+  let verifiedCount = 0;
+  for (const f of organization.fellows) {
+    for (const area of f.areas) areaCounts[area] = (areaCounts[area] ?? 0) + 1;
+    statusKindCounts[f.statusKind] = (statusKindCounts[f.statusKind] ?? 0) + 1;
+    workingModeCounts[f.workingMode] = (workingModeCounts[f.workingMode] ?? 0) + 1;
+    if (f.statusConfirmedAt) verifiedCount += 1;
+  }
+  const areaItems = Object.entries(areaCounts)
+    .map(([key, value]) => ({ label: AZUBI_AREA_LABELS[key] ?? key, value }))
+    .sort((a, b) => b.value - a.value);
+  const statusKindItems = Object.entries(AZUBI_STATUS_KIND_LABELS).map(([key, label]) => ({ label, value: statusKindCounts[key] ?? 0 }));
+  const workingModeItems = Object.entries(AZUBI_WORKING_MODE_LABELS).map(([key, label]) => ({ label, value: workingModeCounts[key] ?? 0 }));
 
   return (
     <div className="max-w-[1000px]">
@@ -98,6 +116,30 @@ export default async function AzubiOrganizationDetailPage({ params }: PageProps<
             </form>
           </section>
 
+          {organization.fellows.length > 0 && (
+            <section className="border border-divider rounded-md p-[var(--space-4)]">
+              <h2 className="font-heading text-base mb-[var(--space-3)]">Roster snapshot</h2>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-[var(--space-4)]">
+                <div>
+                  <div className="text-[11px] tracking-[0.06em] uppercase text-neutral-500 mb-2">Area of interest</div>
+                  <AzubiBarList items={areaItems} barColor="var(--color-azubi-apricot, #e8a159)" />
+                </div>
+                <div>
+                  <div className="text-[11px] tracking-[0.06em] uppercase text-neutral-500 mb-2">Status</div>
+                  <AzubiBarList items={statusKindItems} />
+                </div>
+                <div>
+                  <div className="text-[11px] tracking-[0.06em] uppercase text-neutral-500 mb-2">Working mode</div>
+                  <AzubiBarList items={workingModeItems} barColor="#0f766e" />
+                </div>
+              </div>
+              <div className="mt-[var(--space-4)] pt-[var(--space-3)] border-t border-dashed border-neutral-300 text-[13px] text-text">
+                <strong>{verifiedCount}</strong> of <strong>{organization.fellows.length}</strong> fellows have confirmed status
+                (student/law school ID or call certificate checked).
+              </div>
+            </section>
+          )}
+
           <section className="border border-divider rounded-md p-[var(--space-4)]">
             <h2 className="font-heading text-base mb-[var(--space-3)]">Roster ({organization.fellows.length})</h2>
 
@@ -125,8 +167,11 @@ export default async function AzubiOrganizationDetailPage({ params }: PageProps<
                 <Thead>
                   <Tr>
                     <Th>Fellow</Th>
-                    <Th>Supervisor</Th>
+                    <Th>Interests</Th>
+                    <Th>Status</Th>
+                    <Th>Verified</Th>
                     <Th>Pipeline</Th>
+                    <Th>Assigned</Th>
                     <Th></Th>
                   </Tr>
                 </Thead>
@@ -138,8 +183,27 @@ export default async function AzubiOrganizationDetailPage({ params }: PageProps<
                           {f.fullName}
                         </Link>
                       </Td>
-                      <Td className="text-[12.5px]">{f.assignedSupervisor?.name ?? "—"}</Td>
-                      <Td className="text-[12.5px]">{f.pipelineStatus.replace("_", " ")}</Td>
+                      <Td className="text-[12.5px]">
+                        <div className="flex flex-wrap gap-1 max-w-[180px]">
+                          {f.areas.map((a) => (
+                            <span key={a} className="inline-flex items-center rounded-full bg-neutral-100 text-neutral-700 px-2 py-0.5 text-[10.5px]">
+                              {AZUBI_AREA_LABELS[a] ?? a}
+                            </span>
+                          ))}
+                        </div>
+                      </Td>
+                      <Td className="text-[12.5px]">{AZUBI_STATUS_KIND_LABELS[f.statusKind] ?? f.statusKind}</Td>
+                      <Td className="text-[12.5px]">
+                        {f.statusConfirmedAt ? (
+                          <span className="inline-flex items-center rounded-full bg-accent-100 text-accent-700 px-2 py-0.5 text-[11px] font-medium">
+                            Verified
+                          </span>
+                        ) : (
+                          <span className="text-neutral-500">—</span>
+                        )}
+                      </Td>
+                      <Td className="text-[12.5px]">{AZUBI_PIPELINE_LABELS[f.pipelineStatus] ?? f.pipelineStatus}</Td>
+                      <Td className="text-[12.5px] text-neutral-600">{f.assignedAt ? f.assignedAt.toLocaleDateString() : "—"}</Td>
                       <Td>
                         <form action={assignAzubiApplicationOrganizationAction}>
                           <input type="hidden" name="id" value={f.id} />

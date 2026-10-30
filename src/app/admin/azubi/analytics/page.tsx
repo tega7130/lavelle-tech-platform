@@ -2,25 +2,7 @@ import Link from "next/link";
 import { getAzubiAnalytics } from "@/lib/azubi-reads";
 import { AzubiAdminTabs } from "@/components/admin/azubi/azubi-admin-tabs";
 import { AzubiBarList, AzubiWeeklyBars } from "@/components/admin/azubi/azubi-charts";
-
-const AREA_LABELS: Record<string, string> = {
-  corporate_commercial: "Corporate and commercial",
-  litigation_dispute: "Litigation and dispute resolution",
-  property_land: "Property and land",
-  research_policy: "Research and policy",
-  other: "Other",
-};
-
-const PIPELINE_LABELS: Record<string, string> = {
-  NEW: "New",
-  UNDER_REVIEW: "Under review",
-  SHORTLISTED: "Shortlisted",
-  STATUS_CONFIRMED: "Status confirmed",
-  MATCHED: "Matched",
-  PLACED: "Placed",
-  DECLINED: "Declined",
-  WITHDRAWN: "Withdrawn",
-};
+import { AZUBI_AREA_LABELS as AREA_LABELS, AZUBI_PIPELINE_LABELS as PIPELINE_LABELS } from "@/lib/azubi/labels";
 
 function KpiCard({ label, value, href }: { label: string; value: number; href?: string }) {
   const content = (
