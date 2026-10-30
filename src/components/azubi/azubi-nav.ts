@@ -31,13 +31,8 @@ export const AZUBI_FOOTER_COLS = [
   },
 ] as const;
 
-/**
- * Privacy/Terms are hidden from the footer for now (not deleted — the
- * pages at /azubi/privacy and /azubi/terms are untouched). Kept here,
- * unreferenced, so they can be dropped back into AZUBI_FOOTER_COLS (or
- * their own column) later with no rebuilding.
- */
-export const AZUBI_FOOTER_LEGAL_LINKS_HIDDEN = [
+/** Rendered in the footer's "More" column, alongside the cookie-settings link. */
+export const AZUBI_FOOTER_LEGAL_LINKS = [
   { label: "Privacy notice", href: "/azubi/privacy" },
   { label: "Terms of use", href: "/azubi/terms" },
 ] as const;

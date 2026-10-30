@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { AZUBI_FOOTER_COLS } from "./azubi-nav";
+import { AZUBI_FOOTER_COLS, AZUBI_FOOTER_LEGAL_LINKS } from "./azubi-nav";
 import { AzubiCookieSettingsLink } from "./azubi-cookie-banner";
 
 function HeartIcon() {
@@ -41,6 +41,11 @@ export function AzubiFooter() {
             <div>
               <div className="text-[12px] tracking-[0.18em] uppercase font-bold text-azubi-sage">More</div>
               <div className="flex flex-col gap-[9px] mt-4 text-[17px]">
+                {AZUBI_FOOTER_LEGAL_LINKS.map((l) => (
+                  <Link key={l.label} href={l.href} className="text-white no-underline hover:underline">
+                    {l.label}
+                  </Link>
+                ))}
                 <AzubiCookieSettingsLink />
               </div>
             </div>
