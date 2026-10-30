@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { AZUBI_COUNTRIES } from "@/lib/azubi/countries";
+import { AzubiSelectChevron, azubiSelectClass } from "./azubi-ui";
 
 const inputClass =
   "font-azubi text-[17px] px-[14px] py-[13px] border-2 border-azubi-sage rounded-[12px] bg-white text-azubi-ink min-h-[50px] focus:border-azubi-green-900 focus:outline-none";
@@ -43,21 +44,24 @@ export function AzubiPhoneField({
 
   return (
     <div className="flex gap-[8px]">
-      <select
-        id={`${idPrefix}-dial`}
-        name="phoneDialCode"
-        ref={selectRef}
-        value={dial}
-        onChange={(e) => setDial(e.target.value)}
-        aria-label="Country code"
-        className={`${inputClass} w-[110px] flex-none px-[8px]`}
-      >
-        {AZUBI_COUNTRIES.map((c) => (
-          <option key={c.iso2} value={c.dial}>
-            {c.dial} {c.iso2}
-          </option>
-        ))}
-      </select>
+      <div className="relative flex-none w-[128px]">
+        <select
+          id={`${idPrefix}-dial`}
+          name="phoneDialCode"
+          ref={selectRef}
+          value={dial}
+          onChange={(e) => setDial(e.target.value)}
+          aria-label="Country code"
+          className={`${inputClass} ${azubiSelectClass} w-full pl-[12px]`}
+        >
+          {AZUBI_COUNTRIES.map((c) => (
+            <option key={c.iso2} value={c.dial}>
+              {c.dial} {c.iso2}
+            </option>
+          ))}
+        </select>
+        <AzubiSelectChevron />
+      </div>
       <input
         id={`${idPrefix}-number`}
         name="phoneNumber"

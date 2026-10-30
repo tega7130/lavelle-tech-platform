@@ -7,6 +7,7 @@ import { submitAzubiEnquiryAction } from "@/app/actions/azubi";
 import { emptyActionState } from "@/lib/action-state";
 import { AzubiSubmitButton } from "./azubi-button";
 import { AzubiPhoneField } from "./azubi-phone-field";
+import { AzubiSelectChevron, azubiSelectClass } from "./azubi-ui";
 
 const inputClass =
   "font-azubi text-[17px] px-[14px] py-[13px] border-2 border-azubi-sage rounded-[12px] bg-white text-azubi-ink min-h-[50px] w-full focus:border-azubi-green-900 focus:outline-none";
@@ -146,20 +147,23 @@ export function AzubiEnquiryForm({
           <label htmlFor={id("role")} className="text-[16px] font-bold text-azubi-green-900">
             I am writing as
           </label>
-          <select
-            id={id("role")}
-            name="writingAs"
-            ref={writingAsRef}
-            value={writingAs}
-            onChange={(e) => setWritingAs(e.target.value)}
-            className={inputClass}
-          >
-            {WRITING_AS_OPTIONS.map((o) => (
-              <option key={o} value={o}>
-                {o}
-              </option>
-            ))}
-          </select>
+          <div className="relative">
+            <select
+              id={id("role")}
+              name="writingAs"
+              ref={writingAsRef}
+              value={writingAs}
+              onChange={(e) => setWritingAs(e.target.value)}
+              className={`${inputClass} ${azubiSelectClass}`}
+            >
+              {WRITING_AS_OPTIONS.map((o) => (
+                <option key={o} value={o}>
+                  {o}
+                </option>
+              ))}
+            </select>
+            <AzubiSelectChevron />
+          </div>
         </div>
       </div>
 
