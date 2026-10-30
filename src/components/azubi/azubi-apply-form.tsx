@@ -5,7 +5,7 @@ import { useActionState } from "react";
 import Link from "next/link";
 import { submitAzubiApplicationAction } from "@/app/actions/azubi";
 import { emptyActionState } from "@/lib/action-state";
-import { AzubiKicker, AzubiChoice } from "./azubi-ui";
+import { AzubiKicker, AzubiChoice, AzubiSelectChevron, azubiSelectClass } from "./azubi-ui";
 import { AzubiSubmitButton } from "./azubi-button";
 import { AzubiPhoneField } from "./azubi-phone-field";
 import { AzubiCountrySelect } from "./azubi-country-select";
@@ -144,25 +144,28 @@ export function AzubiApplyForm() {
               State of residence
             </label>
             {country === "Nigeria" ? (
-              <select
-                id="a-state"
-                name="state"
-                required
-                ref={stateFieldRef as React.RefObject<HTMLSelectElement>}
-                value={stateValue}
-                onChange={(e) => setStateValue(e.target.value)}
-                aria-invalid={!!errors.state}
-                className={`${inputClass} ${errors.state ? errorInputClass : ""}`}
-              >
-                <option value="" disabled>
-                  Choose a state
-                </option>
-                {NIGERIA_STATES.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
+              <div className="relative">
+                <select
+                  id="a-state"
+                  name="state"
+                  required
+                  ref={stateFieldRef as React.RefObject<HTMLSelectElement>}
+                  value={stateValue}
+                  onChange={(e) => setStateValue(e.target.value)}
+                  aria-invalid={!!errors.state}
+                  className={`${inputClass} ${azubiSelectClass} ${errors.state ? errorInputClass : ""}`}
+                >
+                  <option value="" disabled>
+                    Choose a state
                   </option>
-                ))}
-              </select>
+                  {NIGERIA_STATES.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </select>
+                <AzubiSelectChevron />
+              </div>
             ) : (
               <input
                 id="a-state"

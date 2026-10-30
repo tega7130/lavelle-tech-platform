@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { AZUBI_FOOTER_LINKS } from "./azubi-nav";
+import { AZUBI_FOOTER_COLS } from "./azubi-nav";
 import { AzubiCookieSettingsLink } from "./azubi-cookie-banner";
 
 function HeartIcon() {
@@ -14,8 +14,8 @@ export function AzubiFooter() {
   return (
     <footer className="bg-azubi-green-900 text-[#E4EFEC]">
       <div className="mx-auto max-w-[1160px] px-4 sm:px-6 md:px-8 lg:px-12 pt-12 sm:pt-14 pb-8 sm:pb-10">
-        <div className="flex flex-wrap gap-8 sm:gap-16 justify-between">
-          <div className="flex-1 min-w-[260px]">
+        <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1.2fr)_minmax(0,2fr)] gap-10 md:gap-14">
+          <div>
             <div className="flex flex-col leading-none">
               <span className="font-azubi text-[26px] font-extrabold tracking-[-0.03em] text-white">Azubi</span>
               <span className="text-[11px] tracking-[0.34em] uppercase font-bold mt-[5px] text-azubi-sage">Foundation</span>
@@ -25,13 +25,25 @@ export function AzubiFooter() {
             </p>
           </div>
 
-          <nav aria-label="Footer" className="flex flex-wrap gap-x-8 gap-y-[6px] text-[17px] content-start">
-            {AZUBI_FOOTER_LINKS.map((l) => (
-              <Link key={l.label} href={l.href} className="text-white no-underline hover:underline py-[6px]">
-                {l.label}
-              </Link>
+          <nav aria-label="Footer" className="grid grid-cols-2 sm:grid-cols-3 gap-8">
+            {AZUBI_FOOTER_COLS.map((col) => (
+              <div key={col.heading}>
+                <div className="text-[12px] tracking-[0.18em] uppercase font-bold text-azubi-sage">{col.heading}</div>
+                <div className="flex flex-col gap-[9px] mt-4">
+                  {col.links.map((l) => (
+                    <Link key={l.label} href={l.href} className="text-[17px] text-white no-underline hover:underline">
+                      {l.label}
+                    </Link>
+                  ))}
+                </div>
+              </div>
             ))}
-            <AzubiCookieSettingsLink />
+            <div>
+              <div className="text-[12px] tracking-[0.18em] uppercase font-bold text-azubi-sage">More</div>
+              <div className="flex flex-col gap-[9px] mt-4 text-[17px]">
+                <AzubiCookieSettingsLink />
+              </div>
+            </div>
           </nav>
         </div>
 

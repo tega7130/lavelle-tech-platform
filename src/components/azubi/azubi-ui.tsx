@@ -11,11 +11,40 @@ export function AzubiKicker({ dot = "bg-azubi-apricot", children }: { dot?: stri
 
 export function AzubiTag({ bg = "bg-azubi-sage-light", children }: { bg?: string; children: React.ReactNode }) {
   return (
-    <span className={cn("inline-block font-azubi font-bold text-[13px] tracking-[0.12em] uppercase px-[12px] py-[8px] rounded-full text-azubi-green-900", bg)}>
+    <span
+      className={cn(
+        "inline-block font-azubi font-bold text-[13px] leading-[1.4] tracking-[0.12em] uppercase text-center px-[14px] py-[9px] rounded-[14px] text-azubi-green-900",
+        bg
+      )}
+    >
       {children}
     </span>
   );
 }
+
+/** Downward chevron for custom-styled (appearance: none) selects — see azubiSelectClass. */
+export function AzubiSelectChevron() {
+  return (
+    <svg
+      aria-hidden="true"
+      className="pointer-events-none absolute right-[14px] top-1/2 -translate-y-1/2 text-azubi-green-900"
+      width="14"
+      height="14"
+      viewBox="0 0 14 14"
+      fill="none"
+    >
+      <path d="M2.5 5L7 9.5L11.5 5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+/**
+ * Strips the native select arrow and reserves room for AzubiSelectChevron
+ * instead — the browser's own arrow was overlapping short/narrow fields
+ * like the phone dial-code select, with neither the arrow nor the text
+ * comfortably fitting.
+ */
+export const azubiSelectClass = "appearance-none pr-[38px] bg-none";
 
 export function AzubiDisc({ bg = "bg-azubi-apricot", children }: { bg?: string; children: React.ReactNode }) {
   return (
