@@ -30,8 +30,9 @@ export default function AzubiHomePage() {
               </span>
             </h1>
             <p className="text-[18px] sm:text-[22px] text-azubi-muted max-w-[580px]">
-              Azubi Foundation places law students, law school graduates and newly called lawyers with law firms and
-              legal organisations, where a lawyer supervises their work.
+              We bridge the gap between legal education and practice, giving emerging lawyers the opportunity to gain
+              hands-on experience, develop practical skills, and build the confidence to thrive in their legal
+              careers.
             </p>
             <div className="flex flex-wrap gap-3 justify-center w-full sm:w-auto">
               <AzubiButton href="/azubi/apply" className="w-full sm:w-auto justify-between sm:justify-center">
