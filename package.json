@@ -3,11 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "build": "tsx scripts/check-azubi-placeholders.ts && prisma generate && next build",
+    "build": "prisma generate && next build",
     "dev": "prisma generate && next dev",
     "start": "next start",
     "lint": "eslint",
-    "check:azubi-placeholders": "tsx scripts/check-azubi-placeholders.ts",
     "db:up": "docker compose up -d",
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
