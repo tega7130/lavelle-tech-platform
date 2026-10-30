@@ -410,6 +410,10 @@ model Staff {
 
   azubiApplicationsAssigned AzubiApplication[] @relation("AzubiApplicationAssignedTo")
   azubiEnquiriesAssigned    AzubiEnquiry[]     @relation("AzubiEnquiryAssignedTo")
+  // An Azubi supervisor can optionally be linked to an existing staff
+  // account (one staff member supervises at most one Azubi fellow cohort
+  // through this link) — external/non-staff supervisors leave this null.
+  azubiSupervisorProfile    AzubiSupervisor?
 
   @@index([role])
   @@index([status])
@@ -3224,6 +3228,24 @@ model AzubiApplication {
   assignedToStaff   Staff?  @relation("AzubiApplicationAssignedTo", fields: [assignedToStaffId], references: [id], onDelete: SetNull)
   internalNotes     String?
 
+  // Host-organisation placement — distinct from assignedToStaff above
+  // (which is the Lavelle staff member handling the case, not where the
+  // fellow is placed to work).
+  assignedOrganizationId String?
+  assignedOrganization   AzubiOrganization? @relation(fields: [assignedOrganizationId], references: [id], onDelete: SetNull)
+  // The Azubi-side supervisor overseeing this fellow — distinct from the
+  // organisation's own supervisor contact (AzubiOrganization.supervisorName
+  // etc.), which is just a name/email/phone the org gave us, not a person
+  // who logs into anything.
+  assignedSupervisorId String?
+  assignedSupervisor   AzubiSupervisor?   @relation(fields: [assignedSupervisorId], references: [id], onDelete: SetNull)
+
+  // A reversible admin hold, orthogonal to pipelineStatus — a PLACED
+  // fellow can still be suspended (e.g. a complaint under review) without
+  // losing their place in the pipeline.
+  suspended       Boolean   @default(false)
+  suspendedAt     DateTime?
+
   // Verified (student ID / law school ID / call certificate) only after
   // shortlisting, outside this form — we record only that it happened and
   // when, never a document or an ID number (build brief section 5).
@@ -3238,6 +3260,57 @@ model AzubiApplication {
 
   @@index([pipelineStatus, createdAt(sort: Desc)])
   @@index([createdAt(sort: Desc)])
+  @@index([assignedOrganizationId])
+  @@index([assignedSupervisorId])
+  @@index([suspended])
+}
+
+model AzubiOrganization {
+  id String @id @default(uuid())
+
+  name String @unique
+
+  // Plain contact-info fields for the organisation's own supervisor — not
+  // a login-capable person, just who to reach there (brief: "field inputs
+  // for their organisation", as opposed to AzubiSupervisor below).
+  supervisorName  String?
+  supervisorEmail String?
+  supervisorPhone String?
+
+  capacity Int?
+
+  // Free text, not tags/checkboxes — the org's own words on what they
+  // want, read by an admin matching fellows, never machine-parsed.
+  preferredPracticeAreas String?
+  preferredFellowLevel   String?
+  desiredFellowTraits    String?
+
+  internalNotes String?
+
+  fellows AzubiApplication[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([name])
+}
+
+model AzubiSupervisor {
+  id String @id @default(uuid())
+
+  name  String
+  email String  @unique @db.Citext
+  phone String?
+
+  // Optional link to an existing Lavelle staff account — leave null for a
+  // supervisor who isn't Lavelle staff.
+  staffId String? @unique
+  staff   Staff?  @relation(fields: [staffId], references: [id], onDelete: SetNull)
+
+  fellows AzubiApplication[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 enum AzubiWritingAs {

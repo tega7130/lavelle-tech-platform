@@ -3,6 +3,7 @@ import { listAzubiEnquiries } from "@/lib/azubi-reads";
 import { Table, Thead, Tbody, Tr, Th, Td } from "@/components/ui/table";
 import { buttonClassName } from "@/components/ui/button";
 import { cn } from "@/lib/cn";
+import { AzubiAdminTabs } from "@/components/admin/azubi/azubi-admin-tabs";
 
 const STATUS_FILTERS = [
   { value: undefined, label: "All" },
@@ -37,11 +38,11 @@ export default async function AzubiEnquiriesPage({
 
   return (
     <div className="max-w-[1100px]">
-      <div className="flex items-center justify-between flex-wrap gap-[var(--space-3)] mb-[var(--space-4)]">
-        <div>
-          <div className="text-[11px] tracking-[0.08em] uppercase text-neutral-500">Azubi Foundation</div>
-          <h1 className="font-heading text-2xl mt-0.5">Enquiries</h1>
-        </div>
+      <div className="text-[11px] tracking-[0.08em] uppercase text-neutral-500">Azubi Foundation</div>
+      <h1 className="font-heading text-2xl mt-0.5">Enquiries</h1>
+      <AzubiAdminTabs />
+      <div className="flex items-center justify-between flex-wrap gap-[var(--space-3)] mb-[var(--space-4)] mt-[var(--space-4)]">
+        <div />
         {/* A CSV download (Content-Disposition: attachment), not page navigation — plain <a> is correct here. */}
         {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
         <a href="/api/exports/azubi-enquiries" className={buttonClassName("secondary")}>
