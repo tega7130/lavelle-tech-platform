@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { getAzubiOrganization, getAzubiActivityLog } from "@/lib/azubi-reads";
+import { getAzubiOrganization, getAzubiActivityLog, listAzubiUnassignedFellowOptions } from "@/lib/azubi-reads";
 import {
   updateAzubiOrganizationAction,
   updateAzubiOrganizationNotesAction,
@@ -12,9 +12,16 @@ import { buttonClassName } from "@/components/ui/button";
 import { Table, Thead, Tbody, Tr, Th, Td } from "@/components/ui/table";
 import { AzubiActivityTimeline } from "@/components/admin/azubi/azubi-activity-timeline";
 
+const selectClass =
+  "h-[38px] font-body text-sm text-text bg-bg border border-neutral-300 rounded-md px-3 outline-none hover:border-neutral-400 focus-visible:border-accent";
+
 export default async function AzubiOrganizationDetailPage({ params }: PageProps<"/admin/azubi/organizations/[id]">) {
   const { id } = await params;
-  const [organization, activity] = await Promise.all([getAzubiOrganization(id), getAzubiActivityLog("AzubiOrganization", id)]);
+  const [organization, activity, unassignedFellows] = await Promise.all([
+    getAzubiOrganization(id),
+    getAzubiActivityLog("AzubiOrganization", id),
+    listAzubiUnassignedFellowOptions(),
+  ]);
   if (!organization) notFound();
 
   return (
@@ -93,6 +100,24 @@ export default async function AzubiOrganizationDetailPage({ params }: PageProps<
 
           <section className="border border-divider rounded-md p-[var(--space-4)]">
             <h2 className="font-heading text-base mb-[var(--space-3)]">Roster ({organization.fellows.length})</h2>
+
+            <form action={assignAzubiApplicationOrganizationAction} className="flex items-center gap-2 mb-[var(--space-4)]">
+              <input type="hidden" name="organizationId" value={organization.id} />
+              <select name="id" defaultValue="" required className={selectClass}>
+                <option value="" disabled>
+                  {unassignedFellows.length === 0 ? "No unassigned fellows" : "Choose a fellow to add…"}
+                </option>
+                {unassignedFellows.map((f) => (
+                  <option key={f.id} value={f.id}>
+                    {f.fullName} — {f.email}
+                  </option>
+                ))}
+              </select>
+              <button type="submit" className={buttonClassName("secondary")} disabled={unassignedFellows.length === 0}>
+                Add fellow
+              </button>
+            </form>
+
             {organization.fellows.length === 0 ? (
               <p className="text-[13px] text-neutral-600">No fellows assigned to this organization yet.</p>
             ) : (
