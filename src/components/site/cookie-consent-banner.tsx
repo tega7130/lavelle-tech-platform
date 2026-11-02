@@ -2,23 +2,30 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { getStoredCookieConsent, setStoredCookieConsent, type CookieConsent } from "@/lib/cookie-consent";
 
 export function CookieConsentBanner() {
+  const pathname = usePathname();
   const [visible, setVisible] = React.useState(false);
 
+  // /azubi/* has its own cookie banner (AzubiCookieBanner) with its own
+  // copy, privacy link and consent key — never show both at once.
+  const isAzubi = pathname?.startsWith("/azubi") ?? false;
+
   React.useEffect(() => {
+    if (isAzubi) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if (getStoredCookieConsent() === null) setVisible(true);
-  }, []);
+  }, [isAzubi]);
 
   const choose = (value: CookieConsent) => {
     setStoredCookieConsent(value);
     setVisible(false);
   };
 
-  if (!visible) return null;
+  if (isAzubi || !visible) return null;
 
   return (
     <div className="fixed inset-x-0 bottom-0 z-50 p-[var(--space-4)] sm:p-[var(--space-6)]">

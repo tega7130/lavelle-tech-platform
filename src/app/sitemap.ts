@@ -14,6 +14,13 @@ const STATIC_ROUTES: Array<{ path: string; changeFrequency: MetadataRoute.Sitema
   { path: "/sign-in", changeFrequency: "monthly", priority: 0.3 },
   { path: "/privacy", changeFrequency: "yearly", priority: 0.2 },
   { path: "/terms", changeFrequency: "yearly", priority: 0.2 },
+  { path: "/azubi", changeFrequency: "weekly", priority: 0.7 },
+  { path: "/azubi/about", changeFrequency: "monthly", priority: 0.5 },
+  { path: "/azubi/mission-and-vision", changeFrequency: "monthly", priority: 0.5 },
+  { path: "/azubi/apply", changeFrequency: "monthly", priority: 0.6 },
+  { path: "/azubi/contact", changeFrequency: "monthly", priority: 0.4 },
+  { path: "/azubi/privacy", changeFrequency: "yearly", priority: 0.2 },
+  { path: "/azubi/terms", changeFrequency: "yearly", priority: 0.2 },
 ];
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {

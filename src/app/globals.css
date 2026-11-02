@@ -145,6 +145,61 @@
 }
 
 /*
+ * Azubi Foundation (/azubi) — a nonprofit sub-brand hosted inside Lavelle,
+ * with its own two-hue palette (deep green + apricot) and Montserrat type.
+ * Entirely opt-in: scoped by the azubi-* token names below and the
+ * .azubi-root class (see src/app/azubi/layout.tsx), so nothing here is
+ * referenced by, or changes the look of, any non-Azubi page.
+ */
+@theme {
+  --color-azubi-green-900: #0f3a30;
+  --color-azubi-green-700: #2a6a5a;
+  --color-azubi-sage: #77a99a;
+  --color-azubi-sage-light: #a9d1c4;
+  --color-azubi-mint: #cfe3de;
+  --color-azubi-green-100: #ddede7;
+  --color-azubi-green-50: #e4f1ec;
+  --color-azubi-mist: #f7fbfa;
+  --color-azubi-apricot: #f4a259;
+  --color-azubi-apricot-100: #fdebd6;
+  --color-azubi-ink: #111111;
+  --color-azubi-muted: #3a4743;
+}
+
+@theme inline {
+  --font-azubi: var(--font-montserrat), ui-sans-serif, system-ui, sans-serif;
+}
+
+@layer components {
+  .azubi-root {
+    font-family: var(--font-azubi);
+    font-size: 18px;
+    line-height: 1.6;
+  }
+  .azubi-root h1,
+  .azubi-root h2,
+  .azubi-root h3,
+  .azubi-root h4 {
+    font-family: var(--font-azubi);
+    font-weight: 700;
+    letter-spacing: -0.025em;
+    line-height: 1.15;
+    margin: 0;
+    color: var(--color-azubi-green-900);
+  }
+  .azubi-root p {
+    margin: 0;
+  }
+  .azubi-root a {
+    color: var(--color-azubi-green-700);
+  }
+  .azubi-root :focus-visible {
+    outline: 3px solid var(--color-azubi-green-900);
+    outline-offset: 3px;
+  }
+}
+
+/*
  * Everything below lives in @layer base so that Tailwind utility classes
  * (which compile into @layer utilities) can always override it — e.g. a
  * nav <a href> styled with `text-text` must win over the base `a { color }`
